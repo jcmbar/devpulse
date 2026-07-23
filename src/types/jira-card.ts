@@ -1,0 +1,45 @@
+export type JiraCard = {
+  id: string;
+  import_id: string;
+  developer_id: string | null;
+  jira_key: string;
+  parent_key: string | null;
+  parent_id: string | null;
+  summary: string | null;
+  status: string | null;
+  categories: string[];
+  estimate_hours: number | null;
+  time_spent_hours: number | null;
+  difference_hours: number | null;
+  delay_days: number | null;
+  started_on: string | null;
+  due_on: string | null;
+  completed_on: string | null;
+  unit_test_delivery_on: string | null;
+  is_rework: boolean;
+  rework_weight: number;
+  raw_payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type JiraCardInsert = {
+  import_id: string;
+  developer_id: string | null;
+  jira_key: string;
+  parent_key: string | null;
+  summary: string | null;
+  status: string | null;
+  categories: string[];
+  estimate_hours: number | null;
+  time_spent_hours: number | null;
+  difference_hours: number | null;
+  delay_days: number | null;
+  started_on: string | null;
+  due_on: string | null;
+  completed_on: string | null;
+  unit_test_delivery_on: string | null;
+  is_rework: boolean;
+  rework_weight: number;
+  raw_payload: Record<string, unknown>;
+};

@@ -1,26 +1,279 @@
 @import "tailwindcss";
 
+/*
+  DevPulse — premium technical UI
+  Cool neutrals + teal signal color. Light/dark/system.
+*/
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f3f5f8;
+  --foreground: #0f172a;
+  --muted: #e8edf3;
+  --muted-foreground: #64748b;
+  --border: #d7dee8;
+  --ring: #0d9488;
+  --accent: #0f766e;
+  --accent-foreground: #f0fdfa;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --header: rgba(243, 245, 248, 0.78);
+  --brand: #0d9488;
+  --brand-soft: #ccfbf1;
+  --brand-foreground: #134e4a;
+  --brand-on: #f0fdfa;
+  --success: #059669;
+  --success-foreground: #ecfdf5;
+  --warning: #d97706;
+  --warning-foreground: #fffbeb;
+  --danger: #dc2626;
+  --danger-foreground: #fef2f2;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+  --shadow-md:
+    0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+  --shadow-glow: 0 0 0 1px rgb(13 148 136 / 0.12);
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --page-glow: radial-gradient(
+      900px 420px at 8% -10%,
+      rgb(13 148 136 / 0.09),
+      transparent 55%
+    ),
+    radial-gradient(
+      700px 360px at 92% 0%,
+      rgb(14 165 233 / 0.06),
+      transparent 50%
+    );
+}
+
+.dark {
+  --background: #070b12;
+  --foreground: #e8eef7;
+  --muted: #121925;
+  --muted-foreground: #94a3b8;
+  --border: #1e293b;
+  --ring: #2dd4bf;
+  --accent: #2dd4bf;
+  --accent-foreground: #042f2e;
+  --card: #0c121c;
+  --card-foreground: #e8eef7;
+  --surface: #0c121c;
+  --surface-elevated: #111927;
+  --header: rgba(7, 11, 18, 0.72);
+  --brand: #2dd4bf;
+  --brand-soft: rgb(45 212 191 / 0.12);
+  --brand-foreground: #99f6e4;
+  --brand-on: #042f2e;
+  --success: #34d399;
+  --success-foreground: #022c22;
+  --warning: #fbbf24;
+  --warning-foreground: #422006;
+  --danger: #f87171;
+  --danger-foreground: #450a0a;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px -16px rgb(0 0 0 / 0.55);
+  --shadow-glow: 0 0 0 1px rgb(45 212 191 / 0.18);
+  --page-glow: radial-gradient(
+      900px 480px at 12% -12%,
+      rgb(45 212 191 / 0.1),
+      transparent 55%
+    ),
+    radial-gradient(
+      720px 400px at 90% 0%,
+      rgb(56 189 248 / 0.06),
+      transparent 52%
+    );
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-header: var(--header);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-on: var(--brand-on);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-md: var(--radius);
+  --radius-sm: var(--radius-sm);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  background-image: var(--page-glow);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--brand) 28%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: 2px;
+}
+
+@layer components {
+  .ui-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-accent px-3.5 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  .ui-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-border/80 bg-card/90 px-3.5 py-2 text-sm font-medium text-foreground shadow-[var(--shadow-sm)] transition-[transform,background-color,border-color,box-shadow] duration-150 hover:border-border hover:bg-muted/80 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  .ui-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  /** Idle destructive trigger — muted until hover/focus (tables / inline). */
+  .ui-btn-danger-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-danger/10 hover:text-danger focus-visible:bg-danger/10 focus-visible:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  /** Confirmed destructive step — clear but compact. */
+  .ui-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-danger px-3.5 py-2 text-sm font-medium text-danger-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  .ui-inline-actions {
+    @apply flex flex-wrap items-center gap-1;
+  }
+
+  .ui-input {
+    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+  }
+
+  .ui-select {
+    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+  }
+
+  .ui-card {
+    @apply rounded-[var(--radius)] border border-border/70 bg-card/95 text-card-foreground shadow-[var(--shadow-md)] backdrop-blur-[2px];
+  }
+
+  .ui-table-wrap {
+    @apply overflow-x-auto rounded-[var(--radius)] border border-border/70 bg-card/95 shadow-[var(--shadow-md)];
+  }
+
+  .ui-table {
+    @apply min-w-full text-left text-sm;
+  }
+
+  .ui-table thead {
+    @apply border-b border-border/80 bg-muted/40;
+  }
+
+  .ui-table th {
+    @apply px-3.5 py-3 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase;
+  }
+
+  .ui-table td {
+    @apply px-3.5 py-3 align-middle;
+  }
+
+  .ui-table tbody tr {
+    @apply border-b border-border/60 transition-colors duration-150 last:border-0 hover:bg-brand-soft/40;
+  }
+
+  .ui-badge {
+    @apply inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/60 px-2 py-0.5 text-[11px] font-medium tracking-wide text-muted-foreground;
+  }
+
+  .ui-badge-brand {
+    @apply inline-flex items-center gap-1 rounded-full border border-brand/20 bg-brand-soft px-2 py-0.5 text-[11px] font-medium tracking-wide text-brand-foreground;
+  }
+
+  .ui-kpi {
+    @apply font-semibold tracking-tight tabular-nums;
+  }
+
+  .ui-label {
+    @apply text-sm font-medium text-foreground/90;
+  }
+
+  .ui-hint {
+    @apply text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .ui-field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .ui-fieldset {
+    @apply space-y-3 rounded-[var(--radius)] border border-border/70 bg-muted/20 p-3.5 sm:p-4;
+  }
+
+  .ui-legend {
+    @apply px-1 text-sm font-semibold tracking-tight;
+  }
+
+  .ui-checkbox {
+    @apply size-4 shrink-0 rounded border-border/80 text-brand accent-[var(--brand)] transition-[box-shadow,border-color] duration-150 focus-visible:ring-2 focus-visible:ring-brand/25;
+  }
+
+  .ui-check {
+    @apply inline-flex items-start gap-2.5 text-sm text-foreground/90;
+  }
+
+  .ui-textarea {
+    @apply w-full min-h-[88px] resize-y rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+  }
+
+  .ui-alert-error {
+    @apply rounded-[var(--radius-sm)] border border-danger/35 bg-danger/10 px-3 py-2 text-sm text-danger;
+  }
+
+  .ui-alert-success {
+    @apply rounded-[var(--radius-sm)] border border-success/35 bg-success/10 px-3 py-2 text-sm text-success;
+  }
+
+  .ui-form-section-title {
+    @apply text-base font-semibold tracking-tight;
+  }
+
+  .ui-form-section-desc {
+    @apply text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .ui-file {
+    @apply block w-full text-sm text-muted-foreground file:mr-3 file:rounded-[var(--radius-sm)] file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground file:transition-colors file:duration-150 hover:file:bg-muted/80;
+  }
+
+  .ui-panel {
+    @apply space-y-2 rounded-[var(--radius)] border border-border/70 bg-muted/30 px-4 py-3 text-sm;
+  }
 }

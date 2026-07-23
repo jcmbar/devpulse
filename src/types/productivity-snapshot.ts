@@ -1,0 +1,24 @@
+export type ProductivitySnapshot = {
+  id: string;
+  developer_id: string;
+  import_id: string | null;
+  period_start: string;
+  period_end: string;
+  cards_count: number;
+  completed_cards_count: number;
+  on_time_cards_count: number;
+  delayed_cards_count: number;
+  rework_cards_count: number;
+  rework_weight_total: number;
+  total_estimate_hours: number;
+  total_time_spent_hours: number;
+  total_difference_hours: number;
+  total_delay_days: number;
+  avg_delay_days: number | null;
+  max_delay_days: number | null;
+  utilization_rate: number | null;
+  required_hours: number | null;
+  metrics: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
