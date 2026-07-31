@@ -7,6 +7,7 @@ import {
 import { CompiladoDateFilter } from "@/components/compilado-date-filter";
 import { CompiladoProvenanceBadge } from "@/components/compilado-provenance-badge";
 import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
+import { MonthlyClosingAuditSection, MonthlyClosingControls } from "@/components/monthly-closing/monthly-closing-panel";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
@@ -31,6 +32,10 @@ import type { CompiladoSnapshotProvenance } from "@/services/compilado/resolve-s
 import type { Developer } from "@/types/developer";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import type { JiraCard } from "@/types/jira-card";
+import type {
+  MonthlyClosing,
+  MonthlyClosingCardAuditRow,
+} from "@/types/monthly-closing";
 import type { Profile } from "@/types/profile";
 
 type AppHomeProps = {
@@ -44,6 +49,11 @@ type AppHomeProps = {
   provenance: CompiladoSnapshotProvenance | null;
   delayJustificationsByKey: Record<string, DelayJustificationBadgeInfo>;
   reworkJustificationsByKey: Record<string, DelayJustificationBadgeInfo>;
+  monthlyClosing: MonthlyClosing | null;
+  closingYearMonth: string | null;
+  closingAuditRows: MonthlyClosingCardAuditRow[];
+  closingCanSubmit: boolean;
+  closingBlockingCount: number;
 };
 
 function formatHours(value: number): string {
@@ -90,6 +100,11 @@ export function AppHome({
   provenance,
   delayJustificationsByKey,
   reworkJustificationsByKey,
+  monthlyClosing,
+  closingYearMonth,
+  closingAuditRows,
+  closingCanSubmit,
+  closingBlockingCount,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
 
@@ -132,15 +147,34 @@ export function AppHome({
               Nenhuma origem Compilado resolvida ainda.
             </p>
           )}
-          <CompiladoDateFilter
-            basePath="/app"
-            importId={selectedImportId}
-            activeRange={dateRange}
-            monthOptions={monthOptions}
-            embedded
-          />
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <CompiladoDateFilter
+                basePath="/app"
+                importId={selectedImportId}
+                activeRange={dateRange}
+                monthOptions={monthOptions}
+                embedded
+              />
+            </div>
+            <div className="shrink-0 lg:pt-1">
+              <MonthlyClosingControls
+                yearMonth={closingYearMonth}
+                importId={selectedImportId}
+                sourceMode={provenance?.resolvedSource ?? "auto"}
+                closing={monthlyClosing}
+                canSubmit={closingCanSubmit}
+                blockingCount={closingBlockingCount}
+              />
+            </div>
+          </div>
         </div>
       </FilterBar>
+
+      <MonthlyClosingAuditSection
+        closing={monthlyClosing}
+        auditRows={closingAuditRows}
+      />
 
       <SectionShell
         title="Resumo do período"

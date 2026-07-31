@@ -13,6 +13,12 @@ import { findUnlinkedDeveloperByEmail } from "@/services/developers";
 import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot";
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
+import {
+  getMonthlyClosingForDeveloperMonth,
+  listMonthlyClosingItems,
+  loadMonthlyClosingAuditForDeveloper,
+} from "@/services/monthly-closings";
+import type { MonthlyClosingCardAuditRow } from "@/types/monthly-closing";
 
 type AppPageProps = {
   searchParams: Promise<{
@@ -129,6 +135,73 @@ export default async function AppPage({ searchParams }: AppPageProps) {
     acceptedReworkKeys,
   });
 
+  const closingYearMonth =
+    dateRange.mode === "month" ? dateRange.month : null;
+
+  const monthlyClosing =
+    closingYearMonth != null
+      ? await getMonthlyClosingForDeveloperMonth({
+          developerId: developer.id,
+          yearMonth: closingYearMonth,
+        })
+      : null;
+
+  let closingAuditRows: MonthlyClosingCardAuditRow[] = [];
+  let closingCanSubmit = false;
+  let closingBlockingCount = 0;
+
+  if (
+    closingYearMonth != null &&
+    selectedImportId != null &&
+    monthlyClosing != null &&
+    monthlyClosing.started_at != null
+  ) {
+    if (
+      monthlyClosing.status === "in_review" ||
+      monthlyClosing.status === "closed" ||
+      monthlyClosing.status === "finalized"
+    ) {
+      const items = await listMonthlyClosingItems(monthlyClosing.id);
+      closingAuditRows = items.map((item) => ({
+        cardId: item.jira_card_id ?? item.id,
+        jiraKey: item.jira_key,
+        summary: item.summary,
+        status: item.status_name,
+        estimateHours: item.estimate_hours,
+        actualHours: item.actual_hours,
+        delayDays: item.delay_days,
+        isDelayed: item.is_delayed,
+        isRework: item.is_rework,
+        reworkWeight: item.rework_weight,
+        dueOn: item.due_on,
+        unitTestDeliveryOn: item.unit_test_delivery_on,
+        delayJustification: {
+          status: item.delay_justification_status,
+          developerNote: item.delay_developer_note,
+          managerNote: item.delay_manager_note,
+        },
+        reworkJustification: {
+          status: item.rework_justification_status,
+          developerNote: item.rework_developer_note,
+          managerNote: item.rework_manager_note,
+        },
+        blocksSubmit: false,
+        blockReasons: [],
+      }));
+      closingCanSubmit = false;
+      closingBlockingCount = 0;
+    } else {
+      const audit = await loadMonthlyClosingAuditForDeveloper({
+        developerId: developer.id,
+        importId: selectedImportId,
+        yearMonth: closingYearMonth,
+      });
+      closingAuditRows = audit.auditRows;
+      closingCanSubmit = audit.canSubmit;
+      closingBlockingCount = audit.blockingCount;
+    }
+  }
+
   return (
     <AppHome
       profile={profile}
@@ -141,6 +214,11 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       provenance={resolved.provenance}
       delayJustificationsByKey={delayJustificationsByKey}
       reworkJustificationsByKey={reworkJustificationsByKey}
+      monthlyClosing={monthlyClosing}
+      closingYearMonth={closingYearMonth}
+      closingAuditRows={closingAuditRows}
+      closingCanSubmit={closingCanSubmit}
+      closingBlockingCount={closingBlockingCount}
     />
   );
 }

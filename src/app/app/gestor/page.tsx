@@ -27,6 +27,7 @@ import {
   buildDeliveryIndexCalcExplain,
   buildUtilizationCalcExplain,
 } from "@/lib/metrics/metric-calc-explain";
+import { GestorClosingsInReviewSection } from "@/components/monthly-closing/gestor-closings-in-review";
 import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
 import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
 import { buildGestorAnaliticoHref } from "@/lib/metrics/gestor-analitico-href";
@@ -45,6 +46,7 @@ import {
   getGestorDashboard,
 } from "@/services/gestor/dashboard";
 import { listJiraIntegrations } from "@/services/integrations/jira";
+import { listMonthlyClosingsInReview } from "@/services/monthly-closings";
 import { listTeamsAdmin } from "@/services/teams";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import {
@@ -161,13 +163,19 @@ export default async function GestorDashboardPage({
     defaultEnd: seed.selectedBatch?.period_end ?? null,
   });
 
-  const dashboard = await getGestorDashboard({
-    // Only pass URL override — auto resolution happens inside getGestorDashboard.
-    importId: params.importId ?? null,
-    dateRange,
-    dataSource,
-    teamId: selectedTeamId,
-  });
+  const [dashboard, closingsInReview] = await Promise.all([
+    getGestorDashboard({
+      // Only pass URL override — auto resolution happens inside getGestorDashboard.
+      importId: params.importId ?? null,
+      dateRange,
+      dataSource,
+      teamId: selectedTeamId,
+    }),
+    listMonthlyClosingsInReview({
+      teamId: selectedTeamId,
+      yearMonth: dateRange.mode === "month" ? dateRange.month : null,
+    }),
+  ]);
 
   const selectedImportId = dashboard.selectedBatch?.id ?? null;
   const { teamMetrics, ranking, monthlyMatrix, thresholds, provenance } =
@@ -356,6 +364,8 @@ export default async function GestorDashboardPage({
           />
         </div>
       </FilterBar>
+
+      <GestorClosingsInReviewSection closings={closingsInReview} />
 
       {dashboard.selectedBatch == null ? (
         <div className="space-y-2 rounded-[var(--radius-sm)] border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
