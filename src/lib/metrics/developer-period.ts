@@ -72,45 +72,6 @@ export function computeUtilizationBreakdown(input: {
   };
 }
 
-/** Human-readable breakdown for Aproveitamento tooltips (pt-BR). */
-export function formatUtilizationBreakdownTooltip(
-  metrics: Pick<
-    DeveloperPeriodMetrics,
-    | "totalCards"
-    | "utilizationPenalty"
-    | "utilizedCardEquivalents"
-    | "utilizationRate"
-  >,
-): string {
-  const pct = (metrics.utilizationRate * 100).toLocaleString("pt-BR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  });
-  return `Qualidade · C ${metrics.totalCards} · P ${metrics.utilizationPenalty} · C_aprov ${metrics.utilizedCardEquivalents} · Aproveitamento ${pct}%`;
-}
-
-/** Tooltip / subtitle for Índice de Entrega. */
-export function formatDeliveryIndexTooltip(
-  metrics: Pick<
-    DeveloperPeriodMetrics,
-    "totalCards" | "utilizationRate" | "deliveryIndex"
-  >,
-): string {
-  const pct = (metrics.utilizationRate * 100).toLocaleString("pt-BR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  });
-  const index = metrics.deliveryIndex.toLocaleString("pt-BR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-  const sqrtC = Math.sqrt(Math.max(0, metrics.totalCards)).toLocaleString(
-    "pt-BR",
-    { minimumFractionDigits: 0, maximumFractionDigits: 2 },
-  );
-  return `Índice = Aproveitamento × raiz quadrada dos cards · Q ${pct}% · √C ${sqrtC} · I ${index}`;
-}
-
 export function formatDeliveryIndex(value: number): string {
   return value.toLocaleString("pt-BR", {
     minimumFractionDigits: 0,

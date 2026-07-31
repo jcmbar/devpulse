@@ -6,9 +6,11 @@ import { buildGestorAnaliticoHref } from "@/lib/metrics/gestor-analitico-href";
 import {
   computeUtilizationBreakdown,
   formatDeliveryIndex,
+} from "@/lib/metrics/developer-period";
+import {
   formatDeliveryIndexTooltip,
   formatUtilizationBreakdownTooltip,
-} from "@/lib/metrics/developer-period";
+} from "@/lib/metrics/metric-calc-explain";
 import type { GestorAnalyticalCardRow } from "@/services/gestor/analytical-base";
 import { Inbox } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -314,9 +316,8 @@ export function AnalyticalBaseView({
             className="ui-kpi text-2xl tracking-tight"
             title={formatUtilizationBreakdownTooltip({
               totalCards: totals.cards,
-              utilizationPenalty: totals.utilization.utilizationPenalty,
-              utilizedCardEquivalents:
-                totals.utilization.utilizedCardEquivalents,
+              delayedCardsNet: totals.delayedNet,
+              reworkWeightTotal: totals.reworkWeightTotal,
               utilizationRate: totals.utilization.utilizationRate,
             })}
           >

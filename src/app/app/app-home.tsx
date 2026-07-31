@@ -6,10 +6,12 @@ import {
 } from "@/app/app/developer-delay-justification";
 import { CompiladoDateFilter } from "@/components/compilado-date-filter";
 import { CompiladoProvenanceBadge } from "@/components/compilado-provenance-badge";
+import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
+import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import { canManageImports } from "@/lib/auth/permissions";
 import { getRoleLabel } from "@/lib/auth/role-labels";
@@ -21,6 +23,10 @@ import {
   formatDeliveryIndex,
   getCardDeliveryFlags,
 } from "@/lib/metrics/developer-period";
+import {
+  buildDeliveryIndexCalcExplain,
+  buildUtilizationCalcExplain,
+} from "@/lib/metrics/metric-calc-explain";
 import type { CompiladoSnapshotProvenance } from "@/services/compilado/resolve-snapshot";
 import type { Developer } from "@/types/developer";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
@@ -142,8 +148,8 @@ export function AppHome({
             <span className="font-medium text-foreground">
               {formatDateRangeLabel(dateRange)}
             </span>
-            . Aproveitamento = qualidade após atraso líquido e retrabalho.
-            Índice de Entrega = qualidade × √volume.
+            . Passe o mouse ou toque em Aproveitamento e Índice para ver o
+            cálculo.
           </>
         }
       >
@@ -183,6 +189,10 @@ export function AppHome({
           </div>
         ) : null}
 
+        <div className="mb-4">
+          <RankingMetricsLegend />
+        </div>
+
         <div className="ui-kpi-grid">
           <KpiMetricCard
             label="Cards"
@@ -221,13 +231,25 @@ export function AppHome({
           />
           <KpiMetricCard
             label="Aproveitamento"
-            value={formatPercent(metrics.utilizationRate)}
+            value={
+              <MetricCalcTooltip
+                explain={buildUtilizationCalcExplain(metrics)}
+              >
+                {formatPercent(metrics.utilizationRate)}
+              </MetricCalcTooltip>
+            }
             tone="brand"
             hint="Qualidade da entrega"
           />
           <KpiMetricCard
             label="Índice de Entrega"
-            value={formatDeliveryIndex(metrics.deliveryIndex)}
+            value={
+              <MetricCalcTooltip
+                explain={buildDeliveryIndexCalcExplain(metrics)}
+              >
+                {formatDeliveryIndex(metrics.deliveryIndex)}
+              </MetricCalcTooltip>
+            }
             tone="brand"
             hint="Q × √C"
           />

@@ -21,9 +21,13 @@ import {
 } from "@/lib/metrics/date-range";
 import {
   formatDeliveryIndex,
-  formatDeliveryIndexTooltip,
-  formatUtilizationBreakdownTooltip,
 } from "@/lib/metrics/developer-period";
+import {
+  buildDeliveryIndexCalcExplain,
+  buildUtilizationCalcExplain,
+} from "@/lib/metrics/metric-calc-explain";
+import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
+import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
 import { buildGestorAnaliticoHref } from "@/lib/metrics/gestor-analitico-href";
 import {
   compiladoSourceModeLabel,
@@ -413,9 +417,14 @@ export default async function GestorDashboardPage({
               />
               <KpiMetricCard
                 label="Aproveitamento"
-                value={formatPercent(teamMetrics.utilizationRate)}
+                value={
+                  <MetricCalcTooltip
+                    explain={buildUtilizationCalcExplain(teamMetrics)}
+                  >
+                    {formatPercent(teamMetrics.utilizationRate)}
+                  </MetricCalcTooltip>
+                }
                 tone="brand"
-                title={formatUtilizationBreakdownTooltip(teamMetrics)}
                 hint={
                   <>
                     C {teamMetrics.totalCards} · P{" "}
@@ -426,9 +435,14 @@ export default async function GestorDashboardPage({
               />
               <KpiMetricCard
                 label="Índice de Entrega"
-                value={formatDeliveryIndex(teamMetrics.deliveryIndex)}
+                value={
+                  <MetricCalcTooltip
+                    explain={buildDeliveryIndexCalcExplain(teamMetrics)}
+                  >
+                    {formatDeliveryIndex(teamMetrics.deliveryIndex)}
+                  </MetricCalcTooltip>
+                }
                 tone="brand"
-                title={formatDeliveryIndexTooltip(teamMetrics)}
                 hint="Q × √C (time)"
               />
               <KpiMetricCard
@@ -560,10 +574,12 @@ export default async function GestorDashboardPage({
                 Nenhum developer para exibir neste período.
               </p>
             ) : (
-              <DataTable
-                minWidthClassName="min-w-0 lg:min-w-[1080px]"
-                stickyFirstColumn
-              >
+              <div className="space-y-3">
+                <RankingMetricsLegend />
+                <DataTable
+                  minWidthClassName="min-w-0 lg:min-w-[1080px]"
+                  stickyFirstColumn
+                >
                 <thead>
                   <tr>
                     <th>Developer</th>
@@ -578,10 +594,10 @@ export default async function GestorDashboardPage({
                     >
                       Retrabalho
                     </th>
-                    <th title="Qualidade da entrega: max(0, (C − P) / C); P = 1·atraso líquido + 2·retrabalho">
+                    <th title="Aproveitamento — qualidade da entrega. Toque no valor para ver o cálculo.">
                       Aprov.
                     </th>
-                    <th title="Índice = Aproveitamento × raiz quadrada dos cards entregues.">
+                    <th title="Índice — qualidade × volume. Ordena o ranking. Toque no valor para ver o cálculo.">
                       Índice
                     </th>
                     <th className="hidden lg:table-cell">Cadastro</th>
@@ -657,15 +673,19 @@ export default async function GestorDashboardPage({
                       </td>
                       <td
                         className={`whitespace-nowrap font-medium ${tone(row.metrics.utilizationRate)}`}
-                        title={formatUtilizationBreakdownTooltip(row.metrics)}
                       >
-                        {formatPercent(row.metrics.utilizationRate)}
+                        <MetricCalcTooltip
+                          explain={buildUtilizationCalcExplain(row.metrics)}
+                        >
+                          {formatPercent(row.metrics.utilizationRate)}
+                        </MetricCalcTooltip>
                       </td>
-                      <td
-                        className="whitespace-nowrap font-medium"
-                        title={formatDeliveryIndexTooltip(row.metrics)}
-                      >
-                        {formatDeliveryIndex(row.metrics.deliveryIndex)}
+                      <td className="whitespace-nowrap font-medium">
+                        <MetricCalcTooltip
+                          explain={buildDeliveryIndexCalcExplain(row.metrics)}
+                        >
+                          {formatDeliveryIndex(row.metrics.deliveryIndex)}
+                        </MetricCalcTooltip>
                       </td>
                       <td className="hidden lg:table-cell">
                         {row.isActive ? "Ativo" : "Inativo"}
@@ -679,7 +699,8 @@ export default async function GestorDashboardPage({
                     </tr>
                   ))}
                 </tbody>
-              </DataTable>
+                </DataTable>
+              </div>
             )}
           </SectionShell>
 

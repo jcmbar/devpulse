@@ -552,6 +552,70 @@ body {
     @apply space-y-2 rounded-[var(--radius)] border border-border/70 bg-muted/30 px-4 py-3 text-sm;
   }
 
+  .ui-metric-tooltip__trigger {
+    @apply inline-flex max-w-full items-center gap-1 rounded-[var(--radius-sm)] text-left transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25;
+    padding-block: 0.1rem;
+    padding-inline: 0.2rem;
+  }
+
+  .ui-metric-tooltip__icon {
+    @apply size-3 shrink-0 opacity-55;
+  }
+
+  .ui-metric-tooltip__panel {
+    @apply fixed z-[60] rounded-[var(--radius)] border border-border/70 bg-[var(--surface-elevated)] p-3.5 shadow-[var(--shadow-md)];
+  }
+
+  .ui-metric-tooltip__body {
+    @apply space-y-2.5 text-sm;
+  }
+
+  .ui-metric-tooltip__title {
+    @apply text-sm font-semibold tracking-tight text-foreground;
+  }
+
+  .ui-metric-tooltip__facts {
+    @apply space-y-1 text-xs;
+  }
+
+  .ui-metric-tooltip__facts li {
+    @apply flex items-baseline justify-between gap-3;
+  }
+
+  .ui-metric-tooltip__fact-label {
+    @apply text-muted-foreground;
+  }
+
+  .ui-metric-tooltip__fact-value {
+    @apply font-medium tabular-nums text-foreground;
+  }
+
+  .ui-metric-tooltip__rule,
+  .ui-metric-tooltip__calc,
+  .ui-metric-tooltip__interpretation {
+    @apply text-xs leading-relaxed text-muted-foreground text-pretty;
+  }
+
+  .ui-metrics-legend {
+    @apply grid gap-3 rounded-[var(--radius)] border border-border/60 bg-muted/20 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4;
+  }
+
+  .ui-metrics-legend__item {
+    @apply min-w-0 space-y-1;
+  }
+
+  .ui-metrics-legend__title {
+    @apply text-[11px] font-semibold tracking-[0.08em] text-brand uppercase;
+  }
+
+  .ui-metrics-legend__text {
+    @apply text-xs leading-relaxed text-muted-foreground text-pretty sm:text-sm;
+  }
+
+  .ui-metrics-legend__hint {
+    @apply text-[11px] leading-relaxed text-muted-foreground sm:col-span-2;
+  }
+
   .login-stage {
     @apply relative isolate flex min-h-full flex-1 flex-col overflow-hidden;
   }
