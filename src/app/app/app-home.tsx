@@ -7,6 +7,7 @@ import {
 import { CompiladoDateFilter } from "@/components/compilado-date-filter";
 import { CompiladoProvenanceBadge } from "@/components/compilado-provenance-badge";
 import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
+import { MonthlyClosingAttachmentsPanel } from "@/components/monthly-closing/monthly-closing-attachments";
 import { MonthlyClosingAuditSection, MonthlyClosingControls } from "@/components/monthly-closing/monthly-closing-panel";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
@@ -34,6 +35,7 @@ import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import type { JiraCard } from "@/types/jira-card";
 import type {
   MonthlyClosing,
+  MonthlyClosingAttachment,
   MonthlyClosingCardAuditRow,
 } from "@/types/monthly-closing";
 import type { Profile } from "@/types/profile";
@@ -54,6 +56,7 @@ type AppHomeProps = {
   closingAuditRows: MonthlyClosingCardAuditRow[];
   closingCanSubmit: boolean;
   closingBlockingCount: number;
+  closingAttachments: MonthlyClosingAttachment[];
 };
 
 function formatHours(value: number): string {
@@ -105,6 +108,7 @@ export function AppHome({
   closingAuditRows,
   closingCanSubmit,
   closingBlockingCount,
+  closingAttachments,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
 
@@ -175,6 +179,13 @@ export function AppHome({
         closing={monthlyClosing}
         auditRows={closingAuditRows}
       />
+
+      {monthlyClosing ? (
+        <MonthlyClosingAttachmentsPanel
+          closing={monthlyClosing}
+          attachments={closingAttachments}
+        />
+      ) : null}
 
       <SectionShell
         title="Resumo do período"

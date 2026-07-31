@@ -15,10 +15,14 @@ import { listDelayJustificationsForDeveloperImport } from "@/services/delay-just
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import {
   getMonthlyClosingForDeveloperMonth,
+  listMonthlyClosingAttachments,
   listMonthlyClosingItems,
   loadMonthlyClosingAuditForDeveloper,
 } from "@/services/monthly-closings";
-import type { MonthlyClosingCardAuditRow } from "@/types/monthly-closing";
+import type {
+  MonthlyClosingAttachment,
+  MonthlyClosingCardAuditRow,
+} from "@/types/monthly-closing";
 
 type AppPageProps = {
   searchParams: Promise<{
@@ -149,6 +153,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   let closingAuditRows: MonthlyClosingCardAuditRow[] = [];
   let closingCanSubmit = false;
   let closingBlockingCount = 0;
+  let closingAttachments: MonthlyClosingAttachment[] = [];
 
   if (
     closingYearMonth != null &&
@@ -161,7 +166,11 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       monthlyClosing.status === "closed" ||
       monthlyClosing.status === "finalized"
     ) {
-      const items = await listMonthlyClosingItems(monthlyClosing.id);
+      const [items, attachments] = await Promise.all([
+        listMonthlyClosingItems(monthlyClosing.id),
+        listMonthlyClosingAttachments(monthlyClosing.id),
+      ]);
+      closingAttachments = attachments;
       closingAuditRows = items.map((item) => ({
         cardId: item.jira_card_id ?? item.id,
         jiraKey: item.jira_key,
@@ -219,6 +228,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       closingAuditRows={closingAuditRows}
       closingCanSubmit={closingCanSubmit}
       closingBlockingCount={closingBlockingCount}
+      closingAttachments={closingAttachments}
     />
   );
 }

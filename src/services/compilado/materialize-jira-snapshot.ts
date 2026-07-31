@@ -12,6 +12,7 @@ import {
 import { archiveOlderImportsForTeam } from "@/services/imports/retention";
 import { getJiraIntegration } from "@/services/integrations/jira";
 import { insertJiraCards } from "@/services/jira-cards";
+import { detectJiraChangesAfterFinalized } from "@/services/monthly-closings";
 import { buildSnapshotsForImport } from "@/services/productivity-snapshots";
 import {
   projectJiraIssueToCompiladoCard,
@@ -347,6 +348,19 @@ export async function materializeJiraCompiladoSnapshot(
         periodEnd: deliveryMax,
         cards: inserted,
       });
+    }
+
+    try {
+      await detectJiraChangesAfterFinalized({
+        importId: importRecord.id,
+        teamId: integration.team_id,
+        actorUserId: input.importedBy,
+      });
+    } catch (driftError) {
+      console.error(
+        "[materializeJiraCompiladoSnapshot] jira drift detection failed",
+        driftError,
+      );
     }
 
     const completed = await updateImportStatus({

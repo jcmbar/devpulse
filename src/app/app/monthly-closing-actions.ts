@@ -2,10 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/auth/app-context";
+import { requireTeamAccess } from "@/lib/auth/permissions";
 import {
+  approveMonthlyClosing,
+  createMonthlyClosingAttachmentSignedUrl,
+  finalizeMonthlyClosing,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
+  uploadMonthlyClosingAttachment,
 } from "@/services/monthly-closings";
+import type { MonthlyClosingAttachmentType } from "@/types/monthly-closing";
 
 export type MonthlyClosingActionResult =
   | { ok: true; closingId: string }
@@ -22,7 +28,10 @@ export async function startMonthlyClosingAction(input: {
       return { ok: false, error: "Developer não vinculado ao perfil." };
     }
     if (!input.yearMonth.trim()) {
-      return { ok: false, error: "Selecione um mês/ano para iniciar o fechamento." };
+      return {
+        ok: false,
+        error: "Selecione um mês/ano para iniciar o fechamento.",
+      };
     }
 
     const closing = await startMonthlyClosing({
@@ -81,6 +90,124 @@ export async function submitMonthlyClosingAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível enviar o fechamento.",
+    };
+  }
+}
+
+export async function approveMonthlyClosingAction(input: {
+  closingId: string;
+  managerInvoiceNotes: string;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile } = await requireTeamAccess();
+    const closing = await approveMonthlyClosing({
+      closingId: input.closingId,
+      managerInvoiceNotes: input.managerInvoiceNotes,
+      actorUserId: profile.id,
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath(`/app/gestor/fechamentos/${closing.id}`);
+    return { ok: true, closingId: closing.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível aprovar o fechamento.",
+    };
+  }
+}
+
+export async function finalizeMonthlyClosingAction(input: {
+  closingId: string;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile } = await requireTeamAccess();
+    const closing = await finalizeMonthlyClosing({
+      closingId: input.closingId,
+      actorUserId: profile.id,
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath(`/app/gestor/fechamentos/${closing.id}`);
+    return { ok: true, closingId: closing.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível finalizar o fechamento.",
+    };
+  }
+}
+
+export async function uploadMonthlyClosingAttachmentAction(
+  formData: FormData,
+): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile, developer } = await getAppContext();
+    if (!developer) {
+      return { ok: false, error: "Developer não vinculado ao perfil." };
+    }
+
+    const closingId = String(formData.get("closingId") ?? "").trim();
+    const typeRaw = String(formData.get("type") ?? "").trim();
+    const type: MonthlyClosingAttachmentType | null =
+      typeRaw === "invoice_pdf" || typeRaw === "boleto_pdf" ? typeRaw : null;
+    const file = formData.get("file");
+
+    if (!closingId || !type) {
+      return { ok: false, error: "Anexo inválido." };
+    }
+    if (!(file instanceof File)) {
+      return { ok: false, error: "Selecione um arquivo PDF." };
+    }
+
+    const bytes = Buffer.from(await file.arrayBuffer());
+    await uploadMonthlyClosingAttachment({
+      closingId,
+      developerId: developer.id,
+      type,
+      file: {
+        bytes,
+        originalFilename: file.name || `${type}.pdf`,
+        mimeType: file.type || "application/pdf",
+      },
+      actorUserId: profile.id,
+    });
+
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath(`/app/gestor/fechamentos/${closingId}`);
+    return { ok: true, closingId };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar o anexo.",
+    };
+  }
+}
+
+export async function getMonthlyClosingAttachmentUrlAction(input: {
+  storageKey: string;
+}): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    await getAppContext();
+    const url = await createMonthlyClosingAttachmentSignedUrl(input.storageKey);
+    return { ok: true, url };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível abrir o anexo.",
     };
   }
 }

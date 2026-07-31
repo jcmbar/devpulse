@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { GestorClosingDecisionPanel } from "@/components/monthly-closing/gestor-closing-decision";
 import { MonthlyClosingStatusBadge } from "@/components/monthly-closing/monthly-closing-panel";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { getDeveloperAdmin } from "@/services/developers/admin";
 import {
   getMonthlyClosingById,
+  listMonthlyClosingAttachments,
   listMonthlyClosingEvents,
   listMonthlyClosingItems,
 } from "@/services/monthly-closings";
@@ -95,10 +97,11 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [developer, items, events] = await Promise.all([
+  const [developer, items, events, attachments] = await Promise.all([
     getDeveloperAdmin(closing.developer_id),
     listMonthlyClosingItems(closing.id),
     listMonthlyClosingEvents(closing.id),
+    listMonthlyClosingAttachments(closing.id),
   ]);
 
   return (
@@ -120,9 +123,14 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
         }
       />
 
+      <GestorClosingDecisionPanel
+        closing={closing}
+        attachments={attachments}
+      />
+
       <SectionShell
         title="Contexto do snapshot"
-        description="Base congelada no envio do developer. Aprovação documental (NF/boleto) entra na Fase 2."
+        description="Base congelada no envio do developer — não é recalculada após finalize."
       >
         <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>

@@ -105,6 +105,29 @@ export type MonthlyClosingCardAuditRow = {
   blockReasons: string[];
 };
 
+export type MonthlyClosingAttachmentType = "invoice_pdf" | "boleto_pdf";
+
+export type MonthlyClosingAttachment = {
+  id: string;
+  monthly_closing_id: string;
+  type: MonthlyClosingAttachmentType;
+  file_storage_key: string;
+  original_filename: string;
+  mime_type: string;
+  uploaded_at: string;
+  uploaded_by_user_id: string | null;
+  is_valid: boolean | null;
+  validated_at: string | null;
+  validated_by_user_id: string | null;
+  created_at: string;
+};
+
+export function monthlyClosingAttachmentTypeLabel(
+  type: MonthlyClosingAttachmentType,
+): string {
+  return type === "invoice_pdf" ? "Nota fiscal" : "Boleto";
+}
+
 export function monthlyClosingStatusLabel(
   status: MonthlyClosingStatus,
 ): string {

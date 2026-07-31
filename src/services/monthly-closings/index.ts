@@ -12,6 +12,8 @@ import type { DelayJustificationRequest } from "@/types/delay-justification";
 import type { JiraCard } from "@/types/jira-card";
 import type {
   MonthlyClosing,
+  MonthlyClosingAttachment,
+  MonthlyClosingAttachmentType,
   MonthlyClosingCardAuditRow,
   MonthlyClosingEvent,
   MonthlyClosingEventType,
@@ -19,6 +21,33 @@ import type {
   MonthlyClosingJustificationSnapshot,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
+
+export const MONTHLY_CLOSING_STORAGE_BUCKET = "monthly-closing-attachments";
+
+function mapAttachment(row: Record<string, unknown>): MonthlyClosingAttachment {
+  return {
+    id: String(row.id),
+    monthly_closing_id: String(row.monthly_closing_id),
+    type: row.type as MonthlyClosingAttachmentType,
+    file_storage_key: String(row.file_storage_key),
+    original_filename: String(row.original_filename),
+    mime_type: String(row.mime_type),
+    uploaded_at: String(row.uploaded_at),
+    uploaded_by_user_id: (row.uploaded_by_user_id as string | null) ?? null,
+    is_valid: row.is_valid == null ? null : Boolean(row.is_valid),
+    validated_at: (row.validated_at as string | null) ?? null,
+    validated_by_user_id: (row.validated_by_user_id as string | null) ?? null,
+    created_at: String(row.created_at),
+  };
+}
+
+function assertEditableClosing(closing: MonthlyClosing): void {
+  if (closing.status === "finalized" || closing.finalized_at) {
+    throw new Error(
+      "Este fechamento está finalizado e não pode ser alterado.",
+    );
+  }
+}
 
 function mapClosing(row: Record<string, unknown>): MonthlyClosing {
   return {
@@ -150,23 +179,61 @@ export async function listMonthlyClosingsInReview(input?: {
     }
   >
 > {
+  return listMonthlyClosingsForGestorQueue({
+    ...input,
+    statuses: ["in_review", "closed"],
+  });
+}
+
+export async function listFinalizedClosingsWithJiraDrift(input?: {
+  teamId?: string | null;
+  yearMonth?: string | null;
+}): Promise<
+  Array<
+    MonthlyClosing & {
+      developer_name: string;
+      team_name: string | null;
+      item_count: number;
+    }
+  >
+> {
+  const rows = await listMonthlyClosingsForGestorQueue({
+    ...input,
+    statuses: ["finalized"],
+  });
+  return rows.filter((row) => row.jira_changed_after_finalized);
+}
+
+async function listMonthlyClosingsForGestorQueue(input: {
+  teamId?: string | null;
+  yearMonth?: string | null;
+  statuses: MonthlyClosingStatus[];
+}): Promise<
+  Array<
+    MonthlyClosing & {
+      developer_name: string;
+      team_name: string | null;
+      item_count: number;
+    }
+  >
+> {
   const supabase = await createClient();
   let query = supabase
     .from("monthly_closings")
     .select("*")
-    .eq("status", "in_review")
+    .in("status", input.statuses)
     .order("submitted_at", { ascending: false });
 
-  if (input?.teamId) {
+  if (input.teamId) {
     query = query.eq("team_id", input.teamId);
   }
-  if (input?.yearMonth) {
+  if (input.yearMonth) {
     query = query.eq("year_month", input.yearMonth);
   }
 
   const { data, error } = await query;
   if (error) {
-    throw new Error(`Falha ao listar fechamentos em revisão: ${error.message}`);
+    throw new Error(`Falha ao listar fechamentos: ${error.message}`);
   }
 
   const closings = (data ?? []).map((row) =>
@@ -463,9 +530,7 @@ export async function submitMonthlyClosingForReview(input: {
   if (closing.status !== "open") {
     throw new Error("Só é possível enviar fechamentos com status Aberto.");
   }
-  if (closing.finalized_at) {
-    throw new Error("Fechamento finalizado não pode ser reenviado.");
-  }
+  assertEditableClosing(closing);
 
   const audit = await loadMonthlyClosingAuditForDeveloper({
     developerId: input.developerId,
@@ -576,4 +641,430 @@ export async function submitMonthlyClosingForReview(input: {
   });
 
   return updated;
+}
+
+export async function listMonthlyClosingAttachments(
+  closingId: string,
+): Promise<MonthlyClosingAttachment[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closing_attachments")
+    .select("*")
+    .eq("monthly_closing_id", closingId)
+    .order("type", { ascending: true });
+  if (error) {
+    throw new Error(`Falha ao listar anexos: ${error.message}`);
+  }
+  return (data ?? []).map((row) => mapAttachment(row as Record<string, unknown>));
+}
+
+export async function approveMonthlyClosing(input: {
+  closingId: string;
+  managerInvoiceNotes: string;
+  actorUserId: string;
+}): Promise<MonthlyClosing> {
+  const notes = input.managerInvoiceNotes.trim();
+  if (!notes) {
+    throw new Error(
+      "Informações para emissão de nota fiscal são obrigatórias na aprovação.",
+    );
+  }
+
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.status !== "in_review") {
+    throw new Error("Só é possível aprovar fechamentos em revisão.");
+  }
+  assertEditableClosing(closing);
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update({
+      status: "closed",
+      manager_invoice_notes: notes,
+      manager_approved_at: now,
+      manager_approved_by_user_id: input.actorUserId,
+      closed_at: now,
+    })
+    .eq("id", closing.id)
+    .eq("status", "in_review")
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao aprovar fechamento: ${error.message}`);
+  }
+
+  const updated = mapClosing(data as Record<string, unknown>);
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "manager_approved",
+    fromStatus: "in_review",
+    toStatus: "closed",
+    actorUserId: input.actorUserId,
+    payload: { hasInvoiceNotes: true },
+  });
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "invoice_note_updated",
+    fromStatus: "closed",
+    toStatus: "closed",
+    actorUserId: input.actorUserId,
+    payload: { noteLength: notes.length },
+  });
+
+  return updated;
+}
+
+export async function uploadMonthlyClosingAttachment(input: {
+  closingId: string;
+  developerId: string;
+  type: MonthlyClosingAttachmentType;
+  file: {
+    bytes: Buffer;
+    originalFilename: string;
+    mimeType: string;
+  };
+  actorUserId: string;
+}): Promise<MonthlyClosingAttachment> {
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.developer_id !== input.developerId) {
+    throw new Error("Você só pode anexar arquivos no próprio fechamento.");
+  }
+  if (closing.status !== "closed") {
+    throw new Error(
+      "Anexos só podem ser enviados quando o fechamento está Fechado.",
+    );
+  }
+  assertEditableClosing(closing);
+
+  const mime = input.file.mimeType.trim().toLowerCase();
+  if (mime !== "application/pdf") {
+    throw new Error("Apenas arquivos PDF são aceitos.");
+  }
+  if (!input.file.originalFilename.toLowerCase().endsWith(".pdf")) {
+    throw new Error("O arquivo deve ter extensão .pdf.");
+  }
+  if (input.file.bytes.byteLength === 0) {
+    throw new Error("Arquivo vazio.");
+  }
+  if (input.file.bytes.byteLength > 10 * 1024 * 1024) {
+    throw new Error("Arquivo excede o limite de 10 MB.");
+  }
+
+  const storageKey = `${closing.id}/${input.type}.pdf`;
+  const supabase = await createClient();
+
+  const { error: uploadError } = await supabase.storage
+    .from(MONTHLY_CLOSING_STORAGE_BUCKET)
+    .upload(storageKey, input.file.bytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  if (uploadError) {
+    throw new Error(`Falha no upload do PDF: ${uploadError.message}`);
+  }
+
+  const existing = await listMonthlyClosingAttachments(closing.id);
+  const current = existing.find((row) => row.type === input.type) ?? null;
+  const now = new Date().toISOString();
+
+  let saved: MonthlyClosingAttachment;
+  if (current) {
+    const { data, error } = await supabase
+      .from("monthly_closing_attachments")
+      .update({
+        file_storage_key: storageKey,
+        original_filename: input.file.originalFilename,
+        mime_type: "application/pdf",
+        uploaded_at: now,
+        uploaded_by_user_id: input.actorUserId,
+        is_valid: null,
+        validated_at: null,
+        validated_by_user_id: null,
+      })
+      .eq("id", current.id)
+      .select("*")
+      .single();
+    if (error) {
+      throw new Error(`Falha ao atualizar anexo: ${error.message}`);
+    }
+    saved = mapAttachment(data as Record<string, unknown>);
+  } else {
+    const { data, error } = await supabase
+      .from("monthly_closing_attachments")
+      .insert({
+        monthly_closing_id: closing.id,
+        type: input.type,
+        file_storage_key: storageKey,
+        original_filename: input.file.originalFilename,
+        mime_type: "application/pdf",
+        uploaded_at: now,
+        uploaded_by_user_id: input.actorUserId,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      throw new Error(`Falha ao registrar anexo: ${error.message}`);
+    }
+    saved = mapAttachment(data as Record<string, unknown>);
+  }
+
+  await appendEvent({
+    closingId: closing.id,
+    eventType:
+      input.type === "invoice_pdf" ? "invoice_uploaded" : "boleto_uploaded",
+    fromStatus: "closed",
+    toStatus: "closed",
+    actorUserId: input.actorUserId,
+    payload: {
+      type: input.type,
+      filename: input.file.originalFilename,
+      bytes: input.file.bytes.byteLength,
+    },
+  });
+
+  return saved;
+}
+
+export async function createMonthlyClosingAttachmentSignedUrl(
+  storageKey: string,
+  expiresInSeconds = 60 * 10,
+): Promise<string> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from(MONTHLY_CLOSING_STORAGE_BUCKET)
+    .createSignedUrl(storageKey, expiresInSeconds);
+  if (error || !data?.signedUrl) {
+    throw new Error(
+      `Falha ao gerar link do anexo: ${error?.message ?? "URL indisponível"}`,
+    );
+  }
+  return data.signedUrl;
+}
+
+export async function finalizeMonthlyClosing(input: {
+  closingId: string;
+  actorUserId: string;
+}): Promise<MonthlyClosing> {
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.status !== "closed") {
+    throw new Error("Só é possível finalizar fechamentos Fechados.");
+  }
+  assertEditableClosing(closing);
+
+  const attachments = await listMonthlyClosingAttachments(closing.id);
+  const hasInvoice = attachments.some((row) => row.type === "invoice_pdf");
+  const hasBoleto = attachments.some((row) => row.type === "boleto_pdf");
+  if (!hasInvoice || !hasBoleto) {
+    throw new Error(
+      "É necessário ter nota fiscal e boleto enviados antes de finalizar.",
+    );
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { error: validateError } = await supabase
+    .from("monthly_closing_attachments")
+    .update({
+      is_valid: true,
+      validated_at: now,
+      validated_by_user_id: input.actorUserId,
+    })
+    .eq("monthly_closing_id", closing.id);
+  if (validateError) {
+    throw new Error(
+      `Falha ao validar anexos: ${validateError.message}`,
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update({
+      status: "finalized",
+      finalized_at: now,
+      finalized_by_user_id: input.actorUserId,
+    })
+    .eq("id", closing.id)
+    .eq("status", "closed")
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao finalizar fechamento: ${error.message}`);
+  }
+
+  const updated = mapClosing(data as Record<string, unknown>);
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "finalized",
+    fromStatus: "closed",
+    toStatus: "finalized",
+    actorUserId: input.actorUserId,
+    payload: {
+      invoiceValidated: true,
+      boletoValidated: true,
+    },
+  });
+
+  return updated;
+}
+
+function normalizeCompareNumber(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "";
+  }
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/**
+ * After a Jira Compilado materialization, flag finalized closings whose
+ * snapshot no longer matches live cards for the same developer + period.
+ * Never mutates monthly_closing_items.
+ */
+export async function detectJiraChangesAfterFinalized(input: {
+  importId: string;
+  teamId?: string | null;
+  actorUserId?: string | null;
+}): Promise<{ flaggedClosingIds: string[] }> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("monthly_closings")
+    .select("*")
+    .eq("status", "finalized");
+
+  if (input.teamId) {
+    query = query.eq("team_id", input.teamId);
+  }
+
+  const { data: closingRows, error } = await query;
+  if (error) {
+    throw new Error(
+      `Falha ao carregar fechamentos finalizados: ${error.message}`,
+    );
+  }
+
+  const closings = (closingRows ?? []).map((row) =>
+    mapClosing(row as Record<string, unknown>),
+  );
+  if (closings.length === 0) {
+    return { flaggedClosingIds: [] };
+  }
+
+  const flaggedClosingIds: string[] = [];
+
+  for (const closing of closings) {
+    if (closing.jira_changed_after_finalized) {
+      continue;
+    }
+
+    const items = await listMonthlyClosingItems(closing.id);
+    if (items.length === 0) {
+      continue;
+    }
+
+    const keys = items.map((item) => item.jira_key);
+    const { data: liveCards, error: cardsError } = await supabase
+      .from("jira_cards")
+      .select(
+        "jira_key, summary, status, estimate_hours, time_spent_hours, delay_days, due_on, unit_test_delivery_on, is_rework, rework_weight",
+      )
+      .eq("import_id", input.importId)
+      .eq("developer_id", closing.developer_id)
+      .in("jira_key", keys);
+
+    if (cardsError) {
+      throw new Error(
+        `Falha ao comparar cards do fechamento: ${cardsError.message}`,
+      );
+    }
+
+    const liveByKey = new Map(
+      (liveCards ?? []).map((card) => [
+        String(card.jira_key).trim().toUpperCase(),
+        card,
+      ]),
+    );
+
+    const changedKeys: string[] = [];
+    for (const item of items) {
+      const live = liveByKey.get(item.jira_key.trim().toUpperCase());
+      if (!live) {
+        changedKeys.push(item.jira_key);
+        continue;
+      }
+      const differs =
+        (live.summary ?? null) !== (item.summary ?? null) ||
+        (live.status ?? null) !== (item.status_name ?? null) ||
+        normalizeCompareNumber(
+          live.estimate_hours == null ? null : Number(live.estimate_hours),
+        ) !== normalizeCompareNumber(item.estimate_hours) ||
+        normalizeCompareNumber(
+          live.time_spent_hours == null ? null : Number(live.time_spent_hours),
+        ) !== normalizeCompareNumber(item.actual_hours) ||
+        normalizeCompareNumber(
+          live.delay_days == null ? null : Number(live.delay_days),
+        ) !== normalizeCompareNumber(item.delay_days) ||
+        (live.due_on ?? null) !== (item.due_on ?? null) ||
+        (live.unit_test_delivery_on ?? null) !==
+          (item.unit_test_delivery_on ?? null) ||
+        Boolean(live.is_rework) !== item.is_rework ||
+        normalizeCompareNumber(
+          live.rework_weight == null ? null : Number(live.rework_weight),
+        ) !== normalizeCompareNumber(item.rework_weight);
+
+      if (differs) {
+        changedKeys.push(item.jira_key);
+      }
+    }
+
+    if (changedKeys.length === 0) {
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from("monthly_closings")
+      .update({
+        jira_changed_after_finalized: true,
+        jira_changed_after_finalized_at: now,
+      })
+      .eq("id", closing.id)
+      .eq("status", "finalized")
+      .eq("jira_changed_after_finalized", false);
+
+    if (updateError) {
+      throw new Error(
+        `Falha ao sinalizar drift do Jira: ${updateError.message}`,
+      );
+    }
+
+    await appendEvent({
+      closingId: closing.id,
+      eventType: "jira_changed_after_finalized_detected",
+      fromStatus: "finalized",
+      toStatus: "finalized",
+      actorUserId: input.actorUserId ?? null,
+      payload: {
+        importId: input.importId,
+        changedKeys: changedKeys.slice(0, 50),
+        changedCount: changedKeys.length,
+      },
+    });
+
+    flaggedClosingIds.push(closing.id);
+  }
+
+  return { flaggedClosingIds };
 }

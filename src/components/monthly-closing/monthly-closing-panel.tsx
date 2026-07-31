@@ -246,6 +246,18 @@ export function MonthlyClosingControls({
         </p>
       ) : null}
 
+      {status === "closed" ? (
+        <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
+          Aprovado · envie NF e boleto em PDF.
+        </p>
+      ) : null}
+
+      {status === "finalized" ? (
+        <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
+          Finalizado · somente leitura.
+        </p>
+      ) : null}
+
       {error ? (
         <p className="max-w-[18rem] text-xs text-danger text-pretty sm:text-right">
           {error}
