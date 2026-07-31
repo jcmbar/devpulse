@@ -16,7 +16,8 @@ export function PerformanceBandsLegend({
         <div className="space-y-1">
           <p className="text-sm font-medium">Régua de aproveitamento</p>
           <p className="text-xs text-muted-foreground">
-            Usada no ranking, nos totais e na matriz mensal.
+            Usada nas cores do ranking, dos totais e da matriz mensal
+            (Aproveitamento).
           </p>
         </div>
         <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs sm:gap-x-4">

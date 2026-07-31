@@ -8,6 +8,7 @@ export type GestorAnaliticoHrefInput = {
   to?: string | null;
   month?: string | null;
   source?: CompiladoSourceMode | string | null;
+  teamId?: string | null;
   developerId?: string | null;
   status?: string | null;
   classification?: GestorCardMetricKind | null;
@@ -35,6 +36,9 @@ export function buildGestorAnaliticoHref(
   }
   if (input.source && input.source !== "auto") {
     params.set("source", String(input.source));
+  }
+  if (input.teamId) {
+    params.set("teamId", input.teamId);
   }
   if (input.developerId) {
     params.set("developerId", input.developerId);

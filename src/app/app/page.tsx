@@ -93,27 +93,40 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       ? await listDelayJustificationsForDeveloperImport({
           importId: selectedBatch.id,
           developerId: developer.id,
+          kind: "all",
         })
       : [];
 
   const acceptedDelayKeys = justifications
-    .filter((row) => row.status === "accepted")
+    .filter((row) => row.kind === "delay" && row.status === "accepted")
+    .map((row) => row.jira_key);
+  const acceptedReworkKeys = justifications
+    .filter((row) => row.kind === "rework" && row.status === "accepted")
     .map((row) => row.jira_key);
 
+  function toBadge(row: (typeof justifications)[number]) {
+    return {
+      id: row.id,
+      status: row.status,
+      developerNote: row.developer_note,
+      reviewerNote: row.reviewer_note,
+    };
+  }
+
   const delayJustificationsByKey = Object.fromEntries(
-    justifications.map((row) => [
-      row.jira_key.trim().toUpperCase(),
-      {
-        id: row.id,
-        status: row.status,
-        developerNote: row.developer_note,
-        reviewerNote: row.reviewer_note,
-      },
-    ]),
+    justifications
+      .filter((row) => row.kind === "delay")
+      .map((row) => [row.jira_key.trim().toUpperCase(), toBadge(row)]),
+  );
+  const reworkJustificationsByKey = Object.fromEntries(
+    justifications
+      .filter((row) => row.kind === "rework")
+      .map((row) => [row.jira_key.trim().toUpperCase(), toBadge(row)]),
   );
 
   const metrics = computeDeveloperPeriodMetrics(cards, {
     acceptedDelayKeys,
+    acceptedReworkKeys,
   });
 
   return (
@@ -127,6 +140,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       metrics={metrics}
       provenance={resolved.provenance}
       delayJustificationsByKey={delayJustificationsByKey}
+      reworkJustificationsByKey={reworkJustificationsByKey}
     />
   );
 }

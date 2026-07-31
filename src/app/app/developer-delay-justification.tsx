@@ -2,7 +2,11 @@
 
 import { submitDelayJustificationAction } from "@/app/app/delay-actions";
 import { cn } from "@/lib/utils";
-import type { DelayJustificationStatus } from "@/types/delay-justification";
+import type {
+  DelayJustificationKind,
+  DelayJustificationStatus,
+} from "@/types/delay-justification";
+import { justificationKindLabel } from "@/types/delay-justification";
 import { Loader2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
@@ -45,25 +49,31 @@ export function DelayJustificationStatusBadge({
   );
 }
 
-type JustifyDelayButtonProps = {
+type JustifyDeliveryButtonProps = {
   importId: string;
   jiraCardId: string;
   jiraKey: string;
+  kind: DelayJustificationKind;
   existing: DelayJustificationBadgeInfo | null;
 };
 
-export function JustifyDelayButton({
+export function JustifyDeliveryButton({
   importId,
   jiraCardId,
   jiraKey,
+  kind,
   existing,
-}: JustifyDelayButtonProps) {
+}: JustifyDeliveryButtonProps) {
   const [open, setOpen] = useState(false);
   const canRequest =
     existing == null || existing.status === "rejected";
+  const kindLabel = justificationKindLabel(kind);
 
   return (
     <div className="flex flex-col items-start gap-1">
+      <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+        {kindLabel}
+      </span>
       {existing ? (
         <DelayJustificationStatusBadge status={existing.status} />
       ) : null}
@@ -74,15 +84,16 @@ export function JustifyDelayButton({
           className="text-xs font-medium text-brand underline-offset-4 hover:underline"
         >
           {existing?.status === "rejected"
-            ? "Reenviar justificativa"
-            : "Justificar atraso"}
+            ? "Reenviar"
+            : `Justificar ${kindLabel.toLowerCase()}`}
         </button>
       ) : null}
       {open ? (
-        <JustifyDelayModal
+        <JustifyDeliveryModal
           importId={importId}
           jiraCardId={jiraCardId}
           jiraKey={jiraKey}
+          kind={kind}
           onClose={() => setOpen(false)}
         />
       ) : null}
@@ -90,15 +101,24 @@ export function JustifyDelayButton({
   );
 }
 
-function JustifyDelayModal({
+/** @deprecated Prefer JustifyDeliveryButton with kind="delay" */
+export function JustifyDelayButton(
+  props: Omit<JustifyDeliveryButtonProps, "kind">,
+) {
+  return <JustifyDeliveryButton {...props} kind="delay" />;
+}
+
+function JustifyDeliveryModal({
   importId,
   jiraCardId,
   jiraKey,
+  kind,
   onClose,
 }: {
   importId: string;
   jiraCardId: string;
   jiraKey: string;
+  kind: DelayJustificationKind;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -107,6 +127,7 @@ function JustifyDelayModal({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [mounted, setMounted] = useState(false);
+  const kindLabel = justificationKindLabel(kind);
 
   useEffect(() => {
     setMounted(true);
@@ -124,6 +145,7 @@ function JustifyDelayModal({
         importId,
         jiraCardId,
         developerNote: note,
+        kind,
       });
       if (!result.ok) {
         setError(result.error);
@@ -154,7 +176,7 @@ function JustifyDelayModal({
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              Justificar atraso
+              Justificar {kindLabel.toLowerCase()}
             </p>
             <h2
               id={titleId}
@@ -176,7 +198,7 @@ function JustifyDelayModal({
 
         <div className="flex min-w-0 flex-col gap-1.5 text-sm">
           <label htmlFor={`${titleId}-note`} className="font-medium">
-            Motivo do atraso
+            Motivo do {kindLabel.toLowerCase()}
           </label>
           <textarea
             id={`${titleId}-note`}
@@ -184,7 +206,7 @@ function JustifyDelayModal({
             onChange={(event) => setNote(event.target.value)}
             rows={4}
             required
-            placeholder="Explique o contexto do atraso para o gestor avaliar."
+            placeholder={`Explique o contexto do ${kindLabel.toLowerCase()} para o gestor avaliar.`}
             className="ui-textarea min-h-[6.5rem] min-w-0 max-w-full"
           />
         </div>

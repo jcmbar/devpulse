@@ -10,7 +10,9 @@ export type DeveloperPeriodMetrics = {
   /** Alias explícito do líquido (= delayedCards). */
   delayedCardsNet: number;
   reworkCards: number;
-  /** Soma dos pesos de retrabalho (Retrabalho=1, 2x=2, 3x=3…). */
+  /** Subconjunto do bruto com justificativa de retrabalho aceita no lote. */
+  reworkCardsAccepted: number;
+  /** Soma dos pesos de retrabalho líquidos (após aceites) usados na penalidade. */
   reworkWeightTotal: number;
   totalEstimateHours: number;
   totalTimeSpentHours: number;

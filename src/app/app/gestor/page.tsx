@@ -7,6 +7,7 @@ import {
 } from "@/components/gestor/metric-audit-button";
 import { RunSyncNowButton } from "@/components/gestor/run-sync-now-button";
 import { GestorSourceFilter } from "@/components/gestor-source-filter";
+import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
@@ -42,10 +43,14 @@ import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot"
 import {
   formatGestorMonthLabel,
   getGestorDashboard,
-  type CapacitySignal,
-  type GestorRankingRow,
 } from "@/services/gestor/dashboard";
 import { listJiraIntegrations } from "@/services/integrations/jira";
+import { listTeamsAdmin } from "@/services/teams";
+import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
+import {
+  parseTeamListFilter,
+  teamListFilterParam,
+} from "@/lib/teams/team-filter";
 
 type GestorPageProps = {
   searchParams: Promise<{
@@ -54,6 +59,7 @@ type GestorPageProps = {
     to?: string;
     month?: string;
     source?: string;
+    teamId?: string;
   }>;
 };
 
@@ -75,125 +81,50 @@ function formatPercent(value: number | null): string {
   })}%`;
 }
 
-function capacitySignalLabel(signal: CapacitySignal): string {
-  switch (signal) {
-    case "under":
-      return "Abaixo da meta";
-    case "over":
-      return "Acima da meta";
-    case "balanced":
-      return "Na meta";
-    case "unknown":
-      return "Sem meta";
-  }
-}
+const ESTIMATE_BALANCE_EPSILON_HOURS = 0.5;
 
-function capacitySignalClass(signal: CapacitySignal): string {
-  switch (signal) {
-    case "under":
-      return "text-sky-800 dark:text-sky-200";
-    case "over":
-      return "text-amber-800 dark:text-amber-200";
-    case "balanced":
-      return "text-emerald-800 dark:text-emerald-200";
-    case "unknown":
-      return "text-muted-foreground";
-  }
-}
+function EstimateVsActualCell({
+  metrics,
+}: {
+  metrics: Pick<
+    DeveloperPeriodMetrics,
+    "totalTimeSpentHours" | "totalEstimateHours" | "totalDifferenceHours"
+  >;
+}) {
+  const realized = metrics.totalTimeSpentHours;
+  const planned = metrics.totalEstimateHours;
+  const delta = metrics.totalDifferenceHours;
+  const absDelta = Math.abs(delta);
 
-function capacitySourceLabel(source: GestorRankingRow["capacitySource"]): string {
-  switch (source) {
-    case "override":
-      return "override";
-    case "mixed":
-      return "misto (padrão + override)";
-    case "team_default":
-      return "padrão do time";
-    case "missing":
-      return "sem meta";
-  }
-}
-
-function CapacityCell({ row }: { row: GestorRankingRow }) {
-  if (row.requiredHours == null) {
-    return (
-      <span className="text-muted-foreground" title="Configure em Capacidade e faixas">
-        Sem meta
-      </span>
-    );
+  if (planned <= 0 && realized <= 0) {
+    return <span className="text-muted-foreground">Sem horas</span>;
   }
 
-  const segmentHint =
-    row.capacitySegments.length > 1
-      ? row.capacitySegments
-          .map(
-            (segment) =>
-              `${segment.yearMonth}: ${segment.hours.toLocaleString("pt-BR", {
-                maximumFractionDigits: 1,
-              })}h`,
-          )
-          .join(" + ")
-      : null;
+  let reading: string;
+  let readingClass = "text-muted-foreground";
 
-  const holidayHint =
-    row.appliedHolidays.length > 0
-      ? row.appliedHolidays
-          .map(
-            (item) =>
-              `${item.date} ${item.name} (−${item.hoursExcluded.toLocaleString("pt-BR", {
-                maximumFractionDigits: 1,
-              })}h, ${item.reason})`,
-          )
-          .join("; ")
-      : null;
-
-  const contextHint = [
-    row.holidayContext.stateCode
-      ? `estado ${row.holidayContext.stateCode}`
-      : null,
-    row.holidayContext.cityCode
-      ? `cidade ${row.holidayContext.cityCode}`
-      : null,
-    row.holidayContext.teamName
-      ? `time ${row.holidayContext.teamName}`
-      : row.holidayContext.teamCode
-        ? `time ${row.holidayContext.teamCode}`
-        : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  if (planned <= 0) {
+    reading = "Sem estimado no Jira";
+  } else if (absDelta < ESTIMATE_BALANCE_EPSILON_HOURS) {
+    reading = "Dentro do previsto";
+    readingClass = "text-emerald-800 dark:text-emerald-200";
+  } else if (delta < 0) {
+    reading = `${formatHours(absDelta)} de antecedência`;
+    readingClass = "text-sky-800 dark:text-sky-200";
+  } else {
+    reading = `${formatHours(absDelta)} de estouro`;
+    readingClass = "text-amber-800 dark:text-amber-200";
+  }
 
   return (
-    <div className="space-y-0.5">
-      <p className="font-medium">
-        {formatHours(row.metrics.totalTimeSpentHours)} /{" "}
-        {formatHours(row.requiredHours)}
+    <div
+      className="space-y-0.5"
+      title={`Realizado ${formatHours(realized)} · Previsto (estimate_hours) ${formatHours(planned)} · Diff ${delta > 0 ? "+" : ""}${formatHours(delta)}`}
+    >
+      <p className="font-medium whitespace-nowrap">
+        {formatHours(realized)} / {formatHours(planned)}
       </p>
-      <p className={`text-xs ${capacitySignalClass(row.capacitySignal)}`}>
-        {capacitySignalLabel(row.capacitySignal)}
-        {row.capacityDeltaHours != null && row.capacityDeltaHours !== 0
-          ? ` (${row.capacityDeltaHours > 0 ? "+" : ""}${formatHours(row.capacityDeltaHours)})`
-          : ""}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {capacitySourceLabel(row.capacitySource)}
-      </p>
-      {segmentHint ? (
-        <p className="text-xs text-muted-foreground" title={segmentHint}>
-          {segmentHint}
-        </p>
-      ) : null}
-      {holidayHint ? (
-        <p className="text-xs text-muted-foreground" title={holidayHint}>
-          Feriados −{formatHours(row.holidayHoursExcluded)}
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          {contextHint
-            ? `Contexto: ${contextHint}`
-            : "Só nacionais (sem estado/cidade/time)"}
-        </p>
-      )}
+      <p className={`text-xs ${readingClass}`}>{reading}</p>
     </div>
   );
 }
@@ -204,14 +135,20 @@ export default async function GestorDashboardPage({
   await requireTeamAccess();
   const params = await searchParams;
   const dataSource = parseCompiladoSourceMode(params.source);
+  const teamFilter = parseTeamListFilter(params.teamId);
+  const selectedTeamId =
+    teamFilter.kind === "team" ? teamFilter.teamId : null;
+  const teamParam = teamListFilterParam(teamFilter) || undefined;
 
-  const [seed, jiraIntegrations] = await Promise.all([
+  const [seed, jiraIntegrations, teams] = await Promise.all([
     resolveCompiladoSnapshot({
       mode: dataSource,
       importId: params.importId ?? null,
       dateRange: null,
+      teamId: selectedTeamId,
     }),
     listJiraIntegrations(),
+    listTeamsAdmin(),
   ]);
 
   const dateRange = resolveCompiladoDateRange({
@@ -229,6 +166,7 @@ export default async function GestorDashboardPage({
     importId: params.importId ?? null,
     dateRange,
     dataSource,
+    teamId: selectedTeamId,
   });
 
   const selectedImportId = dashboard.selectedBatch?.id ?? null;
@@ -248,6 +186,7 @@ export default async function GestorDashboardPage({
     to: dateRange.mode === "custom" ? dateRange.end : null,
     month: dateRange.mode === "month" ? dateRange.month : null,
     source: dataSource,
+    teamId: selectedTeamId,
   });
   const tone = (rate: number | null) =>
     performanceBandTextClass(resolvePerformanceBand(rate, thresholds));
@@ -262,13 +201,25 @@ export default async function GestorDashboardPage({
   const sourceParam = dataSource === "auto" ? undefined : dataSource;
   const preservedWithSource = {
     source: sourceParam,
+    teamId: teamParam,
     month:
       dateRange.mode === "month" ? dateRange.month ?? undefined : undefined,
     from: dateRange.mode === "custom" ? dateRange.start : undefined,
     to: dateRange.mode === "custom" ? dateRange.end : undefined,
   };
 
+  const selectedTeamName =
+    selectedTeamId != null
+      ? (teams.find((team) => team.id === selectedTeamId)?.name ?? null)
+      : null;
+
   const syncTarget =
+    (selectedTeamId
+      ? jiraIntegrations.find(
+          (row) => row.team_id === selectedTeamId && row.is_enabled,
+        ) ??
+        jiraIntegrations.find((row) => row.team_id === selectedTeamId)
+      : null) ??
     jiraIntegrations.find((row) => row.is_enabled) ??
     jiraIntegrations[0] ??
     null;
@@ -287,7 +238,19 @@ export default async function GestorDashboardPage({
         title="Dashboard do gestor"
         description={
           <>
-            Compilado do time ·{" "}
+            Compilado
+            {selectedTeamName ? (
+              <>
+                {" "}
+                ·{" "}
+                <span className="font-medium text-foreground">
+                  {selectedTeamName}
+                </span>
+              </>
+            ) : (
+              " · todos os times"
+            )}
+            {" · "}
             <span className="font-medium text-foreground">
               {formatDateRangeLabel(dateRange)}
             </span>
@@ -335,13 +298,29 @@ export default async function GestorDashboardPage({
             </p>
           )}
 
-          <div className="ui-filter-bar__fields">
+          <div className="ui-filter-bar__fields lg:grid-cols-3">
+            <div className="ui-filter-bar__field">
+              <p className="ui-filter-bar__label">Time</p>
+              <GestorTeamFilter
+                basePath="/app/gestor"
+                teams={teams}
+                selectedTeamId={selectedTeamId}
+                preservedParams={{
+                  source: sourceParam,
+                  month: preservedWithSource.month,
+                  from: preservedWithSource.from,
+                  to: preservedWithSource.to,
+                }}
+                embedded
+              />
+            </div>
             <div className="ui-filter-bar__field">
               <p className="ui-filter-bar__label">Fonte</p>
               <GestorSourceFilter
                 basePath="/app/gestor"
                 selected={dataSource}
                 preservedParams={{
+                  teamId: teamParam,
                   month: preservedWithSource.month,
                   from: preservedWithSource.from,
                   to: preservedWithSource.to,
@@ -357,6 +336,7 @@ export default async function GestorDashboardPage({
                 basePath="/app/gestor"
                 preservedParams={{
                   source: sourceParam,
+                  teamId: teamParam,
                   month: preservedWithSource.month,
                   from: preservedWithSource.from,
                   to: preservedWithSource.to,
@@ -371,7 +351,7 @@ export default async function GestorDashboardPage({
             importId={selectedImportId}
             activeRange={dateRange}
             monthOptions={dashboard.monthOptions}
-            preservedParams={{ source: sourceParam }}
+            preservedParams={{ source: sourceParam, teamId: teamParam }}
             embedded
           />
         </div>
@@ -528,8 +508,9 @@ export default async function GestorDashboardPage({
               )}
               {dashboard.capacityPeriod.spansMultipleMonths ? (
                 <p>
-                  Intervalo multi-mês: Capacidade no ranking soma a meta
-                  prorrateada; a matriz mostra aproveitamento mês a mês.
+                  Intervalo multi-mês: a matriz mostra aproveitamento mês a mês;
+                  Previsto × Realizado no ranking soma as horas do intervalo
+                  inteiro.
                 </p>
               ) : null}
             </div>
@@ -539,9 +520,10 @@ export default async function GestorDashboardPage({
             title="Ranking do período"
             description={
               <>
-                Ordenado por Índice de Entrega (qualidade × √volume). Atraso
-                líquido no ranking; auditoria preserva bruto e justificativas.
-                Fonte: {compiladoSourceModeLabel(dataSource)}.
+                Ordenado por Índice de Entrega (qualidade × √volume). Atraso e
+                retrabalho líquidos no ranking; auditoria preserva bruto e
+                justificativas separadas. Fonte:{" "}
+                {compiladoSourceModeLabel(dataSource)}.
               </>
             }
             actions={
@@ -601,8 +583,12 @@ export default async function GestorDashboardPage({
                       Índice
                     </th>
                     <th className="hidden lg:table-cell">Cadastro</th>
-                    <th className="hidden lg:table-cell">Capacidade</th>
-                    <th className="hidden lg:table-cell">Diff horas</th>
+                    <th
+                      className="hidden lg:table-cell"
+                      title="Realizado (time spent) / Previsto (estimate_hours). Diff = realizado − previsto."
+                    >
+                      Previsto × Realizado
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -659,6 +645,7 @@ export default async function GestorDashboardPage({
                           developerId={row.developerId}
                           developerName={row.fullName}
                           filterContext={auditFilterContext}
+                          pendingDecisionCount={row.pendingDelayJustifications}
                         />
                       </td>
                       <td className="hidden lg:table-cell">
@@ -666,9 +653,15 @@ export default async function GestorDashboardPage({
                           metric="rework"
                           count={row.metrics.reworkCards}
                           displayValue={row.metrics.reworkWeightTotal}
+                          title={
+                            row.metrics.reworkCards > 0
+                              ? `bruto ${row.metrics.reworkCards} · acatado ${row.metrics.reworkCardsAccepted} · peso líquido ${row.metrics.reworkWeightTotal}`
+                              : undefined
+                          }
                           developerId={row.developerId}
                           developerName={row.fullName}
                           filterContext={auditFilterContext}
+                          pendingDecisionCount={row.pendingReworkJustifications}
                         />
                       </td>
                       <td
@@ -691,10 +684,7 @@ export default async function GestorDashboardPage({
                         {row.isActive ? "Ativo" : "Inativo"}
                       </td>
                       <td className="hidden lg:table-cell">
-                        <CapacityCell row={row} />
-                      </td>
-                      <td className="hidden lg:table-cell whitespace-nowrap">
-                        {formatHours(row.metrics.totalDifferenceHours)}
+                        <EstimateVsActualCell metrics={row.metrics} />
                       </td>
                     </tr>
                   ))}
@@ -708,13 +698,12 @@ export default async function GestorDashboardPage({
             title="Matriz mensal"
             description={
               <>
-                Aproveitamento por mês em{" "}
+                Aproveitamento e Índice por mês em{" "}
                 <span className="font-medium text-foreground">
                   {formatDateRangeLabel(dateRange)}
                 </span>
-                {" "}
-                (cards entre parênteses). Fonte:{" "}
-                {compiladoSourceModeLabel(dataSource)}.
+                . A cor segue a régua de aproveitamento. Toque nos valores para
+                ver o cálculo. Fonte: {compiladoSourceModeLabel(dataSource)}.
               </>
             }
           >
@@ -728,7 +717,7 @@ export default async function GestorDashboardPage({
               </p>
             ) : (
               <DataTable
-                minWidthClassName="min-w-0 md:min-w-[720px]"
+                minWidthClassName="min-w-0 md:min-w-[860px]"
                 stickyFirstColumn
               >
                 <thead>
@@ -756,18 +745,41 @@ export default async function GestorDashboardPage({
                       {row.cells.map((cell) => (
                         <td
                           key={`${row.developerId}-${cell.month}`}
-                          className={`whitespace-nowrap ${tone(cell.utilizationRate)} ${cell.cardsCount > 0 ? bandSurface(cell.utilizationRate) : ""}`}
+                          className={`align-top ${tone(cell.utilizationRate)} ${cell.cardsCount > 0 ? bandSurface(cell.utilizationRate) : ""}`}
                         >
                           {cell.cardsCount === 0 ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
-                            <>
-                              {formatPercent(cell.utilizationRate)}
-                              <span className="text-muted-foreground">
-                                {" "}
-                                ({cell.cardsCount})
+                            <div className="flex min-w-[5.5rem] flex-col gap-0.5 py-0.5">
+                              <MetricCalcTooltip
+                                explain={buildUtilizationCalcExplain({
+                                  totalCards: cell.cardsCount,
+                                  delayedCardsNet: cell.delayedCardsNet,
+                                  reworkWeightTotal: cell.reworkWeightTotal,
+                                  utilizationRate: cell.utilizationRate ?? 0,
+                                })}
+                              >
+                                <span className="font-medium">
+                                  {formatPercent(cell.utilizationRate)}
+                                </span>
+                              </MetricCalcTooltip>
+                              <MetricCalcTooltip
+                                explain={buildDeliveryIndexCalcExplain({
+                                  totalCards: cell.cardsCount,
+                                  utilizationRate: cell.utilizationRate ?? 0,
+                                  deliveryIndex: cell.deliveryIndex,
+                                })}
+                                className="text-xs"
+                              >
+                                <span className="tabular-nums">
+                                  Índ. {formatDeliveryIndex(cell.deliveryIndex)}
+                                </span>
+                              </MetricCalcTooltip>
+                              <span className="text-[10px] text-muted-foreground tabular-nums">
+                                {cell.cardsCount} card
+                                {cell.cardsCount === 1 ? "" : "s"}
                               </span>
-                            </>
+                            </div>
                           )}
                         </td>
                       ))}

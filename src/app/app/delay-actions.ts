@@ -5,6 +5,7 @@ import { getAppContext } from "@/lib/auth/app-context";
 import { getCardDeliveryFlags } from "@/lib/metrics/developer-period";
 import { submitDelayJustification } from "@/services/delay-justifications";
 import { getJiraCardById } from "@/services/jira-cards";
+import type { DelayJustificationKind } from "@/types/delay-justification";
 
 export type SubmitDelayJustificationResult =
   | { ok: true }
@@ -14,6 +15,7 @@ export async function submitDelayJustificationAction(input: {
   importId: string;
   jiraCardId: string;
   developerNote: string;
+  kind?: DelayJustificationKind;
 }): Promise<SubmitDelayJustificationResult> {
   try {
     const { profile, developer } = await getAppContext();
@@ -29,6 +31,9 @@ export async function submitDelayJustificationAction(input: {
       return { ok: false, error: "Card ou lote inválido." };
     }
 
+    const kind: DelayJustificationKind =
+      input.kind === "rework" ? "rework" : "delay";
+
     const card = await getJiraCardById(input.jiraCardId);
     if (!card) {
       return { ok: false, error: "Card não encontrado." };
@@ -41,10 +46,16 @@ export async function submitDelayJustificationAction(input: {
     }
 
     const flags = getCardDeliveryFlags(card);
-    if (flags.isDelayed !== true) {
+    if (kind === "delay" && flags.isDelayed !== true) {
       return {
         ok: false,
         error: "Só é possível justificar cards com atraso bruto neste lote.",
+      };
+    }
+    if (kind === "rework" && !flags.isRework) {
+      return {
+        ok: false,
+        error: "Só é possível justificar cards marcados como retrabalho.",
       };
     }
 
@@ -53,6 +64,7 @@ export async function submitDelayJustificationAction(input: {
       jiraCardId: card.id,
       jiraKey: card.jira_key,
       developerId: developer.id,
+      kind,
       dueOn: card.due_on,
       unitTestDeliveryOn: card.unit_test_delivery_on,
       delayDays: card.delay_days,

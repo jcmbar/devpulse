@@ -1,4 +1,4 @@
-export type DelayJustificationKind = "delay";
+export type DelayJustificationKind = "delay" | "rework";
 
 export type DelayJustificationStatus = "pending" | "accepted" | "rejected";
 
@@ -28,6 +28,7 @@ export type DelayJustificationSubmitInput = {
   jiraCardId: string;
   jiraKey: string;
   developerId: string;
+  kind: DelayJustificationKind;
   dueOn: string | null;
   unitTestDeliveryOn: string | null;
   delayDays: number | null;
@@ -41,3 +42,7 @@ export type DelayJustificationDecisionInput = {
   reviewerNote: string;
   reviewerProfileId: string;
 };
+
+export function justificationKindLabel(kind: DelayJustificationKind): string {
+  return kind === "rework" ? "Retrabalho" : "Atraso";
+}

@@ -19,11 +19,15 @@ import { getDeveloperAdmin } from "@/services/developers/admin";
 import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot";
 import { listDelayJustificationsForImportKeys } from "@/services/delay-justifications";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
-import type { DelayJustificationStatus } from "@/types/delay-justification";
+import type {
+  DelayJustificationKind,
+  DelayJustificationStatus,
+} from "@/types/delay-justification";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 
 export type GestorCardDelayJustification = {
   id: string;
+  kind: DelayJustificationKind;
   status: DelayJustificationStatus;
   developerNote: string;
   requestedAt: string;
@@ -114,21 +118,37 @@ export async function getGestorDeveloperCardsAudit(input: {
         })
       : [];
 
-  const justificationByKey =
-    selectedBatch != null
-      ? await listDelayJustificationsForImportKeys({
-          importId: selectedBatch.id,
-          developerId: input.developerId,
-          jiraKeys: periodCards.map((card) => card.jira_key),
-        })
-      : new Map();
+  const justificationKind: DelayJustificationKind | null =
+    metric === "delayed" ? "delay" : metric === "rework" ? "rework" : null;
 
-  const acceptedDelayKeys = [...justificationByKey.values()]
+  const [delayJustificationByKey, reworkJustificationByKey] =
+    selectedBatch != null
+      ? await Promise.all([
+          listDelayJustificationsForImportKeys({
+            importId: selectedBatch.id,
+            developerId: input.developerId,
+            jiraKeys: periodCards.map((card) => card.jira_key),
+            kind: "delay",
+          }),
+          listDelayJustificationsForImportKeys({
+            importId: selectedBatch.id,
+            developerId: input.developerId,
+            jiraKeys: periodCards.map((card) => card.jira_key),
+            kind: "rework",
+          }),
+        ])
+      : [new Map(), new Map()];
+
+  const acceptedDelayKeys = [...delayJustificationByKey.values()]
+    .filter((row) => row.status === "accepted")
+    .map((row) => row.jira_key);
+  const acceptedReworkKeys = [...reworkJustificationByKey.values()]
     .filter((row) => row.status === "accepted")
     .map((row) => row.jira_key);
 
   const periodMetrics = computeDeveloperPeriodMetrics(periodCards, {
     acceptedDelayKeys,
+    acceptedReworkKeys,
   });
   const filtered = filterCardsByMetric(periodCards, metric);
 
@@ -140,8 +160,13 @@ export async function getGestorDeveloperCardsAudit(input: {
       resolvedImportId: selectedBatch?.id ?? null,
       metric,
     });
-    const justification =
-      justificationByKey.get(card.jira_key.trim().toUpperCase()) ?? null;
+    const key = card.jira_key.trim().toUpperCase();
+    const justificationRow =
+      justificationKind === "delay"
+        ? (delayJustificationByKey.get(key) ?? null)
+        : justificationKind === "rework"
+          ? (reworkJustificationByKey.get(key) ?? null)
+          : null;
 
     return {
       id: card.id,
@@ -164,14 +189,15 @@ export async function getGestorDeveloperCardsAudit(input: {
       classificationLabels: annotations.classificationLabels,
       suspicions: annotations.suspicions,
       isSuspicious: annotations.isSuspicious,
-      justification: justification
+      justification: justificationRow
         ? {
-            id: justification.id,
-            status: justification.status,
-            developerNote: justification.developer_note,
-            requestedAt: justification.requested_at,
-            reviewerNote: justification.reviewer_note,
-            reviewedAt: justification.reviewed_at,
+            id: justificationRow.id,
+            kind: justificationRow.kind,
+            status: justificationRow.status,
+            developerNote: justificationRow.developer_note,
+            requestedAt: justificationRow.requested_at,
+            reviewerNote: justificationRow.reviewer_note,
+            reviewedAt: justificationRow.reviewed_at,
           }
         : null,
     };

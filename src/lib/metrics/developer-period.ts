@@ -156,6 +156,8 @@ export function computeDeveloperPeriodMetrics(
   options?: {
     /** Accepted delay jira_keys (uppercase) for this developer/lote. */
     acceptedDelayKeys?: Iterable<string> | null;
+    /** Accepted rework jira_keys (uppercase) — excluded from rework penalty. */
+    acceptedReworkKeys?: Iterable<string> | null;
   },
 ): DeveloperPeriodMetrics {
   let totalEstimateHours = 0;
@@ -164,6 +166,7 @@ export function computeDeveloperPeriodMetrics(
   let delayedCardsGross = 0;
   let delayedCardsAccepted = 0;
   let reworkCards = 0;
+  let reworkCardsAccepted = 0;
   let reworkWeightTotal = 0;
   let totalDelayDays = 0;
   let delaySumForAverage = 0;
@@ -171,8 +174,11 @@ export function computeDeveloperPeriodMetrics(
   let maxDelayDays: number | null = null;
   const statusCounts: Record<string, number> = {};
 
-  const accepted = new Set(
+  const acceptedDelays = new Set(
     [...(options?.acceptedDelayKeys ?? [])].map(normalizeJiraKey),
+  );
+  const acceptedReworks = new Set(
+    [...(options?.acceptedReworkKeys ?? [])].map(normalizeJiraKey),
   );
 
   for (const card of cards) {
@@ -180,9 +186,15 @@ export function computeDeveloperPeriodMetrics(
     totalTimeSpentHours += toNumber(card.time_spent_hours);
 
     const flags = getCardDeliveryFlags(card);
+    const key = normalizeJiraKey(card.jira_key);
     if (flags.isRework) {
       reworkCards += 1;
-      reworkWeightTotal += toNumber(card.rework_weight) || 1;
+      const weight = toNumber(card.rework_weight) || 1;
+      if (acceptedReworks.has(key)) {
+        reworkCardsAccepted += 1;
+      } else {
+        reworkWeightTotal += weight;
+      }
     }
 
     if (card.delay_days != null && Number.isFinite(card.delay_days)) {
@@ -200,7 +212,7 @@ export function computeDeveloperPeriodMetrics(
       onTimeCards += 1;
     } else if (flags.isDelayed === true) {
       delayedCardsGross += 1;
-      if (accepted.has(normalizeJiraKey(card.jira_key))) {
+      if (acceptedDelays.has(key)) {
         delayedCardsAccepted += 1;
       }
     }
@@ -225,6 +237,7 @@ export function computeDeveloperPeriodMetrics(
     delayedCardsAccepted,
     delayedCardsNet,
     reworkCards,
+    reworkCardsAccepted,
     reworkWeightTotal,
     totalEstimateHours,
     totalTimeSpentHours,
@@ -255,6 +268,7 @@ export function aggregateTeamPeriodMetrics(
   let delayedCardsAccepted = 0;
   let delayedCardsNet = 0;
   let reworkCards = 0;
+  let reworkCardsAccepted = 0;
   let reworkWeightTotal = 0;
   let totalEstimateHours = 0;
   let totalTimeSpentHours = 0;
@@ -271,6 +285,7 @@ export function aggregateTeamPeriodMetrics(
     delayedCardsAccepted += metrics.delayedCardsAccepted;
     delayedCardsNet += metrics.delayedCardsNet;
     reworkCards += metrics.reworkCards;
+    reworkCardsAccepted += metrics.reworkCardsAccepted;
     reworkWeightTotal += metrics.reworkWeightTotal;
     totalEstimateHours += metrics.totalEstimateHours;
     totalTimeSpentHours += metrics.totalTimeSpentHours;
@@ -310,6 +325,7 @@ export function aggregateTeamPeriodMetrics(
     delayedCardsAccepted,
     delayedCardsNet,
     reworkCards,
+    reworkCardsAccepted,
     reworkWeightTotal,
     totalEstimateHours,
     totalTimeSpentHours,

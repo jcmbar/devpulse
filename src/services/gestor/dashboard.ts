@@ -31,7 +31,11 @@ import {
   resolveCompiladoSnapshot,
   type CompiladoSnapshotProvenance,
 } from "@/services/compilado/resolve-snapshot";
-import { listAcceptedDelayKeysByDeveloper } from "@/services/delay-justifications";
+import {
+  listAcceptedDelayKeysByDeveloper,
+  listAcceptedReworkKeysByDeveloper,
+  listPendingJustificationCountsByDeveloper,
+} from "@/services/delay-justifications";
 
 export type CapacitySignal = "under" | "over" | "balanced" | "unknown";
 
@@ -55,12 +59,19 @@ export type GestorRankingRow = {
     teamCode: string;
     teamName: string | null;
   };
+  /** Delay justifications with status=pending awaiting gestor decision. */
+  pendingDelayJustifications: number;
+  /** Rework justifications with status=pending awaiting gestor decision. */
+  pendingReworkJustifications: number;
 };
 
 export type GestorMonthlyCell = {
   month: string;
   cardsCount: number;
   utilizationRate: number | null;
+  deliveryIndex: number;
+  delayedCardsNet: number;
+  reworkWeightTotal: number;
 };
 
 export type GestorMonthlyRow = {
@@ -149,6 +160,8 @@ function groupCardsByDeveloper(cards: JiraCard[]): Map<string, JiraCard[]> {
 function buildMonthlyMatrix(input: {
   developers: Awaited<ReturnType<typeof listDevelopersAdmin>>;
   cards: JiraCard[];
+  acceptedByDeveloper: Map<string, Set<string>>;
+  acceptedReworkByDeveloper: Map<string, Set<string>>;
 }): GestorDashboard["monthlyMatrix"] {
   const byDeveloperMonth = new Map<string, Map<string, JiraCard[]>>();
   const monthSet = new Set<string>();
@@ -186,11 +199,17 @@ function buildMonthlyMatrix(input: {
       isActive: developer.is_active,
       cells: months.map((month) => {
         const cards = byMonth.get(month) ?? [];
-        const metrics = computeDeveloperPeriodMetrics(cards);
+        const metrics = computeDeveloperPeriodMetrics(cards, {
+          acceptedDelayKeys: input.acceptedByDeveloper.get(developer.id),
+          acceptedReworkKeys: input.acceptedReworkByDeveloper.get(developer.id),
+        });
         return {
           month,
           cardsCount: metrics.totalCards,
           utilizationRate: metrics.utilizationRate,
+          deliveryIndex: metrics.deliveryIndex,
+          delayedCardsNet: metrics.delayedCardsNet,
+          reworkWeightTotal: metrics.reworkWeightTotal,
         };
       }),
     };
@@ -206,16 +225,20 @@ export async function getGestorDashboard(input: {
   importId?: string | null;
   dateRange: CompiladoDateRange;
   dataSource?: CompiladoSourceMode;
+  /** When set, scopes developers (+ Compilado batches) to this team_id. */
+  teamId?: string | null;
 }): Promise<GestorDashboard> {
   const dataSource = input.dataSource ?? "auto";
+  const teamId = input.teamId?.trim() || null;
 
   const [resolved, developers, thresholds] = await Promise.all([
     resolveCompiladoSnapshot({
       mode: dataSource,
       importId: input.importId,
       dateRange: input.dateRange,
+      teamId,
     }),
-    listDevelopersAdmin(),
+    listDevelopersAdmin(teamId ? { teamId } : undefined),
     getPerformanceThresholds(),
   ]);
 
@@ -265,11 +288,36 @@ export async function getGestorDashboard(input: {
         })
       : new Map<string, Set<string>>();
 
+  const acceptedReworkByDeveloper =
+    selectedBatch != null
+      ? await listAcceptedReworkKeysByDeveloper({
+          importId: selectedBatch.id,
+          developerIds: rankingSource.map((developer) => developer.id),
+        })
+      : new Map<string, Set<string>>();
+
+  const [pendingDelayByDeveloper, pendingReworkByDeveloper] =
+    selectedBatch != null
+      ? await Promise.all([
+          listPendingJustificationCountsByDeveloper({
+            importId: selectedBatch.id,
+            developerIds: rankingSource.map((developer) => developer.id),
+            kind: "delay",
+          }),
+          listPendingJustificationCountsByDeveloper({
+            importId: selectedBatch.id,
+            developerIds: rankingSource.map((developer) => developer.id),
+            kind: "rework",
+          }),
+        ])
+      : [new Map<string, number>(), new Map<string, number>()];
+
   const ranking: GestorRankingRow[] = rankingSource
     .map((developer) => {
       const cards = cardsByDeveloper.get(developer.id) ?? [];
       const metrics = computeDeveloperPeriodMetrics(cards, {
         acceptedDelayKeys: acceptedByDeveloper.get(developer.id),
+        acceptedReworkKeys: acceptedReworkByDeveloper.get(developer.id),
       });
       const capacity = capacities.get(developer.id);
       const requiredHours = capacity?.requiredHours ?? null;
@@ -306,6 +354,10 @@ export async function getGestorDashboard(input: {
           teamCode: teamLabel?.code ?? "",
           teamName: teamLabel?.name ?? null,
         },
+        pendingDelayJustifications:
+          pendingDelayByDeveloper.get(developer.id) ?? 0,
+        pendingReworkJustifications:
+          pendingReworkByDeveloper.get(developer.id) ?? 0,
       };
     })
     .sort((a, b) => {
@@ -339,6 +391,8 @@ export async function getGestorDashboard(input: {
   const monthlyMatrix = buildMonthlyMatrix({
     developers,
     cards: matrixCards,
+    acceptedByDeveloper,
+    acceptedReworkByDeveloper,
   });
 
   const monthOptions =

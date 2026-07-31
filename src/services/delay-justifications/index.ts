@@ -3,23 +3,27 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type {
   DelayJustificationDecisionInput,
+  DelayJustificationKind,
   DelayJustificationRequest,
   DelayJustificationStatus,
   DelayJustificationSubmitInput,
 } from "@/types/delay-justification";
 
 function mapRow(row: Record<string, unknown>): DelayJustificationRequest {
+  const kindRaw = String(row.kind ?? "delay");
+  const kind: DelayJustificationKind =
+    kindRaw === "rework" ? "rework" : "delay";
+
   return {
     id: String(row.id),
     import_id: String(row.import_id),
     jira_card_id: (row.jira_card_id as string | null) ?? null,
     jira_key: String(row.jira_key),
     developer_id: String(row.developer_id),
-    kind: "delay",
+    kind,
     due_on: (row.due_on as string | null) ?? null,
     unit_test_delivery_on: (row.unit_test_delivery_on as string | null) ?? null,
-    delay_days:
-      row.delay_days == null ? null : Number(row.delay_days),
+    delay_days: row.delay_days == null ? null : Number(row.delay_days),
     requester_profile_id: String(row.requester_profile_id),
     developer_note: String(row.developer_note),
     requested_at: String(row.requested_at),
@@ -36,41 +40,72 @@ function normalizeJiraKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
+function compositeKey(jiraKey: string, kind: DelayJustificationKind): string {
+  return `${normalizeJiraKey(jiraKey)}::${kind}`;
+}
+
 /**
- * Latest request per jira_key for a developer within one Compilado batch.
+ * Latest request per (jira_key, kind) for a developer within one Compilado batch.
  * Preference: accepted > pending > rejected (by requested_at within same status).
  */
 export async function listDelayJustificationsForDeveloperImport(input: {
   importId: string;
   developerId: string;
+  kind?: DelayJustificationKind | "all";
 }): Promise<DelayJustificationRequest[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("delay_justification_requests")
     .select("*")
     .eq("import_id", input.importId)
     .eq("developer_id", input.developerId)
-    .eq("kind", "delay")
     .order("requested_at", { ascending: false });
+
+  if (input.kind && input.kind !== "all") {
+    query = query.eq("kind", input.kind);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(`Falha ao listar justificativas: ${error.message}`);
   }
 
   const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
-  return pickLatestPerKey(rows);
+  return pickLatestPerKeyAndKind(rows);
 }
 
 export async function listAcceptedDelayKeysByDeveloper(input: {
   importId: string;
   developerIds?: string[];
 }): Promise<Map<string, Set<string>>> {
+  return listAcceptedKeysByDeveloper({
+    ...input,
+    kind: "delay",
+  });
+}
+
+export async function listAcceptedReworkKeysByDeveloper(input: {
+  importId: string;
+  developerIds?: string[];
+}): Promise<Map<string, Set<string>>> {
+  return listAcceptedKeysByDeveloper({
+    ...input,
+    kind: "rework",
+  });
+}
+
+async function listAcceptedKeysByDeveloper(input: {
+  importId: string;
+  developerIds?: string[];
+  kind: DelayJustificationKind;
+}): Promise<Map<string, Set<string>>> {
   const supabase = await createClient();
   let query = supabase
     .from("delay_justification_requests")
     .select("developer_id, jira_key")
     .eq("import_id", input.importId)
-    .eq("kind", "delay")
+    .eq("kind", input.kind)
     .eq("status", "accepted");
 
   if (input.developerIds && input.developerIds.length > 0) {
@@ -79,7 +114,9 @@ export async function listAcceptedDelayKeysByDeveloper(input: {
 
   const { data, error } = await query;
   if (error) {
-    throw new Error(`Falha ao listar atrasos acatados: ${error.message}`);
+    throw new Error(
+      `Falha ao listar ${input.kind === "rework" ? "retrabalhos" : "atrasos"} acatados: ${error.message}`,
+    );
   }
 
   const map = new Map<string, Set<string>>();
@@ -93,15 +130,63 @@ export async function listAcceptedDelayKeysByDeveloper(input: {
   return map;
 }
 
+/**
+ * Pending justifications awaiting gestor decision, per developer, by kind.
+ */
+export async function listPendingJustificationCountsByDeveloper(input: {
+  importId: string;
+  developerIds?: string[];
+  kind: DelayJustificationKind;
+}): Promise<Map<string, number>> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("delay_justification_requests")
+    .select("developer_id")
+    .eq("import_id", input.importId)
+    .eq("kind", input.kind)
+    .eq("status", "pending");
+
+  if (input.developerIds && input.developerIds.length > 0) {
+    query = query.in("developer_id", input.developerIds);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(
+      `Falha ao listar justificativas pendentes (${input.kind}): ${error.message}`,
+    );
+  }
+
+  const map = new Map<string, number>();
+  for (const row of data ?? []) {
+    const developerId = String(row.developer_id);
+    map.set(developerId, (map.get(developerId) ?? 0) + 1);
+  }
+  return map;
+}
+
+/** @deprecated Prefer listPendingJustificationCountsByDeveloper({ kind: "delay" }) */
+export async function listPendingDelayJustificationCountsByDeveloper(input: {
+  importId: string;
+  developerIds?: string[];
+}): Promise<Map<string, number>> {
+  return listPendingJustificationCountsByDeveloper({
+    ...input,
+    kind: "delay",
+  });
+}
+
 export async function listDelayJustificationsForImportKeys(input: {
   importId: string;
   developerId: string;
   jiraKeys: string[];
+  kind?: DelayJustificationKind;
 }): Promise<Map<string, DelayJustificationRequest>> {
   if (input.jiraKeys.length === 0) {
     return new Map();
   }
 
+  const kind = input.kind ?? "delay";
   const supabase = await createClient();
   const keys = input.jiraKeys.map(normalizeJiraKey);
   const { data, error } = await supabase
@@ -109,7 +194,7 @@ export async function listDelayJustificationsForImportKeys(input: {
     .select("*")
     .eq("import_id", input.importId)
     .eq("developer_id", input.developerId)
-    .eq("kind", "delay")
+    .eq("kind", kind)
     .in("jira_key", keys)
     .order("requested_at", { ascending: false });
 
@@ -117,13 +202,13 @@ export async function listDelayJustificationsForImportKeys(input: {
     throw new Error(`Falha ao carregar justificativas do audit: ${error.message}`);
   }
 
-  const latest = pickLatestPerKey(
+  const latest = pickLatestPerKeyAndKind(
     (data ?? []).map((row) => mapRow(row as Record<string, unknown>)),
   );
   return new Map(latest.map((row) => [normalizeJiraKey(row.jira_key), row]));
 }
 
-function pickLatestPerKey(
+function pickLatestPerKeyAndKind(
   rows: DelayJustificationRequest[],
 ): DelayJustificationRequest[] {
   const rank: Record<DelayJustificationStatus, number> = {
@@ -133,7 +218,7 @@ function pickLatestPerKey(
   };
   const best = new Map<string, DelayJustificationRequest>();
   for (const row of rows) {
-    const key = normalizeJiraKey(row.jira_key);
+    const key = compositeKey(row.jira_key, row.kind);
     const current = best.get(key);
     if (!current) {
       best.set(key, row);
@@ -159,6 +244,8 @@ export async function submitDelayJustification(
     throw new Error("A justificativa do developer é obrigatória.");
   }
 
+  const kind = input.kind;
+  const label = kind === "rework" ? "retrabalho" : "atraso";
   const supabase = await createClient();
   const jiraKey = normalizeJiraKey(input.jiraKey);
 
@@ -168,7 +255,7 @@ export async function submitDelayJustification(
     .eq("import_id", input.importId)
     .eq("developer_id", input.developerId)
     .eq("jira_key", jiraKey)
-    .eq("kind", "delay")
+    .eq("kind", kind)
     .in("status", ["pending", "accepted"])
     .limit(1)
     .maybeSingle();
@@ -177,10 +264,12 @@ export async function submitDelayJustification(
     throw new Error(`Falha ao validar pedido existente: ${existingError.message}`);
   }
   if (existing?.status === "pending") {
-    throw new Error("Já existe um pedido pendente para este card neste lote.");
+    throw new Error(
+      `Já existe um pedido de ${label} pendente para este card neste lote.`,
+    );
   }
   if (existing?.status === "accepted") {
-    throw new Error("Este atraso já foi acatado neste lote.");
+    throw new Error(`Este ${label} já foi acatado neste lote.`);
   }
 
   const { data, error } = await supabase
@@ -190,7 +279,7 @@ export async function submitDelayJustification(
       jira_card_id: input.jiraCardId,
       jira_key: jiraKey,
       developer_id: input.developerId,
-      kind: "delay",
+      kind,
       due_on: input.dueOn,
       unit_test_delivery_on: input.unitTestDeliveryOn,
       delay_days: input.delayDays,

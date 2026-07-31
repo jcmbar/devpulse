@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   DelayJustificationStatusBadge,
-  JustifyDelayButton,
+  JustifyDeliveryButton,
   type DelayJustificationBadgeInfo,
 } from "@/app/app/developer-delay-justification";
 import { CompiladoDateFilter } from "@/components/compilado-date-filter";
@@ -43,6 +43,7 @@ type AppHomeProps = {
   metrics: DeveloperPeriodMetrics;
   provenance: CompiladoSnapshotProvenance | null;
   delayJustificationsByKey: Record<string, DelayJustificationBadgeInfo>;
+  reworkJustificationsByKey: Record<string, DelayJustificationBadgeInfo>;
 };
 
 function formatHours(value: number): string {
@@ -88,6 +89,7 @@ export function AppHome({
   metrics,
   provenance,
   delayJustificationsByKey,
+  reworkJustificationsByKey,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
 
@@ -316,10 +318,15 @@ export function AppHome({
             <tbody>
               {cards.map((card) => {
                 const flags = getCardDeliveryFlags(card);
-                const justification =
-                  delayJustificationsByKey[
-                    card.jira_key.trim().toUpperCase()
-                  ] ?? null;
+                const key = card.jira_key.trim().toUpperCase();
+                const delayJustification =
+                  delayJustificationsByKey[key] ?? null;
+                const reworkJustification =
+                  reworkJustificationsByKey[key] ?? null;
+                const showDelayJustify =
+                  flags.isDelayed === true && selectedImportId != null;
+                const showReworkJustify =
+                  flags.isRework && selectedImportId != null;
                 return (
                   <tr key={card.id}>
                     <td className="whitespace-nowrap font-medium">
@@ -364,18 +371,51 @@ export function AppHome({
                     <td className="hidden whitespace-nowrap md:table-cell">
                       {formatDate(card.unit_test_delivery_on)}
                     </td>
-                    <td className="align-top whitespace-nowrap">
-                      {flags.isDelayed && selectedImportId ? (
-                        <JustifyDelayButton
-                          importId={selectedImportId}
-                          jiraCardId={card.id}
-                          jiraKey={card.jira_key}
-                          existing={justification}
-                        />
-                      ) : justification ? (
-                        <DelayJustificationStatusBadge
-                          status={justification.status}
-                        />
+                    <td className="align-top">
+                      {showDelayJustify || showReworkJustify ? (
+                        <div className="flex flex-col gap-3">
+                          {showDelayJustify ? (
+                            <JustifyDeliveryButton
+                              importId={selectedImportId}
+                              jiraCardId={card.id}
+                              jiraKey={card.jira_key}
+                              kind="delay"
+                              existing={delayJustification}
+                            />
+                          ) : null}
+                          {showReworkJustify ? (
+                            <JustifyDeliveryButton
+                              importId={selectedImportId}
+                              jiraCardId={card.id}
+                              jiraKey={card.jira_key}
+                              kind="rework"
+                              existing={reworkJustification}
+                            />
+                          ) : null}
+                        </div>
+                      ) : delayJustification || reworkJustification ? (
+                        <div className="flex flex-col gap-2">
+                          {delayJustification ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                Atraso
+                              </span>
+                              <DelayJustificationStatusBadge
+                                status={delayJustification.status}
+                              />
+                            </div>
+                          ) : null}
+                          {reworkJustification ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                Retrabalho
+                              </span>
+                              <DelayJustificationStatusBadge
+                                status={reworkJustification.status}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
                       ) : (
                         "—"
                       )}
