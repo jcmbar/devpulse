@@ -1,0 +1,108 @@
+{
+  "generated_at": "2026-07-30T22:08:03.813Z",
+  "integration_id": "4475a7d2-988b-4caf-884b-db19b06030b3",
+  "integration_name": "Jira · Prime",
+  "mapped_field": "Entrega /p Test. Aceitação",
+  "issues_total": 549,
+  "issues_with_custom_field": 0,
+  "impacted_count": 0,
+  "switched_to_custom_count": 0,
+  "ap_7368": {
+    "jira_key": "AP-7368",
+    "summary": "Call Discord e auxilio analistas JUNHO/2026",
+    "developer": "Luis Arruda",
+    "before_date": "2026-07-01",
+    "before_proxy": "resolved_at_jira",
+    "before_month": "2026-07",
+    "after_date": "2026-07-01",
+    "after_proxy": "resolved_at_jira",
+    "after_month": "2026-07",
+    "custom_field": null,
+    "month_changed": false,
+    "date_changed": false,
+    "switched_to_custom": false
+  },
+  "month_totals": [
+    {
+      "month": "2022-12",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2023-02",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2023-03",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2023-09",
+      "before": 3,
+      "after": 3,
+      "delta": 0
+    },
+    {
+      "month": "2024-01",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2024-05",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2024-08",
+      "before": 2,
+      "after": 2,
+      "delta": 0
+    },
+    {
+      "month": "2025-09",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2026-03",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "month": "2026-04",
+      "before": 37,
+      "after": 37,
+      "delta": 0
+    },
+    {
+      "month": "2026-05",
+      "before": 123,
+      "after": 123,
+      "delta": 0
+    },
+    {
+      "month": "2026-06",
+      "before": 104,
+      "after": 104,
+      "delta": 0
+    },
+    {
+      "month": "2026-07",
+      "before": 149,
+      "after": 149,
+      "delta": 0
+    }
+  ],
+  "developer_month_deltas": [],
+  "impacted_cards": [],
+  "switched_to_custom": []
+}

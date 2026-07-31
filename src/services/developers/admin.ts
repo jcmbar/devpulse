@@ -41,6 +41,10 @@ export type ListDevelopersAdminInput = {
   unassignedOnly?: boolean;
   /** Case-insensitive search on full_name / email. */
   q?: string | null;
+  /** Cadastro: active | inactive (omit = all). */
+  isActive?: boolean | null;
+  /** Jira Account ID presence: true = with, false = without (omit = all). */
+  hasJiraAccountId?: boolean | null;
 };
 
 export type ListDevelopersAdminPagedInput = ListDevelopersAdminInput & {
@@ -141,6 +145,18 @@ function applyDeveloperFilters(
     next = next.is("team_id", null);
   } else if (input?.teamId) {
     next = next.eq("team_id", input.teamId);
+  }
+
+  if (input?.isActive === true) {
+    next = next.eq("is_active", true);
+  } else if (input?.isActive === false) {
+    next = next.eq("is_active", false);
+  }
+
+  if (input?.hasJiraAccountId === true) {
+    next = next.not("jira_account_id", "is", null);
+  } else if (input?.hasJiraAccountId === false) {
+    next = next.is("jira_account_id", null);
   }
 
   const q = sanitizeSearchTerm(input?.q ?? "");
@@ -316,6 +332,54 @@ export async function updateDeveloperAdmin(
 
   if (error) {
     throw new Error(`Failed to update developer: ${error.message}`);
+  }
+
+  return mapDeveloperRow(data);
+}
+
+/**
+ * Lightweight list updates — does not touch name/email/location/etc.
+ */
+export async function patchDeveloperListFieldsAdmin(input: {
+  developerId: string;
+  isActive?: boolean;
+  teamId?: string | null;
+  jiraAccountId?: string | null;
+}): Promise<Developer> {
+  if (
+    input.isActive === undefined &&
+    input.teamId === undefined &&
+    input.jiraAccountId === undefined
+  ) {
+    throw new Error("Nenhum campo para atualizar.");
+  }
+
+  const supabase = await createClient();
+  const payload: Record<string, unknown> = {};
+
+  if (input.isActive !== undefined) {
+    payload.is_active = input.isActive;
+  }
+
+  if (input.teamId !== undefined) {
+    const team = await resolveTeamCode(input.teamId);
+    payload.team_id = team.teamId;
+    payload.team_code = team.teamCode;
+  }
+
+  if (input.jiraAccountId !== undefined) {
+    payload.jira_account_id = input.jiraAccountId;
+  }
+
+  const { data, error } = await supabase
+    .from("developers")
+    .update(payload)
+    .eq("id", input.developerId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to patch developer: ${error.message}`);
   }
 
   return mapDeveloperRow(data);

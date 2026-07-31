@@ -21,7 +21,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "flex flex-col gap-5 border-b border-border/50 pb-6 sm:flex-row sm:items-end sm:justify-between",
+        "flex flex-col gap-4 border-b border-border/50 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-5 sm:pb-6",
         className,
       )}
     >
@@ -34,7 +34,7 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-[2rem]">
+        <h1 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl sm:text-[2rem]">
           {title}
         </h1>
         {description ? (
@@ -44,7 +44,7 @@ export function PageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full min-w-0 shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
           {actions}
         </div>
       ) : null}

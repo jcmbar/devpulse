@@ -10,6 +10,8 @@ type ImportBatchSelectorProps = {
   basePath: string;
   /** Preserve other query params (from/to/month). */
   preservedParams?: Record<string, string | undefined>;
+  /** Compact control for FilterBar. */
+  embedded?: boolean;
 };
 
 function formatBatchLabel(batch: ImportBatchOption): string {
@@ -50,6 +52,7 @@ export function ImportBatchSelector({
   selectedImportId,
   basePath,
   preservedParams,
+  embedded = false,
 }: ImportBatchSelectorProps) {
   const router = useRouter();
 
@@ -61,24 +64,35 @@ export function ImportBatchSelector({
     );
   }
 
+  const select = (
+    <select
+      id="importId"
+      name="importId"
+      value={selectedImportId ?? ""}
+      onChange={(event) => {
+        const value = event.target.value || null;
+        router.push(buildHref(basePath, value, preservedParams));
+      }}
+      className={
+        embedded ? "ui-select w-full min-w-0 max-w-full" : "ui-select max-w-xl"
+      }
+      aria-label="Lote importado"
+    >
+      {batches.map((batch) => (
+        <option key={batch.id} value={batch.id}>
+          {formatBatchLabel(batch)}
+        </option>
+      ))}
+    </select>
+  );
+
+  if (embedded) {
+    return select;
+  }
+
   return (
     <FormField label="Lote importado" htmlFor="importId">
-      <select
-        id="importId"
-        name="importId"
-        value={selectedImportId ?? ""}
-        onChange={(event) => {
-          const value = event.target.value || null;
-          router.push(buildHref(basePath, value, preservedParams));
-        }}
-        className="ui-select max-w-xl"
-      >
-        {batches.map((batch) => (
-          <option key={batch.id} value={batch.id}>
-            {formatBatchLabel(batch)}
-          </option>
-        ))}
-      </select>
+      {select}
     </FormField>
   );
 }

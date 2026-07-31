@@ -108,6 +108,7 @@ export async function linkDeveloperToProfile(input: {
 
 export {
   assignDeveloperTeamIfEmpty,
+  findDevelopersByJiraAccountIds,
   findOrCreateDeveloperByResponsible,
   listDevelopers,
 } from "./resolve";
@@ -118,6 +119,7 @@ export {
   linkDeveloperProfileAdmin,
   listDevelopersAdmin,
   listDevelopersAdminPaged,
+  patchDeveloperListFieldsAdmin,
   searchProfilesAdmin,
   unlinkDeveloperProfileAdmin,
   updateDeveloperAdmin,

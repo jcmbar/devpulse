@@ -34,16 +34,27 @@ type DataTableProps = {
   children: ReactNode;
   className?: string;
   minWidthClassName?: string;
+  /** Pin first column while scrolling horizontally (mobile-friendly). */
+  stickyFirstColumn?: boolean;
 };
 
 export function DataTable({
   children,
   className,
   minWidthClassName = "min-w-[640px]",
+  stickyFirstColumn = false,
 }: DataTableProps) {
   return (
     <div className={cn("ui-table-wrap", className)}>
-      <table className={cn("ui-table", minWidthClassName)}>{children}</table>
+      <table
+        className={cn(
+          "ui-table",
+          minWidthClassName,
+          stickyFirstColumn && "ui-table-sticky-first",
+        )}
+      >
+        {children}
+      </table>
     </div>
   );
 }

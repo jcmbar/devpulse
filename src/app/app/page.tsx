@@ -10,7 +10,8 @@ import {
 } from "@/lib/metrics/date-range";
 import { computeDeveloperPeriodMetrics } from "@/lib/metrics/developer-period";
 import { findUnlinkedDeveloperByEmail } from "@/services/developers";
-import { listImportBatches } from "@/services/imports";
+import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot";
+import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 
 type AppPageProps = {
@@ -42,10 +43,13 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   }
 
   const params = await searchParams;
-  const batches = await listImportBatches();
-  const selectedBatch =
-    batches.find((batch) => batch.id === params.importId) ?? batches[0] ?? null;
-  const selectedImportId = selectedBatch?.id ?? null;
+
+  // Home do developer: sempre snapshot automático (origem ativa).
+  const seed = await resolveCompiladoSnapshot({
+    mode: "auto",
+    importId: null,
+    dateRange: null,
+  });
 
   const dateRange = resolveCompiladoDateRange({
     searchParams: {
@@ -53,9 +57,18 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       to: params.to,
       month: params.month,
     },
-    defaultStart: selectedBatch?.period_start ?? null,
-    defaultEnd: selectedBatch?.period_end ?? null,
+    defaultStart: seed.selectedBatch?.period_start ?? null,
+    defaultEnd: seed.selectedBatch?.period_end ?? null,
   });
+
+  const resolved = await resolveCompiladoSnapshot({
+    mode: "auto",
+    importId: null,
+    dateRange,
+  });
+
+  const selectedBatch = resolved.selectedBatch;
+  const selectedImportId = selectedBatch?.id ?? null;
 
   const monthOptions =
     selectedBatch?.period_start && selectedBatch.period_end
@@ -75,18 +88,45 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         })
       : [];
 
-  const metrics = computeDeveloperPeriodMetrics(cards);
+  const justifications =
+    selectedBatch != null
+      ? await listDelayJustificationsForDeveloperImport({
+          importId: selectedBatch.id,
+          developerId: developer.id,
+        })
+      : [];
+
+  const acceptedDelayKeys = justifications
+    .filter((row) => row.status === "accepted")
+    .map((row) => row.jira_key);
+
+  const delayJustificationsByKey = Object.fromEntries(
+    justifications.map((row) => [
+      row.jira_key.trim().toUpperCase(),
+      {
+        id: row.id,
+        status: row.status,
+        developerNote: row.developer_note,
+        reviewerNote: row.reviewer_note,
+      },
+    ]),
+  );
+
+  const metrics = computeDeveloperPeriodMetrics(cards, {
+    acceptedDelayKeys,
+  });
 
   return (
     <AppHome
       profile={profile}
       developer={developer}
-      batches={batches}
       selectedImportId={selectedImportId}
       dateRange={dateRange}
       monthOptions={monthOptions}
       cards={cards}
       metrics={metrics}
+      provenance={resolved.provenance}
+      delayJustificationsByKey={delayJustificationsByKey}
     />
   );
 }

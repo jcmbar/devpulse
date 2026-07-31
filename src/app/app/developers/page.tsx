@@ -12,6 +12,8 @@ import {
   adminListHref,
   listEmptyMessage,
   parseAdminListQuery,
+  type ActiveListFilter,
+  type JiraAccountListFilter,
 } from "@/lib/admin-list-query";
 import {
   formatAccessDate,
@@ -20,24 +22,49 @@ import {
 } from "@/services/auth/developer-access";
 import { listDevelopersAdminPaged } from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
-import {
-  buildTeamCodeLabelMap,
-  formatTeamLabel,
-  getTeamLabelMap,
-  resolveDisplayTeamLabel,
-} from "@/services/teams/labels";
 import { Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { DeveloperListColumnFilters } from "@/app/app/developers/developer-list-column-filters";
+import { DeveloperJiraAccountBatchLookup } from "@/app/app/developers/developer-jira-batch-lookup";
+import {
+  DeveloperActiveInline,
+  DeveloperJiraAccountInline,
+  DeveloperTeamInline,
+} from "@/app/app/developers/developer-list-quick-edit";
 
 type DevelopersAdminPageProps = {
   searchParams: Promise<{
     teamId?: string;
     q?: string;
     page?: string;
+    active?: string;
+    jiraId?: string;
   }>;
 };
+
+function toIsActiveFilter(filter: ActiveListFilter): boolean | null {
+  if (filter === "active") {
+    return true;
+  }
+  if (filter === "inactive") {
+    return false;
+  }
+  return null;
+}
+
+function toHasJiraAccountFilter(
+  filter: JiraAccountListFilter,
+): boolean | null {
+  if (filter === "with") {
+    return true;
+  }
+  if (filter === "without") {
+    return false;
+  }
+  return null;
+}
 
 export default async function DevelopersAdminPage({
   searchParams,
@@ -46,39 +73,51 @@ export default async function DevelopersAdminPage({
   const params = await searchParams;
   const query = parseAdminListQuery(params, { pageSize: 20 });
 
+  const listHrefInput = {
+    teamId: query.teamParam || null,
+    q: query.q || null,
+    active: query.activeFilter,
+    jiraId: query.jiraAccountFilter,
+  };
+
   if (query.teamIdNeedsCanonicalize) {
     redirect(
       adminListHref("/app/developers", {
-        teamId: query.teamParam || null,
-        q: query.q || null,
+        ...listHrefInput,
         page: query.page > 1 ? query.page : null,
       }),
     );
   }
 
-  const [teams, paged, teamLabels] = await Promise.all([
+  const [teams, paged] = await Promise.all([
     listTeamsAdmin({ includeInactive: true }),
     listDevelopersAdminPaged({
       ...query.teamScope,
       q: query.q || null,
+      isActive: toIsActiveFilter(query.activeFilter),
+      hasJiraAccountId: toHasJiraAccountFilter(query.jiraAccountFilter),
       page: query.page,
       pageSize: query.pageSize,
     }),
-    getTeamLabelMap(),
   ]);
 
   if (query.page !== paged.page) {
     redirect(
       adminListHref("/app/developers", {
-        teamId: query.teamParam || null,
-        q: query.q || null,
+        ...listHrefInput,
         page: paged.page > 1 ? paged.page : null,
       }),
     );
   }
 
   const developers = paged.items;
-  const teamLabelsByCode = buildTeamCodeLabelMap(teamLabels);
+  const jiraLookupCandidates = developers
+    .filter(
+      (developer) =>
+        Boolean(developer.email?.includes("@")) &&
+        !developer.jira_account_id?.trim(),
+    )
+    .map((developer) => developer.id);
 
   let accessByDeveloperId = new Map<string, DeveloperAccessInfo>();
   let accessLookupError: string | null = null;
@@ -97,7 +136,7 @@ export default async function DevelopersAdminPage({
       <PageHeader
         eyebrow="Cadastro"
         title="Developers"
-        description="Cadastro administrativo. Filtro de time usa apenas team_id."
+        description="Cadastro administrativo. Time, status e Jira Account ID podem ser alterados na lista; use Editar para os demais campos."
         actions={
           <Link href="/app/developers/new" className="ui-btn-primary">
             <Plus className="size-3.5" strokeWidth={2} />
@@ -124,6 +163,19 @@ export default async function DevelopersAdminPage({
             placeholder="Nome ou e-mail…"
           />
         </Suspense>
+        <Suspense
+          fallback={
+            <p className="text-sm text-muted-foreground">Carregando filtros…</p>
+          }
+        >
+          <DeveloperListColumnFilters
+            activeFilter={query.activeFilter}
+            jiraAccountFilter={query.jiraAccountFilter}
+          />
+        </Suspense>
+        <DeveloperJiraAccountBatchLookup
+          candidateIds={jiraLookupCandidates}
+        />
       </AdminToolbar>
 
       {accessLookupError ? (
@@ -138,6 +190,8 @@ export default async function DevelopersAdminPage({
           title={listEmptyMessage("developer", {
             filter: query.teamFilter,
             q: query.q,
+            activeFilter: query.activeFilter,
+            jiraAccountFilter: query.jiraAccountFilter,
           })}
           description="Ajuste filtros, limpe a busca ou cadastre um novo developer."
           action={
@@ -149,11 +203,12 @@ export default async function DevelopersAdminPage({
         />
       ) : (
         <div className="space-y-3">
-          <DataTable minWidthClassName="min-w-[720px]">
+          <DataTable minWidthClassName="min-w-[980px]">
             <thead>
               <tr>
                 <th>Nome</th>
                 <th>Time</th>
+                <th>Jira Account ID</th>
                 <th className="hidden md:table-cell">E-mail</th>
                 <th>Cadastro</th>
                 <th>Acesso</th>
@@ -168,37 +223,33 @@ export default async function DevelopersAdminPage({
                 const accessDate = formatAccessDate(
                   access?.relevantAt ?? null,
                 );
-                const teamLabel = resolveDisplayTeamLabel({
-                  teamId: developer.team_id,
-                  teamCode: developer.team_code,
-                  byId: teamLabels,
-                  byCode: teamLabelsByCode,
-                });
-                const legacyOnly = !developer.team_id && Boolean(teamLabel);
 
                 return (
                   <tr key={developer.id}>
                     <td className="font-medium">{developer.full_name}</td>
-                    <td className="text-muted-foreground">
-                      {teamLabel ? (
-                        <span
-                          title={
-                            legacyOnly
-                              ? "Exibição via team_code legado (sem team_id)"
-                              : undefined
-                          }
-                        >
-                          {formatTeamLabel(teamLabel)}
-                          {legacyOnly ? " · legado" : ""}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
+                    <td>
+                      <DeveloperTeamInline
+                        developerId={developer.id}
+                        teamId={developer.team_id}
+                        teams={teams}
+                      />
+                    </td>
+                    <td>
+                      <DeveloperJiraAccountInline
+                        developerId={developer.id}
+                        jiraAccountId={developer.jira_account_id}
+                        email={developer.email}
+                      />
                     </td>
                     <td className="hidden md:table-cell">
                       {developer.email ?? "—"}
                     </td>
-                    <td>{developer.is_active ? "Ativo" : "Inativo"}</td>
+                    <td>
+                      <DeveloperActiveInline
+                        developerId={developer.id}
+                        isActive={developer.is_active}
+                      />
+                    </td>
                     <td>
                       {access ? (
                         <div className="space-y-1">
@@ -255,6 +306,8 @@ export default async function DevelopersAdminPage({
             pageSize={paged.pageSize}
             teamId={query.teamParam || null}
             q={query.q || null}
+            active={query.activeFilter}
+            jiraId={query.jiraAccountFilter}
           />
         </div>
       )}

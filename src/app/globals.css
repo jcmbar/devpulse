@@ -2,7 +2,8 @@
 
 /*
   DevPulse — premium technical UI
-  Cool neutrals + teal signal color. Light/dark/system.
+  Cool neutrals + teal signal. Light / dark / system.
+  Semantic KPI tints (volume/info, success, warning, danger, brand).
 */
 
 :root {
@@ -29,6 +30,30 @@
   --warning-foreground: #fffbeb;
   --danger: #dc2626;
   --danger-foreground: #fef2f2;
+  /* Volume / informational (cards count, capacity) */
+  --info: #0284c7;
+  --info-foreground: #f0f9ff;
+  --info-soft: #e0f2fe;
+  --info-ink: #075985;
+  /* KPI card soft fills */
+  --kpi-neutral-soft: #f1f5f9;
+  --kpi-brand-soft: #ccfbf1;
+  --kpi-success-soft: #d1fae5;
+  --kpi-warning-soft: #fef3c7;
+  --kpi-danger-soft: #fee2e2;
+  --kpi-info-soft: #e0f2fe;
+  --kpi-neutral-ink: #334155;
+  --kpi-brand-ink: #134e4a;
+  --kpi-success-ink: #065f46;
+  --kpi-warning-ink: #92400e;
+  --kpi-danger-ink: #991b1b;
+  --kpi-info-ink: #075985;
+  --kpi-neutral-accent: #64748b;
+  --kpi-brand-accent: #0d9488;
+  --kpi-success-accent: #059669;
+  --kpi-warning-accent: #d97706;
+  --kpi-danger-accent: #dc2626;
+  --kpi-info-accent: #0284c7;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
   --shadow-md:
     0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
@@ -45,6 +70,9 @@
       rgb(14 165 233 / 0.06),
       transparent 50%
     );
+  --login-orb-a: rgb(13 148 136 / 0.22);
+  --login-orb-b: rgb(14 165 233 / 0.16);
+  --login-orb-c: rgb(45 212 191 / 0.12);
 }
 
 .dark {
@@ -71,6 +99,28 @@
   --warning-foreground: #422006;
   --danger: #f87171;
   --danger-foreground: #450a0a;
+  --info: #38bdf8;
+  --info-foreground: #082f49;
+  --info-soft: rgb(56 189 248 / 0.12);
+  --info-ink: #7dd3fc;
+  --kpi-neutral-soft: rgb(148 163 184 / 0.1);
+  --kpi-brand-soft: rgb(45 212 191 / 0.12);
+  --kpi-success-soft: rgb(52 211 153 / 0.12);
+  --kpi-warning-soft: rgb(251 191 36 / 0.12);
+  --kpi-danger-soft: rgb(248 113 113 / 0.12);
+  --kpi-info-soft: rgb(56 189 248 / 0.12);
+  --kpi-neutral-ink: #cbd5e1;
+  --kpi-brand-ink: #99f6e4;
+  --kpi-success-ink: #6ee7b7;
+  --kpi-warning-ink: #fcd34d;
+  --kpi-danger-ink: #fca5a5;
+  --kpi-info-ink: #7dd3fc;
+  --kpi-neutral-accent: #94a3b8;
+  --kpi-brand-accent: #2dd4bf;
+  --kpi-success-accent: #34d399;
+  --kpi-warning-accent: #fbbf24;
+  --kpi-danger-accent: #f87171;
+  --kpi-info-accent: #38bdf8;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
   --shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px -16px rgb(0 0 0 / 0.55);
   --shadow-glow: 0 0 0 1px rgb(45 212 191 / 0.18);
@@ -84,6 +134,9 @@
       rgb(56 189 248 / 0.06),
       transparent 52%
     );
+  --login-orb-a: rgb(45 212 191 / 0.18);
+  --login-orb-b: rgb(56 189 248 / 0.12);
+  --login-orb-c: rgb(13 148 136 / 0.14);
 }
 
 @theme inline {
@@ -110,6 +163,10 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-danger: var(--danger);
   --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --radius-md: var(--radius);
@@ -146,17 +203,55 @@ body {
   outline-offset: 2px;
 }
 
+@keyframes login-orb-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(4%, 6%, 0) scale(1.06);
+  }
+}
+
+@keyframes login-orb-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-5%, -4%, 0) scale(1.08);
+  }
+}
+
+@keyframes login-orb-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate3d(3%, -5%, 0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-orb {
+    animation: none !important;
+  }
+}
+
 @layer components {
   .ui-btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-accent px-3.5 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-accent px-3.5 py-2.5 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-2;
   }
 
   .ui-btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-border/80 bg-card/90 px-3.5 py-2 text-sm font-medium text-foreground shadow-[var(--shadow-sm)] transition-[transform,background-color,border-color,box-shadow] duration-150 hover:border-border hover:bg-muted/80 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-border/80 bg-card/90 px-3.5 py-2.5 text-sm font-medium text-foreground shadow-[var(--shadow-sm)] transition-[transform,background-color,border-color,box-shadow] duration-150 hover:border-border hover:bg-muted/80 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-2;
   }
 
   .ui-btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-2;
   }
 
   /** Idle destructive trigger — muted until hover/focus (tables / inline). */
@@ -174,11 +269,11 @@ body {
   }
 
   .ui-input {
-    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2.5 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50 sm:py-2;
   }
 
   .ui-select {
-    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2.5 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50 sm:py-2;
   }
 
   .ui-card {
@@ -186,7 +281,7 @@ body {
   }
 
   .ui-table-wrap {
-    @apply overflow-x-auto rounded-[var(--radius)] border border-border/70 bg-card/95 shadow-[var(--shadow-md)];
+    @apply relative -mx-3 overflow-x-auto overscroll-x-contain rounded-none border-y border-border/70 bg-card shadow-[var(--shadow-md)] sm:mx-0 sm:rounded-[var(--radius)] sm:border;
   }
 
   .ui-table {
@@ -198,15 +293,30 @@ body {
   }
 
   .ui-table th {
-    @apply px-3.5 py-3 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase;
+    @apply px-2.5 py-2.5 text-[10px] font-semibold tracking-[0.06em] text-muted-foreground uppercase sm:px-3.5 sm:py-3 sm:text-[11px];
   }
 
   .ui-table td {
-    @apply px-3.5 py-3 align-middle;
+    @apply px-2.5 py-2.5 align-middle sm:px-3.5 sm:py-3;
   }
 
   .ui-table tbody tr {
     @apply border-b border-border/60 transition-colors duration-150 last:border-0 hover:bg-brand-soft/40;
+  }
+
+  /** Sticky first column — only useful when horizontal scroll is needed. */
+  .ui-table-sticky-first th:first-child,
+  .ui-table-sticky-first td:first-child {
+    @apply sticky left-0 z-[1] bg-card;
+    box-shadow: 1px 0 0 color-mix(in oklab, var(--border) 70%, transparent);
+  }
+
+  .ui-table-sticky-first thead th:first-child {
+    @apply bg-muted/95;
+  }
+
+  .ui-table-sticky-first tbody tr:hover td:first-child {
+    background-color: color-mix(in oklab, var(--brand-soft) 40%, var(--card));
   }
 
   .ui-badge {
@@ -219,6 +329,171 @@ body {
 
   .ui-kpi {
     @apply font-semibold tracking-tight tabular-nums;
+  }
+
+  .ui-kpi-card {
+    @apply relative min-w-0 overflow-hidden rounded-[var(--radius-sm)] border border-border/60 p-3 shadow-[var(--shadow-sm)] sm:rounded-[var(--radius)] sm:p-4 lg:p-5;
+    background: var(--kpi-neutral-soft);
+  }
+
+  .ui-kpi-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--kpi-neutral-accent);
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  }
+
+  .ui-kpi-card__label {
+    @apply text-[10px] font-semibold tracking-[0.08em] uppercase sm:text-[11px];
+    color: color-mix(in oklab, var(--kpi-neutral-ink) 75%, transparent);
+  }
+
+  .ui-kpi-card__value {
+    @apply mt-1 text-xl font-semibold tracking-tight tabular-nums sm:mt-1.5 sm:text-2xl lg:text-[1.65rem];
+    color: var(--kpi-neutral-ink);
+  }
+
+  .ui-kpi-card__hint {
+    @apply mt-1 text-[11px] leading-snug sm:mt-1.5 sm:text-xs;
+    color: color-mix(in oklab, var(--kpi-neutral-ink) 65%, transparent);
+  }
+
+  .ui-kpi-grid {
+    @apply grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 lg:grid-cols-4 lg:gap-4;
+  }
+
+  .ui-kpi-card--brand {
+    background: var(--kpi-brand-soft);
+  }
+  .ui-kpi-card--brand::before {
+    background: var(--kpi-brand-accent);
+  }
+  .ui-kpi-card--brand .ui-kpi-card__label {
+    color: color-mix(in oklab, var(--kpi-brand-ink) 80%, transparent);
+  }
+  .ui-kpi-card--brand .ui-kpi-card__value {
+    color: var(--kpi-brand-ink);
+  }
+  .ui-kpi-card--brand .ui-kpi-card__hint {
+    color: color-mix(in oklab, var(--kpi-brand-ink) 70%, transparent);
+  }
+
+  .ui-kpi-card--success {
+    background: var(--kpi-success-soft);
+  }
+  .ui-kpi-card--success::before {
+    background: var(--kpi-success-accent);
+  }
+  .ui-kpi-card--success .ui-kpi-card__label {
+    color: color-mix(in oklab, var(--kpi-success-ink) 80%, transparent);
+  }
+  .ui-kpi-card--success .ui-kpi-card__value {
+    color: var(--kpi-success-ink);
+  }
+  .ui-kpi-card--success .ui-kpi-card__hint {
+    color: color-mix(in oklab, var(--kpi-success-ink) 70%, transparent);
+  }
+
+  .ui-kpi-card--warning {
+    background: var(--kpi-warning-soft);
+  }
+  .ui-kpi-card--warning::before {
+    background: var(--kpi-warning-accent);
+  }
+  .ui-kpi-card--warning .ui-kpi-card__label {
+    color: color-mix(in oklab, var(--kpi-warning-ink) 80%, transparent);
+  }
+  .ui-kpi-card--warning .ui-kpi-card__value {
+    color: var(--kpi-warning-ink);
+  }
+  .ui-kpi-card--warning .ui-kpi-card__hint {
+    color: color-mix(in oklab, var(--kpi-warning-ink) 70%, transparent);
+  }
+
+  .ui-kpi-card--danger {
+    background: var(--kpi-danger-soft);
+  }
+  .ui-kpi-card--danger::before {
+    background: var(--kpi-danger-accent);
+  }
+  .ui-kpi-card--danger .ui-kpi-card__label {
+    color: color-mix(in oklab, var(--kpi-danger-ink) 80%, transparent);
+  }
+  .ui-kpi-card--danger .ui-kpi-card__value {
+    color: var(--kpi-danger-ink);
+  }
+  .ui-kpi-card--danger .ui-kpi-card__hint {
+    color: color-mix(in oklab, var(--kpi-danger-ink) 70%, transparent);
+  }
+
+  .ui-kpi-card--info {
+    background: var(--kpi-info-soft);
+  }
+  .ui-kpi-card--info::before {
+    background: var(--kpi-info-accent);
+  }
+  .ui-kpi-card--info .ui-kpi-card__label {
+    color: color-mix(in oklab, var(--kpi-info-ink) 80%, transparent);
+  }
+  .ui-kpi-card--info .ui-kpi-card__value {
+    color: var(--kpi-info-ink);
+  }
+  .ui-kpi-card--info .ui-kpi-card__hint {
+    color: color-mix(in oklab, var(--kpi-info-ink) 70%, transparent);
+  }
+
+  .ui-section {
+    @apply space-y-3 sm:space-y-4;
+  }
+
+  .ui-section__header {
+    @apply space-y-1;
+  }
+
+  .ui-section__title {
+    @apply text-base font-semibold tracking-tight sm:text-lg;
+  }
+
+  .ui-section__description {
+    @apply max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty;
+  }
+
+  .ui-filter-bar {
+    @apply flex min-w-0 flex-col gap-3 overflow-hidden rounded-[var(--radius)] border border-border/60 bg-card/80 p-3 shadow-[var(--shadow-sm)] sm:gap-3.5 sm:p-4;
+  }
+
+  .ui-filter-bar__row {
+    @apply flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end;
+  }
+
+  .ui-filter-bar__fields {
+    @apply grid min-w-0 gap-3 sm:grid-cols-2;
+  }
+
+  .ui-filter-bar__field {
+    @apply min-w-0 space-y-1.5;
+  }
+
+  .ui-filter-bar__label {
+    @apply text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase;
+  }
+
+  .ui-mode-toggle {
+    @apply grid grid-cols-2 gap-1 rounded-[var(--radius-sm)] border border-border/70 bg-muted/40 p-1;
+  }
+
+  .ui-mode-toggle__btn {
+    @apply inline-flex min-h-10 items-center justify-center rounded-[calc(var(--radius-sm)-2px)] px-2 text-sm font-medium transition-[background-color,color,box-shadow] duration-150;
+  }
+
+  .ui-mode-toggle__btn.is-active {
+    @apply bg-accent text-accent-foreground shadow-[var(--shadow-sm)];
+  }
+
+  .ui-mode-toggle__btn:not(.is-active) {
+    @apply text-muted-foreground hover:bg-card/80 hover:text-foreground;
   }
 
   .ui-label {
@@ -250,7 +525,7 @@ body {
   }
 
   .ui-textarea {
-    @apply w-full min-h-[88px] resize-y rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+    @apply box-border w-full min-h-[88px] min-w-0 max-w-full resize-y rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
   }
 
   .ui-alert-error {
@@ -275,5 +550,51 @@ body {
 
   .ui-panel {
     @apply space-y-2 rounded-[var(--radius)] border border-border/70 bg-muted/30 px-4 py-3 text-sm;
+  }
+
+  .login-stage {
+    @apply relative isolate flex min-h-full flex-1 flex-col overflow-hidden;
+  }
+
+  .login-stage__backdrop {
+    @apply pointer-events-none absolute inset-0 -z-10 overflow-hidden;
+    background-color: var(--background);
+  }
+
+  .login-orb {
+    @apply absolute rounded-full blur-3xl;
+    will-change: transform;
+  }
+
+  .login-orb--a {
+    width: min(72vw, 420px);
+    height: min(72vw, 420px);
+    top: -12%;
+    left: -8%;
+    background: var(--login-orb-a);
+    animation: login-orb-drift-a 18s ease-in-out infinite;
+  }
+
+  .login-orb--b {
+    width: min(80vw, 480px);
+    height: min(80vw, 480px);
+    right: -18%;
+    bottom: -10%;
+    background: var(--login-orb-b);
+    animation: login-orb-drift-b 22s ease-in-out infinite;
+  }
+
+  .login-orb--c {
+    width: min(50vw, 280px);
+    height: min(50vw, 280px);
+    top: 42%;
+    left: 38%;
+    background: var(--login-orb-c);
+    animation: login-orb-drift-c 16s ease-in-out infinite;
+  }
+
+  .login-panel {
+    @apply w-full max-w-md space-y-6 rounded-[var(--radius)] border border-border/70 p-6 text-card-foreground shadow-[var(--shadow-md)] backdrop-blur-[2px] sm:p-8;
+    background: color-mix(in oklab, var(--surface-elevated) 92%, transparent);
   }
 }

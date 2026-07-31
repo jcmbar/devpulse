@@ -13,7 +13,6 @@ import {
 import type { PerformanceThresholds } from "@/lib/metrics/performance-bands";
 import { resolveCapacitiesForDevelopers, resolveTeamDefaultCapacityForPeriod } from "@/services/capacity";
 import { listDevelopersAdmin } from "@/services/developers/admin";
-import { listImportBatches } from "@/services/imports";
 import {
   listJiraCardsByImportInRange,
   listJiraCardsForMonthlyMatrix,
@@ -27,6 +26,12 @@ import type {
 } from "@/types/capacity";
 import type { ImportBatchOption } from "@/types/import-period";
 import type { JiraCard } from "@/types/jira-card";
+import type { CompiladoSourceMode } from "@/lib/metrics/gestor-data-source";
+import {
+  resolveCompiladoSnapshot,
+  type CompiladoSnapshotProvenance,
+} from "@/services/compilado/resolve-snapshot";
+import { listAcceptedDelayKeysByDeveloper } from "@/services/delay-justifications";
 
 export type CapacitySignal = "under" | "over" | "balanced" | "unknown";
 
@@ -68,6 +73,8 @@ export type GestorMonthlyRow = {
 export type GestorDashboard = {
   batches: ImportBatchOption[];
   selectedBatch: ImportBatchOption | null;
+  dataSource: CompiladoSourceMode;
+  provenance: CompiladoSnapshotProvenance | null;
   dateRange: CompiladoDateRange;
   monthOptions: string[];
   activeDevelopersCount: number;
@@ -198,15 +205,21 @@ function buildMonthlyMatrix(input: {
 export async function getGestorDashboard(input: {
   importId?: string | null;
   dateRange: CompiladoDateRange;
+  dataSource?: CompiladoSourceMode;
 }): Promise<GestorDashboard> {
-  const [batches, developers, thresholds] = await Promise.all([
-    listImportBatches(),
+  const dataSource = input.dataSource ?? "auto";
+
+  const [resolved, developers, thresholds] = await Promise.all([
+    resolveCompiladoSnapshot({
+      mode: dataSource,
+      importId: input.importId,
+      dateRange: input.dateRange,
+    }),
     listDevelopersAdmin(),
     getPerformanceThresholds(),
   ]);
 
-  const selectedBatch =
-    batches.find((batch) => batch.id === input.importId) ?? batches[0] ?? null;
+  const { batches, selectedBatch, provenance } = resolved;
 
   const rangeCards =
     selectedBatch != null
@@ -244,10 +257,20 @@ export async function getGestorDashboard(input: {
 
   const teamDefaultRequiredHours = teamDefaultCapacity.requiredHours;
 
+  const acceptedByDeveloper =
+    selectedBatch != null
+      ? await listAcceptedDelayKeysByDeveloper({
+          importId: selectedBatch.id,
+          developerIds: rankingSource.map((developer) => developer.id),
+        })
+      : new Map<string, Set<string>>();
+
   const ranking: GestorRankingRow[] = rankingSource
     .map((developer) => {
       const cards = cardsByDeveloper.get(developer.id) ?? [];
-      const metrics = computeDeveloperPeriodMetrics(cards);
+      const metrics = computeDeveloperPeriodMetrics(cards, {
+        acceptedDelayKeys: acceptedByDeveloper.get(developer.id),
+      });
       const capacity = capacities.get(developer.id);
       const requiredHours = capacity?.requiredHours ?? null;
       const capacityDeltaHours =
@@ -286,21 +309,18 @@ export async function getGestorDashboard(input: {
       };
     })
     .sort((a, b) => {
-      const rateA = a.metrics.utilizationRate;
-      const rateB = b.metrics.utilizationRate;
-      if (rateA == null && rateB == null) {
-        return a.fullName.localeCompare(b.fullName, "pt-BR");
+      const indexA = a.metrics.deliveryIndex;
+      const indexB = b.metrics.deliveryIndex;
+      if (indexB !== indexA) {
+        return indexB - indexA;
       }
-      if (rateA == null) {
-        return 1;
+      if (b.metrics.utilizationRate !== a.metrics.utilizationRate) {
+        return b.metrics.utilizationRate - a.metrics.utilizationRate;
       }
-      if (rateB == null) {
-        return -1;
+      if (b.metrics.totalCards !== a.metrics.totalCards) {
+        return b.metrics.totalCards - a.metrics.totalCards;
       }
-      if (rateB !== rateA) {
-        return rateB - rateA;
-      }
-      return b.metrics.totalCards - a.metrics.totalCards;
+      return a.fullName.localeCompare(b.fullName, "pt-BR");
     });
 
   const teamMetrics = aggregateTeamPeriodMetrics(
@@ -332,6 +352,8 @@ export async function getGestorDashboard(input: {
   return {
     batches,
     selectedBatch,
+    dataSource,
+    provenance,
     dateRange: input.dateRange,
     monthOptions,
     activeDevelopersCount: activeDevelopers.length,
@@ -353,3 +375,4 @@ export async function getGestorDashboard(input: {
     holidayScopeNote: teamDefaultCapacity.holidayScopeNote,
   };
 }
+

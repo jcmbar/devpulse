@@ -3,15 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import {
+  normalizeJiraAccountId,
+  validateJiraAccountId,
+} from "@/lib/jira/account-id";
 import { inviteAccessUser } from "@/services/auth/invite-user";
 import { resendAccessInvite } from "@/services/auth/resend-invite";
 import {
   createDeveloperAdmin,
   linkDeveloperProfileAdmin,
+  patchDeveloperListFieldsAdmin,
   searchProfilesAdmin,
   unlinkDeveloperProfileAdmin,
   updateDeveloperAdmin,
 } from "@/services/developers";
+import {
+  batchLookupDeveloperJiraAccounts,
+  lookupAndFillDeveloperJiraAccount,
+  type JiraAccountLookupResult,
+} from "@/services/developers/jira-account-lookup";
 import { isUserRole } from "@/services/profiles/admin";
 import type { Profile } from "@/types/profile";
 
@@ -107,6 +117,191 @@ export async function updateDeveloperAction(
           : "Não foi possível atualizar o developer.",
     };
   }
+}
+
+export type DeveloperListPatchState = {
+  error: string | null;
+};
+
+/** Inline list: toggle is_active without opening the full edit form. */
+export async function updateDeveloperIsActiveAction(
+  developerId: string,
+  isActive: boolean,
+): Promise<DeveloperListPatchState> {
+  await requireTeamAccess();
+
+  const id = developerId.trim();
+  if (!id) {
+    return { error: "Developer inválido." };
+  }
+
+  try {
+    await patchDeveloperListFieldsAdmin({ developerId: id, isActive });
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${id}`);
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o status.",
+    };
+  }
+}
+
+/** Inline list: change team_id without opening the full edit form. */
+export async function updateDeveloperTeamAction(
+  developerId: string,
+  teamId: string | null,
+): Promise<DeveloperListPatchState> {
+  await requireTeamAccess();
+
+  const id = developerId.trim();
+  if (!id) {
+    return { error: "Developer inválido." };
+  }
+
+  try {
+    await patchDeveloperListFieldsAdmin({
+      developerId: id,
+      teamId: teamId?.trim() ? teamId.trim() : null,
+    });
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${id}`);
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o time.",
+    };
+  }
+}
+
+/** Inline list: set / clear jira_account_id. */
+export async function updateDeveloperJiraAccountAction(
+  developerId: string,
+  jiraAccountId: string | null,
+): Promise<DeveloperListPatchState> {
+  await requireTeamAccess();
+
+  const id = developerId.trim();
+  if (!id) {
+    return { error: "Developer inválido." };
+  }
+
+  const normalized = normalizeJiraAccountId(jiraAccountId);
+  const validationError = validateJiraAccountId(normalized);
+  if (validationError) {
+    return { error: validationError };
+  }
+
+  try {
+    await patchDeveloperListFieldsAdmin({
+      developerId: id,
+      jiraAccountId: normalized,
+    });
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${id}`);
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o Jira Account ID.",
+    };
+  }
+}
+
+export async function lookupDeveloperJiraAccountAction(
+  developerId: string,
+  options?: { force?: boolean },
+): Promise<JiraAccountLookupResult> {
+  await requireTeamAccess();
+
+  const id = developerId.trim();
+  if (!id) {
+    return {
+      developerId: "",
+      status: "error",
+      message: "Developer inválido.",
+    };
+  }
+
+  const result = await lookupAndFillDeveloperJiraAccount({
+    developerId: id,
+    force: options?.force === true,
+  });
+
+  if (result.status === "filled") {
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${id}`);
+  }
+
+  return result;
+}
+
+export async function batchLookupDeveloperJiraAccountsAction(
+  developerIds: string[],
+  options?: { force?: boolean },
+): Promise<{
+  results: JiraAccountLookupResult[];
+  summary: {
+    filled: number;
+    skipped: number;
+    notFound: number;
+    ambiguous: number;
+    noEmail: number;
+    error: number;
+  };
+}> {
+  await requireTeamAccess();
+
+  const results = await batchLookupDeveloperJiraAccounts({
+    developerIds,
+    force: options?.force === true,
+  });
+
+  const summary = {
+    filled: 0,
+    skipped: 0,
+    notFound: 0,
+    ambiguous: 0,
+    noEmail: 0,
+    error: 0,
+  };
+
+  for (const result of results) {
+    switch (result.status) {
+      case "filled":
+        summary.filled += 1;
+        break;
+      case "skipped_existing":
+        summary.skipped += 1;
+        break;
+      case "not_found":
+        summary.notFound += 1;
+        break;
+      case "ambiguous":
+        summary.ambiguous += 1;
+        break;
+      case "no_email":
+        summary.noEmail += 1;
+        break;
+      case "error":
+        summary.error += 1;
+        break;
+    }
+  }
+
+  if (summary.filled > 0) {
+    revalidatePath("/app/developers");
+  }
+
+  return { results, summary };
 }
 
 export async function linkDeveloperProfileAction(

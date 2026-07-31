@@ -8,7 +8,7 @@ import type { ImportRecord, ImportStatus } from "@/types/import";
 import type { ImportBatchOption } from "@/types/import-period";
 
 export type CreateImportInput = {
-  importedBy: string;
+  importedBy: string | null;
   teamId: string;
   periodStart?: string | null;
   periodEnd?: string | null;
@@ -302,6 +302,8 @@ export async function listImportsAdminPaged(
 export async function listImportBatches(input?: {
   includeArchived?: boolean;
   teamId?: string | null;
+  /** When set, only batches whose `imports.source` is in this list. */
+  sources?: string[] | null;
 }): Promise<ImportBatchOption[]> {
   const supabase = await createClient();
 
@@ -312,11 +314,15 @@ export async function listImportBatches(input?: {
       id,
       period_start,
       period_end,
+      source,
       source_label,
       records_count,
       cards_with_delivery_count,
       team_id,
-      archived_at
+      archived_at,
+      completed_at,
+      created_at,
+      updated_at
     `,
     )
     .eq("status", "completed")
@@ -328,6 +334,10 @@ export async function listImportBatches(input?: {
 
   if (input?.teamId) {
     query = query.eq("team_id", input.teamId);
+  }
+
+  if (input?.sources && input.sources.length > 0) {
+    query = query.in("source", input.sources);
   }
 
   const { data, error } = await query;
@@ -349,6 +359,7 @@ export async function listImportBatches(input?: {
       id: row.id,
       period_start: row.period_start,
       period_end: row.period_end,
+      source: String(row.source ?? ""),
       source_label: row.source_label,
       records_count: row.records_count,
       cards_with_delivery_count: row.cards_with_delivery_count ?? 0,
@@ -357,6 +368,9 @@ export async function listImportBatches(input?: {
       team_code: team?.code ?? null,
       jira_key_prefix: team?.jira_key_prefix ?? null,
       archived_at: row.archived_at,
+      completed_at: (row.completed_at as string | null) ?? null,
+      created_at: (row.created_at as string | null) ?? null,
+      updated_at: (row.updated_at as string | null) ?? null,
     };
   });
 }

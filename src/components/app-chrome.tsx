@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { Profile } from "@/types/profile";
 import {
   Activity,
+  Cable,
   FolderKanban,
   Home,
   LayoutDashboard,
@@ -75,6 +76,12 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             match: (path: string) => path.startsWith("/app/imports"),
           },
           {
+            href: "/app/jira",
+            label: "Jira",
+            icon: Cable,
+            match: (path: string) => path.startsWith("/app/jira"),
+          },
+          {
             href: "/app/teams",
             label: "Times",
             icon: FolderKanban,
@@ -87,20 +94,20 @@ export function AppChrome({ profile, children }: AppChromeProps) {
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-header shadow-[var(--shadow-sm)] backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3 lg:px-8">
           <Link
             href="/app"
-            className="group flex shrink-0 items-center gap-2.5 rounded-[var(--radius-sm)] pr-1 transition-opacity hover:opacity-90"
+            className="group flex min-w-0 shrink-0 items-center gap-2 rounded-[var(--radius-sm)] pr-1 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
             <span className="inline-flex size-8 items-center justify-center rounded-[0.6rem] bg-brand text-brand-on shadow-[var(--shadow-glow)]">
               <Activity className="size-4" strokeWidth={2.25} />
             </span>
-            <span className="text-sm font-semibold tracking-tight">
+            <span className="truncate text-sm font-semibold tracking-tight">
               DevPulse
             </span>
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
+          <nav className="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
             {items.map((item) => {
               const active = isActive(pathname, item);
               const Icon = item.icon;
@@ -109,21 +116,21 @@ export function AppChrome({ profile, children }: AppChromeProps) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-150",
+                    "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 xl:gap-2 xl:px-2.5",
                     active
                       ? "bg-brand-soft text-brand-foreground shadow-[var(--shadow-sm)]"
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                   )}
                 >
                   <Icon className="size-3.5 opacity-80" strokeWidth={1.9} />
-                  {item.label}
+                  <span className="truncate">{item.label}</span>
                 </Link>
               );
             })}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 lg:flex">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 xl:flex">
               <span className="max-w-[160px] truncate text-xs font-medium text-foreground">
                 {profile.full_name ?? profile.email}
               </span>
@@ -133,12 +140,12 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             <form action={signOut} className="hidden sm:block">
               <button type="submit" className="ui-btn-secondary">
                 <LogOut className="size-3.5" strokeWidth={1.9} />
-                Sair
+                <span className="hidden md:inline">Sair</span>
               </button>
             </form>
             <button
               type="button"
-              className="ui-btn-secondary md:hidden"
+              className="ui-btn-secondary lg:hidden"
               aria-expanded={open}
               aria-label={open ? "Fechar menu" : "Abrir menu"}
               onClick={() => setOpen((value) => !value)}
@@ -149,7 +156,15 @@ export function AppChrome({ profile, children }: AppChromeProps) {
         </div>
 
         {open ? (
-          <div className="border-t border-border/70 px-4 py-3 md:hidden">
+          <div className="border-t border-border/70 px-3 py-3 sm:px-6 lg:hidden">
+            <div className="mb-3 rounded-[var(--radius-sm)] border border-border/60 bg-muted/30 px-3 py-2.5">
+              <p className="truncate text-sm font-medium text-foreground">
+                {profile.full_name ?? profile.email}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {getRoleLabel(profile.role)}
+              </p>
+            </div>
             <nav className="flex flex-col gap-1">
               {items.map((item) => {
                 const active = isActive(pathname, item);
@@ -171,7 +186,7 @@ export function AppChrome({ profile, children }: AppChromeProps) {
                   </Link>
                 );
               })}
-              <form action={signOut} className="pt-2">
+              <form action={signOut} className="pt-2 sm:hidden">
                 <button type="submit" className="ui-btn-secondary w-full">
                   <LogOut className="size-3.5" strokeWidth={1.9} />
                   Sair

@@ -44,6 +44,42 @@ export async function listDevelopers(): Promise<Developer[]> {
   return (data ?? []).map(mapDeveloper);
 }
 
+export async function findDevelopersByJiraAccountIds(
+  accountIds: string[],
+): Promise<Map<string, Developer>> {
+  const unique = [
+    ...new Set(
+      accountIds
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0),
+    ),
+  ];
+  const map = new Map<string, Developer>();
+  if (unique.length === 0) {
+    return map;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("developers")
+    .select("*")
+    .in("jira_account_id", unique);
+
+  if (error) {
+    throw new Error(
+      `Failed to find developers by jira_account_id: ${error.message}`,
+    );
+  }
+
+  for (const row of data ?? []) {
+    if (row.jira_account_id) {
+      map.set(String(row.jira_account_id), mapDeveloper(row));
+    }
+  }
+
+  return map;
+}
+
 export async function findOrCreateDeveloperByResponsible(input: {
   fullName: string | null;
   email: string | null;

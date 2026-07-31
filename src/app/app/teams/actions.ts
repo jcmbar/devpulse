@@ -30,11 +30,6 @@ export async function createTeamAction(
       code: String(formData.get("code") ?? ""),
       jiraKeyPrefix: String(formData.get("jiraKeyPrefix") ?? ""),
       isActive: formData.get("isActive") === "on",
-      jiraBaseUrl: readOptional(formData, "jiraBaseUrl"),
-      jiraProjectKey: readOptional(formData, "jiraProjectKey"),
-      jiraEmail: readOptional(formData, "jiraEmail"),
-      jiraApiTokenSecretRef: readOptional(formData, "jiraApiTokenSecretRef"),
-      jiraIntegrationEnabled: formData.get("jiraIntegrationEnabled") === "on",
       notes: readOptional(formData, "notes"),
     });
   } catch (error) {
@@ -48,6 +43,7 @@ export async function createTeamAction(
   revalidatePath("/app/teams");
   revalidatePath("/app/imports");
   revalidatePath("/app/developers");
+  revalidatePath("/app/jira");
   return { error: null, success: "Time criado." };
 }
 
@@ -63,11 +59,6 @@ export async function updateTeamAction(
       code: String(formData.get("code") ?? ""),
       jiraKeyPrefix: String(formData.get("jiraKeyPrefix") ?? ""),
       isActive: formData.get("isActive") === "on",
-      jiraBaseUrl: readOptional(formData, "jiraBaseUrl"),
-      jiraProjectKey: readOptional(formData, "jiraProjectKey"),
-      jiraEmail: readOptional(formData, "jiraEmail"),
-      jiraApiTokenSecretRef: readOptional(formData, "jiraApiTokenSecretRef"),
-      jiraIntegrationEnabled: formData.get("jiraIntegrationEnabled") === "on",
       notes: readOptional(formData, "notes"),
     });
   } catch (error) {
@@ -84,6 +75,7 @@ export async function updateTeamAction(
   revalidatePath("/app/imports");
   revalidatePath("/app/developers");
   revalidatePath("/app/gestor");
+  revalidatePath("/app/jira");
   return { error: null, success: "Time atualizado." };
 }
 

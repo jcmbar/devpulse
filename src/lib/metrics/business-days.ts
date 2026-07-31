@@ -76,6 +76,23 @@ export function computeBusinessDayDelay(input: {
   return -(networkDaysIntl(deliveryOn, dueOn) - 1);
 }
 
+/**
+ * Gestor / produtividade “Atraso”:
+ * - sem `due_on` ou sem Entrega TU → null (não penaliza, não conta no prazo);
+ * - Entrega TU <= due → 0;
+ * - Entrega TU > due → dias úteis de atraso (sempre ≥ 0).
+ */
+export function computeDeliveryDelayDays(input: {
+  dueOn: string | null;
+  deliveryOn: string | null;
+}): number | null {
+  const raw = computeBusinessDayDelay(input);
+  if (raw == null) {
+    return null;
+  }
+  return raw > 0 ? raw : 0;
+}
+
 export function listDatesInMonth(year: number, month: number): string[] {
   const dates: string[] = [];
   let cursor = new Date(Date.UTC(year, month - 1, 1));
@@ -91,8 +108,8 @@ export function listDatesInMonth(year: number, month: number): string[] {
 
 /** Inclusive ISO date list for [startIso, endIso]. Empty if start > end. */
 export function listDatesInRange(startIso: string, endIso: string): string[] {
-  let start = parseIsoDate(startIso);
-  let end = parseIsoDate(endIso);
+  const start = parseIsoDate(startIso);
+  const end = parseIsoDate(endIso);
 
   if (start.getTime() > end.getTime()) {
     return [];

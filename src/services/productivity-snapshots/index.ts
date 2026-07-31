@@ -37,7 +37,7 @@ export async function upsertProductivitySnapshot(
     total_estimate_hours: metrics.totalEstimateHours,
     total_time_spent_hours: metrics.totalTimeSpentHours,
     total_difference_hours: metrics.totalDifferenceHours,
-    total_delay_days: metrics.averageDelayDays ?? 0,
+    total_delay_days: metrics.totalDelayDays,
     avg_delay_days: metrics.averageDelayDays,
     max_delay_days: metrics.maxDelayDays,
     utilization_rate: metrics.utilizationRate,

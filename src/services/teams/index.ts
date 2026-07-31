@@ -4,23 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Team, TeamWriteInput } from "@/types/team";
 
 function mapTeam(row: Record<string, unknown>): Team {
-  const settings = row.jira_settings;
   return {
     id: String(row.id),
     name: String(row.name),
     code: String(row.code),
     jira_key_prefix: String(row.jira_key_prefix),
     is_active: Boolean(row.is_active),
-    jira_base_url: (row.jira_base_url as string | null) ?? null,
-    jira_project_key: (row.jira_project_key as string | null) ?? null,
-    jira_email: (row.jira_email as string | null) ?? null,
-    jira_api_token_secret_ref:
-      (row.jira_api_token_secret_ref as string | null) ?? null,
-    jira_integration_enabled: Boolean(row.jira_integration_enabled),
-    jira_settings:
-      settings && typeof settings === "object" && !Array.isArray(settings)
-        ? (settings as Record<string, unknown>)
-        : {},
     notes: (row.notes as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
@@ -87,7 +76,12 @@ export async function listTeamsAdmin(input?: {
   includeInactive?: boolean;
 }): Promise<Team[]> {
   const supabase = await createClient();
-  let query = supabase.from("teams").select("*").order("name", { ascending: true });
+  let query = supabase
+    .from("teams")
+    .select(
+      "id, name, code, jira_key_prefix, is_active, notes, created_at, updated_at",
+    )
+    .order("name", { ascending: true });
 
   if (!input?.includeInactive) {
     query = query.eq("is_active", true);
@@ -105,7 +99,9 @@ export async function getTeamById(id: string): Promise<Team | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("teams")
-    .select("*")
+    .select(
+      "id, name, code, jira_key_prefix, is_active, notes, created_at, updated_at",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -127,7 +123,9 @@ export async function findTeamByJiraKeyPrefix(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("teams")
-    .select("*")
+    .select(
+      "id, name, code, jira_key_prefix, is_active, notes, created_at, updated_at",
+    )
     .eq("jira_key_prefix", normalized)
     .eq("is_active", true)
     .maybeSingle();
@@ -150,15 +148,11 @@ export async function createTeam(input: TeamWriteInput): Promise<Team> {
       code: parsed.code,
       jira_key_prefix: parsed.jiraKeyPrefix,
       is_active: input.isActive,
-      jira_base_url: input.jiraBaseUrl?.trim() || null,
-      jira_project_key:
-        input.jiraProjectKey?.trim().toUpperCase() || parsed.jiraKeyPrefix,
-      jira_email: input.jiraEmail?.trim() || null,
-      jira_api_token_secret_ref: input.jiraApiTokenSecretRef?.trim() || null,
-      jira_integration_enabled: input.jiraIntegrationEnabled ?? false,
       notes: input.notes?.trim() || null,
     })
-    .select("*")
+    .select(
+      "id, name, code, jira_key_prefix, is_active, notes, created_at, updated_at",
+    )
     .single();
 
   if (error) {
@@ -186,16 +180,12 @@ export async function updateTeam(
       code: parsed.code,
       jira_key_prefix: parsed.jiraKeyPrefix,
       is_active: input.isActive,
-      jira_base_url: input.jiraBaseUrl?.trim() || null,
-      jira_project_key:
-        input.jiraProjectKey?.trim().toUpperCase() || parsed.jiraKeyPrefix,
-      jira_email: input.jiraEmail?.trim() || null,
-      jira_api_token_secret_ref: input.jiraApiTokenSecretRef?.trim() || null,
-      jira_integration_enabled: input.jiraIntegrationEnabled ?? false,
       notes: input.notes?.trim() || null,
     })
     .eq("id", id)
-    .select("*")
+    .select(
+      "id, name, code, jira_key_prefix, is_active, notes, created_at, updated_at",
+    )
     .single();
 
   if (error) {
@@ -221,7 +211,9 @@ export async function setTeamActive(input: {
     .from("teams")
     .update({ is_active: input.isActive })
     .eq("id", input.id)
-    .select("*")
+    .select(
+      "id, name, code, jira_key_prefix, is_active, notes, created_at, updated_at",
+    )
     .single();
 
   if (error) {

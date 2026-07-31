@@ -30,6 +30,21 @@ export async function insertJiraCards(
   return inserted;
 }
 
+export async function getJiraCardById(id: string): Promise<JiraCard | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jira_cards")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load jira card: ${error.message}`);
+  }
+
+  return data ?? null;
+}
+
 /**
  * Cards do developer no import, filtrados pela data de entrega (Compilado).
  */
@@ -52,6 +67,47 @@ export async function listJiraCardsByDeveloperAndImport(input: {
 
   if (error) {
     throw new Error(`Failed to list jira cards: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Lookup by Jira keys inside one import (no delivery-date filter).
+ * Investigation only — does not define ranking membership.
+ */
+export async function listJiraCardsByKeysInImport(input: {
+  importId: string;
+  keys: string[];
+  developerId?: string | null;
+}): Promise<JiraCard[]> {
+  const keys = [
+    ...new Set(
+      input.keys
+        .map((key) => key.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (keys.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  let request = supabase
+    .from("jira_cards")
+    .select("*")
+    .eq("import_id", input.importId)
+    .in("jira_key", keys)
+    .order("jira_key", { ascending: true });
+
+  if (input.developerId) {
+    request = request.eq("developer_id", input.developerId);
+  }
+
+  const { data, error } = await request;
+
+  if (error) {
+    throw new Error(`Failed to list jira cards by keys: ${error.message}`);
   }
 
   return data ?? [];

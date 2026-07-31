@@ -14,6 +14,10 @@ type CompiladoDateFilterProps = {
   importId: string | null;
   activeRange: CompiladoDateRange;
   monthOptions: string[];
+  /** Extra query params to keep (e.g. source). */
+  preservedParams?: Record<string, string | undefined>;
+  /** When true, drop outer card chrome (parent already provides FilterBar). */
+  embedded?: boolean;
 };
 
 export function CompiladoDateFilter({
@@ -21,6 +25,8 @@ export function CompiladoDateFilter({
   importId,
   activeRange,
   monthOptions,
+  preservedParams,
+  embedded = false,
 }: CompiladoDateFilterProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"month" | "custom">(activeRange.mode);
@@ -33,6 +39,11 @@ export function CompiladoDateFilter({
   function navigate(next: URLSearchParams) {
     if (importId) {
       next.set("importId", importId);
+    }
+    for (const [key, value] of Object.entries(preservedParams ?? {})) {
+      if (value && !next.has(key)) {
+        next.set(key, value);
+      }
     }
     const query = next.toString();
     router.push(query ? `${basePath}?${query}` : basePath);
@@ -59,10 +70,114 @@ export function CompiladoDateFilter({
     navigate(params);
   }
 
+  const modeToggle = (
+    <div className="ui-mode-toggle" role="group" aria-label="Modo do filtro">
+      <button
+        type="button"
+        onClick={() => setMode("month")}
+        className={`ui-mode-toggle__btn ${mode === "month" ? "is-active" : ""}`}
+        aria-pressed={mode === "month"}
+      >
+        Mês / ano
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode("custom")}
+        className={`ui-mode-toggle__btn ${mode === "custom" ? "is-active" : ""}`}
+        aria-pressed={mode === "custom"}
+      >
+        Intervalo
+      </button>
+    </div>
+  );
+
+  const forms =
+    mode === "month" ? (
+      <form
+        onSubmit={applyMonth}
+        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3"
+      >
+        <FormField label="Mês" htmlFor="month" className="min-w-0 flex-1 sm:max-w-xs">
+          <select
+            id="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+            className="ui-select w-full min-w-0"
+          >
+            {monthOptions.length === 0 ? (
+              <option value="">Sem meses disponíveis</option>
+            ) : (
+              monthOptions.map((option) => (
+                <option key={option} value={option}>
+                  {formatYearMonthLabel(option)}
+                </option>
+              ))
+            )}
+          </select>
+        </FormField>
+        <button
+          type="submit"
+          disabled={!month}
+          className="ui-btn-primary w-full sm:w-auto"
+        >
+          Aplicar
+        </button>
+      </form>
+    ) : (
+      <form
+        onSubmit={applyCustom}
+        className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+      >
+        <FormField label="Data inicial" htmlFor="from" className="min-w-0">
+          <input
+            id="from"
+            type="date"
+            value={from}
+            onChange={(event) => setFrom(event.target.value)}
+            required
+            className="ui-input"
+          />
+        </FormField>
+        <FormField label="Data final" htmlFor="to" className="min-w-0">
+          <input
+            id="to"
+            type="date"
+            value={to}
+            onChange={(event) => setTo(event.target.value)}
+            required
+            className="ui-input"
+          />
+        </FormField>
+        <button type="submit" className="ui-btn-primary w-full sm:w-auto">
+          Aplicar
+        </button>
+      </form>
+    );
+
+  if (embedded) {
+    return (
+      <div className="min-w-0 space-y-3">
+        <div className="space-y-1">
+          <p className="ui-filter-bar__label">Período</p>
+          <p className="text-xs text-muted-foreground">
+            Ativo:{" "}
+            <span className="font-medium text-foreground">
+              {formatDateRangeLabel(activeRange)}
+            </span>
+            {" · "}
+            Entrega TU
+          </p>
+        </div>
+        {modeToggle}
+        {forms}
+      </div>
+    );
+  }
+
   return (
     <div className="ui-card space-y-5 px-4 py-3">
       <FormSectionHeader
-        title="Filtro de período (Compilado)"
+        title="Filtro de período"
         description={
           <>
             Ativo:{" "}
@@ -74,83 +189,8 @@ export function CompiladoDateFilter({
           </>
         }
       />
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setMode("month")}
-          className={
-            mode === "month" ? "ui-btn-primary" : "ui-btn-secondary"
-          }
-        >
-          Mês / ano
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("custom")}
-          className={
-            mode === "custom" ? "ui-btn-primary" : "ui-btn-secondary"
-          }
-        >
-          Intervalo customizado
-        </button>
-      </div>
-
-      {mode === "month" ? (
-        <form onSubmit={applyMonth} className="flex flex-wrap items-end gap-4">
-          <FormField label="Mês" htmlFor="month">
-            <select
-              id="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-              className="ui-select min-w-[12rem]"
-            >
-              {monthOptions.length === 0 ? (
-                <option value="">Sem meses disponíveis</option>
-              ) : (
-                monthOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {formatYearMonthLabel(option)}
-                  </option>
-                ))
-              )}
-            </select>
-          </FormField>
-          <button
-            type="submit"
-            disabled={!month}
-            className="ui-btn-primary"
-          >
-            Aplicar mês
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={applyCustom} className="flex flex-wrap items-end gap-4">
-          <FormField label="Data inicial" htmlFor="from">
-            <input
-              id="from"
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              required
-              className="ui-input"
-            />
-          </FormField>
-          <FormField label="Data final" htmlFor="to">
-            <input
-              id="to"
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              required
-              className="ui-input"
-            />
-          </FormField>
-          <button type="submit" className="ui-btn-primary">
-            Aplicar intervalo
-          </button>
-        </form>
-      )}
+      {modeToggle}
+      {forms}
     </div>
   );
 }

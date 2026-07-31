@@ -1,0 +1,71 @@
+/** Central constants for Jira Cloud read-sync MVP. */
+
+export const JIRA_API_VERSION = "3" as const;
+
+export const JIRA_DEFAULT_PAGE_SIZE = 50;
+export const JIRA_MAX_PAGE_SIZE = 100;
+
+/** Hard stop for `/search/jql` loops (guards + operational safety). */
+export const JIRA_MAX_SEARCH_PAGES = 500;
+
+/** Soft concurrency for secondary fetches (changelog / worklogs). */
+export const JIRA_SECONDARY_CONCURRENCY = 2;
+
+/** Soft cap per issue when paging dedicated worklog endpoint. */
+export const JIRA_MAX_WORKLOGS_PER_ISSUE = 2000;
+
+/** Page size for GET /issue/{id}/changelog. */
+export const JIRA_CHANGELOG_PAGE_SIZE = 100;
+
+/** Soft cap per issue when paging dedicated changelog endpoint. */
+export const JIRA_MAX_CHANGELOG_HISTORIES_PER_ISSUE = 2000;
+
+export const JIRA_MAX_RETRIES = 5;
+export const JIRA_RETRY_BASE_MS = 500;
+export const JIRA_RETRY_MAX_MS = 20_000;
+
+/**
+ * @deprecated Search fields come from resolveJiraFieldMappings / collectSearchJiraFieldIds.
+ * Kept only as a historical reference of former hardcoded defaults.
+ */
+export const JIRA_ISSUE_FIELDS = [
+  "summary",
+  "issuetype",
+  "status",
+  "priority",
+  "labels",
+  "assignee",
+  "reporter",
+  "created",
+  "updated",
+  "resolutiondate",
+  "project",
+  "parent",
+  "duedate",
+  "timeoriginalestimate",
+] as const;
+
+/**
+ * @deprecated Not used. Changelog comes from GET /issue/{id}/changelog.
+ * Kept only as a historical marker — do not reintroduce as primary source.
+ */
+export const JIRA_SEARCH_EXPAND_CHANGELOG_DEPRECATED = ["changelog"] as const;
+
+export const JIRA_SYNC_STATUSES = [
+  "pending",
+  "running",
+  "completed",
+  "partial",
+  "failed",
+] as const;
+
+export const JIRA_SYNC_MODES = ["full", "incremental"] as const;
+
+/** Default changelog field names when mappings use system fields. */
+export const JIRA_CHANGELOG_FIELDS = {
+  status: "status",
+  assignee: "assignee",
+} as const;
+
+export type JiraChangelogField =
+  (typeof JIRA_CHANGELOG_FIELDS)[keyof typeof JIRA_CHANGELOG_FIELDS];

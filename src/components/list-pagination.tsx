@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { adminListHref } from "@/lib/admin-list-query";
+import {
+  adminListHref,
+  type ActiveListFilter,
+  type JiraAccountListFilter,
+} from "@/lib/admin-list-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 type ListPaginationProps = {
@@ -10,6 +14,8 @@ type ListPaginationProps = {
   pageSize: number;
   teamId?: string | null;
   q?: string | null;
+  active?: ActiveListFilter | null;
+  jiraId?: JiraAccountListFilter | null;
 };
 
 export function ListPagination({
@@ -20,6 +26,8 @@ export function ListPagination({
   pageSize,
   teamId,
   q,
+  active,
+  jiraId,
 }: ListPaginationProps) {
   if (total === 0) {
     return null;
@@ -27,13 +35,14 @@ export function ListPagination({
 
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
+  const hrefInput = { teamId, q, active, jiraId };
   const prevHref =
     page > 1
-      ? adminListHref(pathname, { teamId, q, page: page - 1 })
+      ? adminListHref(pathname, { ...hrefInput, page: page - 1 })
       : null;
   const nextHref =
     page < totalPages
-      ? adminListHref(pathname, { teamId, q, page: page + 1 })
+      ? adminListHref(pathname, { ...hrefInput, page: page + 1 })
       : null;
 
   return (

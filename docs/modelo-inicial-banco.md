@@ -83,6 +83,15 @@ Um card é único por importação (`import_id` + `jira_key`). Assim o mesmo car
 
 Há no máximo **um snapshot por desenvolvedor + período** (`period_start` / `period_end`).
 
+## Justificativa de atraso (overlay)
+
+Tabela `delay_justification_requests`: o developer pede justificativa de atraso no Início; o gestor aceita/rejeita no drill-down de Atraso.
+
+- Identidade estável por lote Compilado: `(import_id, jira_key, developer_id)`.
+- Rematerializar cria novo `import_id` — aceites do lote antigo não carregam.
+- Não altera `jira_cards.delay_days` / atraso bruto; o ranking mostra **líquido** (bruto − acatados).
+- Status: `pending` | `accepted` | `rejected`. Um `pending` e um `accepted` por chave/lote; após rejeição, novo pedido é permitido.
+
 ## Enums usados
 
 Só foram criados enums estáveis:

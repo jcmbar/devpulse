@@ -9,7 +9,7 @@ import type {
   SpreadsheetParserVersion,
   SpreadsheetParseResult,
 } from "@/lib/imports/types";
-import { computeBusinessDayDelay } from "@/lib/metrics/business-days";
+import { computeDeliveryDelayDays } from "@/lib/metrics/business-days";
 import { toDecimalHours } from "@/lib/metrics/hours";
 import { detectRework } from "@/lib/metrics/rework";
 import {
@@ -125,10 +125,13 @@ export async function runSpreadsheetImport(
       const timeSpentHours = toDecimalHours(row.timeSpentHours);
       const rework = detectRework(row.categories);
       const delayDays =
-        computeBusinessDayDelay({
+        computeDeliveryDelayDays({
           dueOn: row.dueOn,
           deliveryOn: unitTestDeliveryOn,
-        }) ?? row.delayDays;
+        }) ??
+        (row.delayDays != null && Number.isFinite(row.delayDays)
+          ? Math.max(0, row.delayDays)
+          : null);
 
       const differenceHours =
         estimateHours != null && timeSpentHours != null
@@ -185,11 +188,12 @@ export async function runSpreadsheetImport(
 
     const archivedOlderCount = await archiveOlderImportsForTeam({
       teamId: teamResolution.team.id,
+      source: "spreadsheet",
     });
 
     if (archivedOlderCount > 0) {
       parseResult.warnings.push(
-        `${archivedOlderCount} import(s) anterior(es) deste time foram arquivados (mantemos as 2 mais recentes ativas).`,
+        `${archivedOlderCount} import(s) manual(is) anterior(es) deste time foram arquivados (mantemos as 2 planilhas mais recentes ativas).`,
       );
     }
 

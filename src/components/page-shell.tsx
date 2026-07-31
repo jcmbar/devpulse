@@ -25,7 +25,7 @@ export function PageShell({
   return (
     <div
       className={cn(
-        "mx-auto flex w-full flex-1 flex-col gap-7 px-4 py-7 sm:gap-8 sm:px-6 sm:py-9 lg:gap-9 lg:px-8",
+        "mx-auto flex w-full flex-1 flex-col gap-5 px-3 py-5 sm:gap-7 sm:px-6 sm:py-8 lg:gap-8 lg:px-8 lg:py-9",
         SIZE_CLASS[size],
         className,
       )}

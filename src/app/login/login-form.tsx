@@ -37,7 +37,7 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <FormField label="E-mail" htmlFor="email">
         <input
           id="email"
@@ -45,6 +45,7 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           required
+          placeholder="voce@empresa.com"
           className="ui-input"
         />
       </FormField>
@@ -56,6 +57,7 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
+          placeholder="••••••••"
           className="ui-input"
         />
       </FormField>
@@ -65,8 +67,8 @@ export function LoginForm() {
       <FormActions
         fullWidth
         primary={{
-          label: "Entrar",
-          loadingLabel: "Entrando...",
+          label: "Entrar no DevPulse",
+          loadingLabel: "Entrando…",
           pending: isLoading,
         }}
       />

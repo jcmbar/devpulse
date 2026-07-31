@@ -1,5 +1,5 @@
 /**
- * Shared admin list query params: teamId + q + page.
+ * Shared admin list query params: teamId + q + page (+ optional developer filters).
  * teamId filtering is always by team_id (see team-filter.ts); never team_code.
  */
 
@@ -15,8 +15,13 @@ import {
 
 export const SEARCH_PARAM = "q";
 export const PAGE_PARAM = "page";
+export const ACTIVE_FILTER_PARAM = "active";
+export const JIRA_ACCOUNT_FILTER_PARAM = "jiraId";
 
 export const DEFAULT_ADMIN_PAGE_SIZE = 20;
+
+export type ActiveListFilter = "all" | "active" | "inactive";
+export type JiraAccountListFilter = "all" | "with" | "without";
 
 export type AdminListQuery = {
   teamFilter: TeamListFilter;
@@ -30,6 +35,10 @@ export type AdminListQuery = {
   page: number;
   pageSize: number;
   teamScope: TeamScopedListInput;
+  /** Developers list: cadastro ativo/inativo. */
+  activeFilter: ActiveListFilter;
+  /** Developers list: presença de jira_account_id. */
+  jiraAccountFilter: JiraAccountListFilter;
 };
 
 export function parseSearchQuery(value: string | null | undefined): string {
@@ -44,11 +53,31 @@ export function parsePageParam(value: string | null | undefined): number {
   return Math.floor(n);
 }
 
+export function parseActiveListFilter(
+  value: string | null | undefined,
+): ActiveListFilter {
+  if (value === "active" || value === "inactive") {
+    return value;
+  }
+  return "all";
+}
+
+export function parseJiraAccountListFilter(
+  value: string | null | undefined,
+): JiraAccountListFilter {
+  if (value === "with" || value === "without") {
+    return value;
+  }
+  return "all";
+}
+
 export function parseAdminListQuery(
   params: {
     teamId?: string | null;
     q?: string | null;
     page?: string | null;
+    active?: string | null;
+    jiraId?: string | null;
   },
   options?: { pageSize?: number },
 ): AdminListQuery {
@@ -66,6 +95,8 @@ export function parseAdminListQuery(
     page: parsePageParam(params.page),
     pageSize,
     teamScope: toTeamScopedListInput(teamFilter),
+    activeFilter: parseActiveListFilter(params.active),
+    jiraAccountFilter: parseJiraAccountListFilter(params.jiraId),
   };
 }
 
@@ -73,6 +104,8 @@ export type AdminListHrefInput = {
   teamId?: string | null;
   q?: string | null;
   page?: number | null;
+  active?: ActiveListFilter | null;
+  jiraId?: JiraAccountListFilter | null;
 };
 
 /** Build query string preserving only known admin list params. */
@@ -83,12 +116,20 @@ export function buildAdminListSearchParams(
   const teamId = (input.teamId ?? "").trim();
   const q = parseSearchQuery(input.q);
   const page = input.page ?? 1;
+  const active = input.active ?? "all";
+  const jiraId = input.jiraId ?? "all";
 
   if (teamId) {
     params.set(TEAM_FILTER_PARAM, teamId);
   }
   if (q) {
     params.set(SEARCH_PARAM, q);
+  }
+  if (active !== "all") {
+    params.set(ACTIVE_FILTER_PARAM, active);
+  }
+  if (jiraId !== "all") {
+    params.set(JIRA_ACCOUNT_FILTER_PARAM, jiraId);
   }
   if (page > 1) {
     params.set(PAGE_PARAM, String(page));
@@ -117,6 +158,8 @@ export function patchAdminListSearchParams(
     q?: string | null;
     page?: number | null;
     resetPage?: boolean;
+    active?: ActiveListFilter | null;
+    jiraId?: JiraAccountListFilter | null;
   },
 ): URLSearchParams {
   const next = new URLSearchParams(current.toString());
@@ -136,6 +179,22 @@ export function patchAdminListSearchParams(
       next.delete(SEARCH_PARAM);
     } else {
       next.set(SEARCH_PARAM, q);
+    }
+  }
+
+  if (patch.active !== undefined) {
+    if (!patch.active || patch.active === "all") {
+      next.delete(ACTIVE_FILTER_PARAM);
+    } else {
+      next.set(ACTIVE_FILTER_PARAM, patch.active);
+    }
+  }
+
+  if (patch.jiraId !== undefined) {
+    if (!patch.jiraId || patch.jiraId === "all") {
+      next.delete(JIRA_ACCOUNT_FILTER_PARAM);
+    } else {
+      next.set(JIRA_ACCOUNT_FILTER_PARAM, patch.jiraId);
     }
   }
 
@@ -181,7 +240,12 @@ export function toPaginatedList<T>(input: {
 
 export function listEmptyMessage(
   entity: "developer" | "import",
-  input: { filter: TeamListFilter; q?: string },
+  input: {
+    filter: TeamListFilter;
+    q?: string;
+    activeFilter?: ActiveListFilter;
+    jiraAccountFilter?: JiraAccountListFilter;
+  },
 ): string {
   const q = parseSearchQuery(input.q);
   if (q) {
@@ -190,5 +254,23 @@ export function listEmptyMessage(
     }
     return `Nenhuma importação encontrada para “${q}”.`;
   }
+
+  if (entity === "developer") {
+    const parts: string[] = [];
+    if (input.activeFilter === "active") {
+      parts.push("ativos");
+    } else if (input.activeFilter === "inactive") {
+      parts.push("inativos");
+    }
+    if (input.jiraAccountFilter === "with") {
+      parts.push("com Jira Account ID");
+    } else if (input.jiraAccountFilter === "without") {
+      parts.push("sem Jira Account ID");
+    }
+    if (parts.length > 0) {
+      return `Nenhum developer ${parts.join(" e ")} neste filtro.`;
+    }
+  }
+
   return teamFilterEmptyMessage(entity, input.filter);
 }
