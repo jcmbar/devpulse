@@ -60,32 +60,33 @@ Required variables:
 
 ### Redirect URLs (aceite de convite)
 
-No Supabase → **Authentication → URL Configuration**, inclua nas Redirect URLs:
+Guia completo: [`docs/auth-invite-flow.md`](docs/auth-invite-flow.md).
 
-- `http://localhost:3000/set-password`
-- `http://localhost:3000/auth/confirm`
-- (produção) `https://seu-dominio/set-password`
-- (produção) `https://seu-dominio/auth/confirm`
+No Supabase → **Authentication → URL Configuration**:
 
-Site URL pode permanecer `http://localhost:3000` em local.
+- **Site URL:** `http://localhost:3000` (local) ou o domínio de produção
+- **Redirect URLs:**
+  - `http://localhost:3000/set-password`
+  - `http://localhost:3000/auth/confirm`
+  - (produção) `https://seu-dominio/set-password`
+  - (produção) `https://seu-dominio/auth/confirm`
 
-Template de e-mail de **Invite** (recomendado, Authentication → Email Templates):
+Templates HTML prontos para colar:
+
+- Invite: [`docs/email-templates/invite-user.html`](docs/email-templates/invite-user.html)
+- Reset / reenvio: [`docs/email-templates/reset-password.html`](docs/email-templates/reset-password.html)
+
+CTA recomendado (Invite):
 
 ```html
-<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/set-password">
-  Aceitar convite
-</a>
-```
-
-Template de **Reset Password** (usado no “Reenviar convite”):
-
-```html
-<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/set-password">
-  Definir senha
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&redirect_to=/set-password">
+  Criar senha
 </a>
 ```
 
 Se o template padrão for mantido, o app também aceita o redirect com tokens no hash em `/set-password`.
+
+Custom SMTP é **opcional** (próxima etapa) — o fluxo funciona com o SMTP padrão do Supabase; só o remetente permanece genérico.
 
 3. Start the development server:
 

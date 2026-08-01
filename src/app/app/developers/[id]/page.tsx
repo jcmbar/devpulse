@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DeleteDeveloperControl } from "@/app/app/developers/delete-developer-control";
 import { AccessRolePanel } from "@/app/app/developers/access-role-panel";
 import { DeveloperForm } from "@/app/app/developers/developer-form";
 import { InviteUserPanel } from "@/app/app/developers/invite-user-panel";
@@ -199,6 +200,26 @@ export default async function EditDeveloperPage({
           </SectionShell>
         ) : null}
       </div>
+
+      <SectionShell
+        title="Excluir cadastro"
+        description="Remove o developer da base. Use em testes para limpar dados."
+      >
+        <div className="ui-dashboard-panel space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Cards Jira vinculados ficam sem responsável (não são apagados).
+            Snapshots, capacidade e fechamentos deste developer são removidos em
+            cascata.
+          </p>
+          <DeleteDeveloperControl
+            developerId={developer.id}
+            developerName={developer.full_name}
+            hasProfile={Boolean(developer.profile)}
+            variant="panel"
+            showAuthOption
+          />
+        </div>
+      </SectionShell>
     </PageShell>
   );
 }

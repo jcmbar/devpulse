@@ -259,7 +259,7 @@ export function SetPasswordForm() {
   if (status === "success") {
     return (
       <div className="space-y-2">
-        <FormFeedback success="Senha definida com sucesso. Redirecionando..." />
+        <FormFeedback success="Acesso ativado. Redirecionando..." />
       </div>
     );
   }
@@ -301,8 +301,8 @@ export function SetPasswordForm() {
       <FormActions
         fullWidth
         primary={{
-          label: "Definir senha e continuar",
-          loadingLabel: "Salvando...",
+          label: "Ativar acesso",
+          loadingLabel: "Ativando...",
           pending: isSubmitting,
         }}
       />

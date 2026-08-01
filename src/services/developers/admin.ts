@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   toPaginatedList,
@@ -437,6 +438,83 @@ export async function unlinkDeveloperProfileAdmin(
   }
 
   return mapDeveloperRow(data);
+}
+
+export type DeleteDeveloperAdminInput = {
+  developerId: string;
+  /** When true and a profile is linked, also deletes auth.users (cascades profile). */
+  deleteAuthUser?: boolean;
+  /** Current operator — cannot delete own linked developer/auth. */
+  actorUserId: string;
+};
+
+export type DeleteDeveloperAdminResult = {
+  deletedAuthUser: boolean;
+  hadProfile: boolean;
+};
+
+/**
+ * Permanently removes a developer row (admin/service role).
+ * Related productivity rows cascade or null out via FKs (cards → set null).
+ */
+export async function deleteDeveloperAdmin(
+  input: DeleteDeveloperAdminInput,
+): Promise<DeleteDeveloperAdminResult> {
+  const admin = createAdminClient();
+  const developerId = input.developerId.trim();
+
+  if (!developerId) {
+    throw new Error("Developer inválido.");
+  }
+
+  const { data: developer, error: loadError } = await admin
+    .from("developers")
+    .select("id, profile_id, full_name")
+    .eq("id", developerId)
+    .maybeSingle();
+
+  if (loadError) {
+    throw new Error(`Failed to load developer: ${loadError.message}`);
+  }
+
+  if (!developer) {
+    throw new Error("Developer não encontrado.");
+  }
+
+  const profileId =
+    typeof developer.profile_id === "string" ? developer.profile_id : null;
+
+  if (profileId && profileId === input.actorUserId) {
+    throw new Error(
+      "Você não pode excluir o próprio cadastro / login. Peça a outro administrador.",
+    );
+  }
+
+  const { error: deleteError } = await admin
+    .from("developers")
+    .delete()
+    .eq("id", developerId);
+
+  if (deleteError) {
+    throw new Error(`Failed to delete developer: ${deleteError.message}`);
+  }
+
+  let deletedAuthUser = false;
+
+  if (input.deleteAuthUser && profileId) {
+    const { error: authError } = await admin.auth.admin.deleteUser(profileId);
+    if (authError) {
+      throw new Error(
+        `Developer excluído, mas falha ao remover o login (Auth): ${authError.message}`,
+      );
+    }
+    deletedAuthUser = true;
+  }
+
+  return {
+    deletedAuthUser,
+    hadProfile: Boolean(profileId),
+  };
 }
 
 export async function searchProfilesAdmin(query: string): Promise<

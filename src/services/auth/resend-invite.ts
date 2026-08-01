@@ -6,7 +6,7 @@ import {
   type AccessInviteTarget,
 } from "@/services/auth/access-status";
 import {
-  getSiteUrl,
+  getSetPasswordRedirectTo,
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
@@ -105,11 +105,11 @@ export async function resendAccessInvite(
   }
 
   const admin = createAdminClient();
-  const siteUrl = getSiteUrl();
   const email = normalizeEmail(target.email);
 
   const { error } = await admin.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/set-password`,
+    // Same fallback as invite; Recovery template should use /auth/confirm.
+    redirectTo: getSetPasswordRedirectTo(),
   });
 
   if (error) {

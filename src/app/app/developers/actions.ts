@@ -11,6 +11,7 @@ import { inviteAccessUser } from "@/services/auth/invite-user";
 import { resendAccessInvite } from "@/services/auth/resend-invite";
 import {
   createDeveloperAdmin,
+  deleteDeveloperAdmin,
   getDeveloperAdmin,
   linkDeveloperProfileAdmin,
   patchDeveloperListFieldsAdmin,
@@ -357,6 +358,37 @@ export async function unlinkDeveloperProfileAction(
         error instanceof Error
           ? error.message
           : "Não foi possível desvincular o profile.",
+    };
+  }
+}
+
+/** Permanently deletes a developer; optionally removes Auth login + profile. */
+export async function deleteDeveloperAction(
+  formData: FormData,
+): Promise<{ error: string | null }> {
+  const context = await requireTeamAccess();
+
+  const developerId = String(formData.get("developerId") ?? "").trim();
+  const deleteAuthUser = formData.get("deleteAuthUser") === "on";
+
+  if (!developerId) {
+    return { error: "Developer inválido." };
+  }
+
+  try {
+    await deleteDeveloperAdmin({
+      developerId,
+      deleteAuthUser,
+      actorUserId: context.user.id,
+    });
+    revalidatePath("/app/developers");
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o developer.",
     };
   }
 }

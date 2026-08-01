@@ -115,6 +115,7 @@ export {
 
 export {
   createDeveloperAdmin,
+  deleteDeveloperAdmin,
   getDeveloperAdmin,
   linkDeveloperProfileAdmin,
   listDevelopersAdmin,
@@ -127,6 +128,8 @@ export {
 
 export type {
   CreateDeveloperInput,
+  DeleteDeveloperAdminInput,
+  DeleteDeveloperAdminResult,
   DeveloperListItem,
   ListDevelopersAdminInput,
   ListDevelopersAdminPagedInput,

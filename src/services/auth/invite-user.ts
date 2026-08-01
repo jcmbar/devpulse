@@ -3,7 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { linkDeveloperProfileAdmin } from "@/services/developers/admin";
 import {
-  getSiteUrl,
+  getSetPasswordRedirectTo,
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
@@ -91,7 +91,6 @@ export async function inviteAccessUser(
     throw new Error("Role inválida. Use admin, gestor ou dev.");
   }
 
-  const siteUrl = getSiteUrl();
   const admin = createAdminClient();
 
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -99,7 +98,9 @@ export async function inviteAccessUser(
       full_name: fullName,
       role,
     },
-    redirectTo: `${siteUrl}/set-password`,
+    // Fallback / {{ .RedirectTo }} when templates use ConfirmationURL.
+    // Branded templates should link to /auth/confirm?token_hash=...&redirect_to=/set-password.
+    redirectTo: getSetPasswordRedirectTo(),
   });
 
   if (error) {

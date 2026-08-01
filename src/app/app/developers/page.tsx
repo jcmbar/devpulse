@@ -30,11 +30,13 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { DeveloperListColumnFilters } from "@/app/app/developers/developer-list-column-filters";
 import { DeveloperJiraAccountBatchLookup } from "@/app/app/developers/developer-jira-batch-lookup";
+import { DeleteDeveloperControl } from "@/app/app/developers/delete-developer-control";
 import {
   DeveloperActiveInline,
   DeveloperJiraAccountInline,
   DeveloperTeamInline,
 } from "@/app/app/developers/developer-list-quick-edit";
+import { InlineActions } from "@/components/ui/destructive-action";
 
 type DevelopersAdminPageProps = {
   searchParams: Promise<{
@@ -386,12 +388,20 @@ export default async function DevelopersAdminPage({
                         {developer.cards_count}
                       </td>
                       <td className="text-right">
-                        <Link
-                          href={`/app/developers/${developer.id}`}
-                          className="ui-btn-ghost"
-                        >
-                          Editar
-                        </Link>
+                        <InlineActions className="justify-end">
+                          <Link
+                            href={`/app/developers/${developer.id}`}
+                            className="ui-btn-ghost"
+                          >
+                            Editar
+                          </Link>
+                          <DeleteDeveloperControl
+                            developerId={developer.id}
+                            developerName={developer.full_name}
+                            hasProfile={Boolean(developer.profile)}
+                            variant="inline"
+                          />
+                        </InlineActions>
                       </td>
                     </tr>
                   );
