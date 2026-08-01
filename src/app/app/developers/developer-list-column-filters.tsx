@@ -6,6 +6,7 @@ import {
   patchAdminListSearchParams,
 } from "@/lib/admin-list-query";
 import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import { cn } from "@/lib/utils";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
@@ -29,6 +30,8 @@ const JIRA_OPTIONS: ChipOption<JiraAccountListFilter>[] = [
 type DeveloperListColumnFiltersProps = {
   activeFilter: ActiveListFilter;
   jiraAccountFilter: JiraAccountListFilter;
+  /** Compact inline layout for FilterBar. */
+  embedded?: boolean;
 };
 
 function FilterChipGroup<T extends string>({
@@ -46,7 +49,7 @@ function FilterChipGroup<T extends string>({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="ui-label">{label}</p>
+      <p className="ui-filter-bar__label">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((option) => {
           const selected = option.value === value;
@@ -75,6 +78,7 @@ function FilterChipGroup<T extends string>({
 export function DeveloperListColumnFilters({
   activeFilter,
   jiraAccountFilter,
+  embedded = false,
 }: DeveloperListColumnFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -100,7 +104,12 @@ export function DeveloperListColumnFilters({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-5">
+    <div
+      className={cn(
+        "flex flex-wrap gap-4 sm:gap-6",
+        embedded ? "items-start" : "items-end gap-5",
+      )}
+    >
       <FilterChipGroup
         label="Cadastro"
         value={activeFilter}

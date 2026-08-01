@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { DataTable } from "@/components/surface";
+import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { InlineActions } from "@/components/ui/destructive-action";
 import {
   FormActions,
   FormCheck,
   FormFeedback,
   FormField,
-  FormSectionHeader,
 } from "@/components/ui/form";
+import { SectionShell } from "@/components/ui/section-shell";
 import { useActionState, useState } from "react";
 import {
   createTeamAction,
@@ -101,8 +102,8 @@ function TeamJiraSummaryCard({
 }) {
   if (!link) {
     return (
-      <div className="rounded-[var(--radius-sm)] border border-dashed border-border/80 bg-muted/30 px-4 py-3 sm:col-span-2 lg:col-span-4">
-        <p className="text-sm font-medium">Integração Jira</p>
+      <div className="rounded-[var(--radius-sm)] border border-dashed border-border bg-muted/30 px-3 py-3 sm:col-span-2 lg:col-span-4">
+        <p className="text-sm font-medium text-foreground">Integração Jira</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Este time ainda não tem integração vinculada. Prefixo de routing:{" "}
           <span className="font-medium text-foreground">
@@ -110,13 +111,7 @@ function TeamJiraSummaryCard({
           </span>
           .
         </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Credenciais, projetos, sync e analytics são gerenciados na aba Jira.
-        </p>
-        <Link
-          href="/app/jira"
-          className="ui-btn-secondary mt-3 inline-flex"
-        >
+        <Link href="/app/jira" className="ui-btn-secondary mt-3 inline-flex">
           Configurar na aba Jira
         </Link>
       </div>
@@ -124,27 +119,28 @@ function TeamJiraSummaryCard({
   }
 
   const projects =
-    link.projectKeys.length > 0 ? link.projectKeys.join(", ") : "todos (sem filtro)";
+    link.projectKeys.length > 0
+      ? link.projectKeys.join(", ")
+      : "todos (sem filtro)";
 
   return (
-    <div className="rounded-[var(--radius-sm)] border border-border/80 bg-muted/20 px-4 py-3 sm:col-span-2 lg:col-span-4">
+    <div className="rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-3 sm:col-span-2 lg:col-span-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-sm font-medium">Integração Jira (somente leitura)</p>
+          <p className="text-sm font-medium text-foreground">
+            Integração Jira (somente leitura)
+          </p>
           <p className="text-sm text-muted-foreground">
             Vinculado a{" "}
             <span className="font-medium text-foreground">{link.name}</span>
             {" · "}
             {link.isEnabled ? "habilitada" : "desabilitada"}
             {" · "}
-            projetos: <span className="font-medium text-foreground">{projects}</span>
+            projetos:{" "}
+            <span className="font-medium text-foreground">{projects}</span>
           </p>
           <p className="text-[11px] text-muted-foreground">
-            Prefixo do time: {team.jira_key_prefix}-… · {link.baseUrl}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            Para editar conexão, filtros, mapeamentos ou histórico, use a aba
-            Jira.
+            Prefixo: {team.jira_key_prefix}-… · {link.baseUrl}
           </p>
         </div>
         <Link
@@ -179,138 +175,226 @@ export function TeamsAdminPanel({ teams, jiraByTeamId }: TeamsAdminPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = teams.find((row) => row.id === editingId) ?? null;
 
+  const activeCount = teams.filter((team) => team.is_active).length;
+  const inactiveCount = teams.length - activeCount;
+  const withJiraCount = teams.filter((team) => jiraByTeamId[team.id]).length;
+  const withoutJiraCount = teams.length - withJiraCount;
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-[var(--radius-sm)] border border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-        As configurações da integração Jira (credenciais, sync, mapping,
-        analytics) ficam na aba{" "}
-        <Link href="/app/jira" className="font-medium text-foreground underline-offset-2 hover:underline">
+    <div className="space-y-5">
+      <SectionShell
+        title="Resumo"
+        description="Visão rápida do cadastro organizacional."
+      >
+        <div className="ui-kpi-grid--hero">
+          <KpiMetricCard
+            variant="hero"
+            label="Times"
+            value={String(teams.length)}
+            tone="info"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Ativos"
+            value={String(activeCount)}
+            tone="success"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Inativos"
+            value={String(inactiveCount)}
+            tone={inactiveCount > 0 ? "warning" : "neutral"}
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Com Jira"
+            value={String(withJiraCount)}
+            tone="brand"
+            hint={`${withoutJiraCount} sem integração`}
+          />
+        </div>
+      </SectionShell>
+
+      <div className="rounded-[var(--radius-sm)] border border-border bg-card px-3.5 py-3 text-sm text-muted-foreground shadow-[var(--shadow-sm)]">
+        Credenciais, sync, mapping e analytics ficam na aba{" "}
+        <Link
+          href="/app/jira"
+          className="font-medium text-foreground underline-offset-2 hover:underline"
+        >
           Jira
         </Link>
         . Aqui você organiza o time e o prefixo usado nos imports.
       </div>
 
-      <form
-        action={createAction}
-        className="ui-card grid gap-4 border-dashed p-4 sm:grid-cols-2 lg:grid-cols-4"
+      <SectionShell
+        title="Novo time"
+        description="Crie a estrutura organizacional. Depois vincule a integração na aba Jira."
       >
-        <div className="sm:col-span-2 lg:col-span-4">
-          <FormSectionHeader
-            title="Novo time"
-            description="Estrutura organizacional. Depois vincule a integração na aba Jira."
-          />
-        </div>
-        <TeamFields idPrefix="create" />
-        <div className="sm:col-span-2 lg:col-span-4">
-          <FormActions
-            primary={{
-              label: "Criar time",
-              loadingLabel: "Salvando...",
-              pending: createPending,
-            }}
-          />
-        </div>
-      </form>
-      <FormFeedback error={createState.error} success={createState.success} />
-
-      {editing ? (
         <form
-          action={updateAction}
-          className="ui-card grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4"
+          action={createAction}
+          className="ui-dashboard-panel grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <input type="hidden" name="teamId" value={editing.id} />
-          <p className="text-sm font-medium sm:col-span-2 lg:col-span-4">
-            Editando: {editing.name}
-          </p>
-          <TeamFields key={editing.id} team={editing} idPrefix="edit" />
-          <TeamJiraSummaryCard
-            team={editing}
-            link={jiraByTeamId[editing.id] ?? null}
-          />
+          <TeamFields idPrefix="create" />
           <div className="sm:col-span-2 lg:col-span-4">
             <FormActions
               primary={{
-                label: "Salvar",
+                label: "Criar time",
                 loadingLabel: "Salvando...",
-                pending: updatePending,
-              }}
-              secondary={{
-                label: "Cancelar",
-                onClick: () => setEditingId(null),
+                pending: createPending,
               }}
             />
           </div>
         </form>
+        <div className="mt-3">
+          <FormFeedback
+            error={createState.error}
+            success={createState.success}
+          />
+        </div>
+      </SectionShell>
+
+      {editing ? (
+        <SectionShell
+          title={`Editando · ${editing.name}`}
+          description="Altere dados do time. Integração Jira permanece somente leitura aqui."
+          actions={
+            <button
+              type="button"
+              onClick={() => setEditingId(null)}
+              className="ui-btn-ghost"
+            >
+              Fechar edição
+            </button>
+          }
+        >
+          <form
+            action={updateAction}
+            className="ui-dashboard-panel grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            <input type="hidden" name="teamId" value={editing.id} />
+            <TeamFields key={editing.id} team={editing} idPrefix="edit" />
+            <TeamJiraSummaryCard
+              team={editing}
+              link={jiraByTeamId[editing.id] ?? null}
+            />
+            <div className="sm:col-span-2 lg:col-span-4">
+              <FormActions
+                primary={{
+                  label: "Salvar",
+                  loadingLabel: "Salvando...",
+                  pending: updatePending,
+                }}
+                secondary={{
+                  label: "Cancelar",
+                  onClick: () => setEditingId(null),
+                }}
+              />
+            </div>
+          </form>
+          <div className="mt-3 space-y-2">
+            <FormFeedback
+              error={updateState.error}
+              success={updateState.success}
+            />
+          </div>
+        </SectionShell>
       ) : null}
-      <FormFeedback error={updateState.error} success={updateState.success} />
+
       <FormFeedback error={toggleState.error} success={toggleState.success} />
 
-      <DataTable minWidthClassName="min-w-[720px]">
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>Código</th>
-            <th>Prefixo</th>
-            <th>Status</th>
-            <th>Jira</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {teams.map((team) => {
-            const link = jiraByTeamId[team.id];
-            return (
-              <tr
-                key={team.id}
-                className={!team.is_active ? "opacity-60" : undefined}
-              >
-                <td className="font-medium">{team.name}</td>
-                <td>{team.code}</td>
-                <td>{team.jira_key_prefix}-…</td>
-                <td>{team.is_active ? "Ativo" : "Inativo"}</td>
-                <td className="text-muted-foreground">
-                  {link ? (
-                    <Link
-                      href={`/app/jira?integrationId=${link.integrationId}`}
-                      className="text-foreground underline-offset-2 hover:underline"
-                    >
-                      {link.isEnabled ? "conectada" : "desabilitada"}
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td>
-                  <InlineActions>
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(team.id)}
-                      className="ui-btn-ghost"
-                    >
-                      Editar
-                    </button>
-                    <form action={toggleAction}>
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input
-                        type="hidden"
-                        name="nextActive"
-                        value={team.is_active ? "false" : "true"}
-                      />
+      <SectionShell
+        title="Lista de times"
+        description={`${teams.length} time(s) · clique em Editar para alterar dados e ver o vínculo Jira.`}
+      >
+        <DataTable minWidthClassName="min-w-0 md:min-w-[720px]" stickyFirstColumn>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th className="hidden sm:table-cell">Código</th>
+              <th>Prefixo</th>
+              <th>Status</th>
+              <th className="hidden md:table-cell">Jira</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map((team) => {
+              const link = jiraByTeamId[team.id];
+              const isEditing = editingId === team.id;
+              return (
+                <tr
+                  key={team.id}
+                  className={
+                    !team.is_active
+                      ? "opacity-60"
+                      : isEditing
+                        ? "bg-brand-soft/40"
+                        : undefined
+                  }
+                >
+                  <td>
+                    <div className="min-w-[8rem]">
+                      <p className="font-medium text-foreground">{team.name}</p>
+                      {team.notes ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {team.notes}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground sm:hidden">
+                          {team.code}
+                        </p>
+                      )}
+                    </div>
+                  </td>
+                  <td className="hidden sm:table-cell">{team.code}</td>
+                  <td className="whitespace-nowrap tabular-nums">
+                    {team.jira_key_prefix}-…
+                  </td>
+                  <td>{team.is_active ? "Ativo" : "Inativo"}</td>
+                  <td className="hidden md:table-cell">
+                    {link ? (
+                      <Link
+                        href={`/app/jira?integrationId=${link.integrationId}`}
+                        className="text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                      >
+                        {link.isEnabled ? "Conectada" : "Desabilitada"}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="text-right">
+                    <InlineActions>
                       <button
-                        type="submit"
-                        disabled={togglePending}
+                        type="button"
+                        onClick={() => setEditingId(team.id)}
                         className="ui-btn-ghost"
                       >
-                        {team.is_active ? "Desativar" : "Ativar"}
+                        {isEditing ? "Em edição" : "Editar"}
                       </button>
-                    </form>
-                  </InlineActions>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </DataTable>
+                      <form action={toggleAction}>
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input
+                          type="hidden"
+                          name="nextActive"
+                          value={team.is_active ? "false" : "true"}
+                        />
+                        <button
+                          type="submit"
+                          disabled={togglePending}
+                          className="ui-btn-ghost"
+                        >
+                          {team.is_active ? "Desativar" : "Ativar"}
+                        </button>
+                      </form>
+                    </InlineActions>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </DataTable>
+      </SectionShell>
     </div>
   );
 }

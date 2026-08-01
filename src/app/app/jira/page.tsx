@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
@@ -81,8 +82,14 @@ export default async function JiraIntegrationsPage({ searchParams }: PageProps) 
     ]),
   );
 
+  const analyticsHref = selected
+    ? `/app/jira/analytics?integrationId=${encodeURIComponent(selected.id)}${
+        selectedTeam ? `&teamId=${encodeURIComponent(selectedTeam.id)}` : ""
+      }`
+    : "/app/jira/analytics";
+
   return (
-    <PageShell>
+    <PageShell size="full">
       <FilterPersistenceSync
         scope="jira-admin"
         params={{
@@ -91,8 +98,24 @@ export default async function JiraIntegrationsPage({ searchParams }: PageProps) 
         }}
       />
       <PageHeader
+        eyebrow="Integrações"
         title="Jira"
-        description="Fonte da verdade da integração: conexão, sync, mapeamentos e analytics. Times cuidam só da organização e do prefixo de imports."
+        description={
+          selectedTeam
+            ? `Conexão, sync e mapeamentos · ${selectedTeam.name}${
+                selectedTeam.jira_key_prefix
+                  ? ` (${selectedTeam.jira_key_prefix})`
+                  : ""
+              }`
+            : "Cadastre um time antes de configurar a integração Jira."
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link href={analyticsHref} className="ui-btn-secondary">
+              Analytics de fluxo
+            </Link>
+          </div>
+        }
       />
       <JiraAdminPanel
         key={`${selectedTeam?.id ?? "none"}:${selected?.id ?? "new"}`}

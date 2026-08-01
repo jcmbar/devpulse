@@ -5,12 +5,13 @@ import { DataTable } from "@/components/surface";
 import { JiraTeamContextSelect } from "@/app/app/jira/jira-team-context-select";
 import { JiraSyncPipelinePanel } from "@/app/app/jira/jira-sync-pipeline-panel";
 import { JiraFieldMappingCatalogPanel } from "@/app/app/jira/jira-field-mapping-catalog";
+import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
+import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import {
   FormActions,
   FormCheck,
   FormFeedback,
   FormField,
-  FormSectionHeader,
 } from "@/components/ui/form";
 import {
   getJiraMappingReadiness,
@@ -125,257 +126,365 @@ export function JiraAdminPanel({
 
   if (!selectedTeam) {
     return (
-      <div className="ui-card p-5 text-sm text-muted-foreground">
+      <div className="ui-dashboard-panel text-sm text-muted-foreground">
         Cadastre um time antes de configurar a integração Jira.
       </div>
     );
   }
 
+  const lastOkSync = selected?.last_successful_sync_at ?? null;
+
   return (
-    <div className="space-y-8">
-      <section className="ui-card space-y-5 p-4 sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-4 rounded-[var(--radius-sm)] border border-border/70 bg-muted/20 p-3">
-          <div className="space-y-1">
-            <label
-              htmlFor="jira-team-context"
-              className="ui-label"
-            >
-              Time em contexto
-            </label>
-            <JiraTeamContextSelect
-              teams={teams}
-              value={selectedTeam.id}
-            />
+    <div className="space-y-5">
+      <FilterBar>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="ui-filter-bar__field min-w-0 sm:max-w-sm">
+            <p className="ui-filter-bar__label">Time em contexto</p>
+            <JiraTeamContextSelect teams={teams} value={selectedTeam.id} />
           </div>
-          <div className="text-right">
-            <p className="text-sm font-medium">{selectedTeam.name}</p>
+          <div className="text-sm sm:text-right">
+            <p className="font-medium text-foreground">{selectedTeam.name}</p>
             <p className="text-xs text-muted-foreground">
               {selected
                 ? `Integração salva · ${selected.name}`
                 : "Sem integração salva · modo de criação"}
+              {selectedTeam.jira_key_prefix
+                ? ` · prefixo ${selectedTeam.jira_key_prefix}`
+                : ""}
             </p>
           </div>
         </div>
+      </FilterBar>
 
-        {hasDuplicateIntegrations ? (
-          <div className="ui-alert-error">
-            Há mais de uma integração vinculada a este time. A tela carregou a
-            mais recente; corrija os dados antes de operar. O schema atual
-            exige uma integração por time.
-          </div>
-        ) : null}
-
-        <FormSectionHeader
-          title={
-            selected
-              ? `Editar integração · ${selectedTeam.name}`
-              : `Criar integração · ${selectedTeam.name}`
-          }
-          description={
-            selected
-              ? "Os campos e operações abaixo pertencem exclusivamente ao time em contexto."
-              : "Este time ainda não possui integração. Salve a configuração antes de executar operações."
-          }
-        />
-
-        <form action={saveAction} className="space-y-5">
-          <input type="hidden" name="teamId" value={selectedTeam.id} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="Nome" htmlFor="name">
-              <input
-                id="name"
-                name="name"
-                required
-                defaultValue={
-                  selected?.name ??
-                  `Jira · ${selectedTeam.name}`
-                }
-                className="ui-input"
-              />
-            </FormField>
-            <FormField
-              label="Base URL"
-              htmlFor="baseUrl"
-              hint="Ex.: https://sua-empresa.atlassian.net"
-            >
-              <input
-                id="baseUrl"
-                name="baseUrl"
-                type="url"
-                required
-                defaultValue={selected?.base_url ?? ""}
-                placeholder="https://empresa.atlassian.net"
-                className="ui-input"
-              />
-            </FormField>
-            <FormField label="E-mail da conta API" htmlFor="email">
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                defaultValue={selected?.email ?? ""}
-                className="ui-input"
-              />
-            </FormField>
-            <FormField
-              label="Secret ref (env)"
-              htmlFor="apiTokenSecretRef"
-              hint="Nome da variável, nunca o token. Ex.: JIRA_TOKEN_PRIME"
-            >
-              <input
-                id="apiTokenSecretRef"
-                name="apiTokenSecretRef"
-                required
-                defaultValue={selected?.api_token_secret_ref ?? ""}
-                placeholder="JIRA_TOKEN_PRIME"
-                className="ui-input"
-              />
-            </FormField>
-            <FormField
-              label="Project keys"
-              htmlFor="projectKeys"
-              hint="Separados por vírgula. Vazio = todos os projetos visíveis (cuidado com volume). Seed sugerido = prefixo do time."
-            >
-              <input
-                id="projectKeys"
-                name="projectKeys"
-                defaultValue={
-                  selected?.project_keys?.join(", ") ??
-                  selectedTeam.jira_key_prefix ??
-                  ""
-                }
-                placeholder="AP, PE"
-                className="ui-input"
-              />
-            </FormField>
-            <FormField
-              label="Janela inicial (dias)"
-              htmlFor="syncWindowDays"
-              hint="Usada no primeiro sync (full)."
-            >
-              <input
-                id="syncWindowDays"
-                name="syncWindowDays"
-                type="number"
-                min={1}
-                max={730}
-                defaultValue={selected?.sync_window_days ?? 90}
-                className="ui-input"
-              />
-            </FormField>
-            <FormField
-              label="Overlap de segurança (min)"
-              htmlFor="safetyOverlapMinutes"
-            >
-              <input
-                id="safetyOverlapMinutes"
-                name="safetyOverlapMinutes"
-                type="number"
-                min={0}
-                max={1440}
-                defaultValue={selected?.safety_overlap_minutes ?? 15}
-                className="ui-input"
-              />
-            </FormField>
-            <FormField
-              label="JQL extra (AND) — opcional"
-              htmlFor="jqlExtra"
-              className="sm:col-span-2"
-              hint={
-                selected?.jql_extra?.trim()
-                  ? `Valor salvo: ${selected.jql_extra.trim()}. Apague o campo e salve para remover o filtro. Não inclua ORDER BY.`
-                  : "Opcional. Deixe vazio para sync sem filtro adicional. Não inclua ORDER BY. Ex.: statusCategory != Done"
-              }
-            >
-              <input
-                id="jqlExtra"
-                name="jqlExtra"
-                defaultValue={selected?.jql_extra ?? ""}
-                placeholder="(vazio = sem filtro extra)"
-                className="ui-input"
-                autoComplete="off"
-              />
-            </FormField>
-          </div>
-
-          <div className="flex flex-wrap gap-4">
-            <FormCheck>
-              <input
-                type="checkbox"
-                name="isEnabled"
-                defaultChecked={selected?.is_enabled ?? false}
-                className="ui-checkbox mt-0.5"
-              />
-              <span>Integração habilitada</span>
-            </FormCheck>
-            <FormCheck>
-              <input
-                type="checkbox"
-                name="includeChangelog"
-                defaultChecked={selected?.include_changelog ?? true}
-                className="ui-checkbox mt-0.5"
-              />
-              <span>Coletar changelog (status/assignee)</span>
-            </FormCheck>
-            <FormCheck>
-              <input
-                type="checkbox"
-                name="includeWorklogs"
-                defaultChecked={selected?.include_worklogs ?? true}
-                className="ui-checkbox mt-0.5"
-              />
-              <span>Coletar worklogs</span>
-            </FormCheck>
-          </div>
-
-          <FormFeedback
-            error={saveState.error}
-            success={
-              saveState.success ??
-              (saved
-                ? `Integração de ${selectedTeam.name} salva.`
-                : null)
-            }
-          />
-          <FormActions
-            primary={{
-              label: "Salvar integração",
-              loadingLabel: "Salvando...",
-              pending: savePending,
-            }}
-          />
-        </form>
-      </section>
-
-      {selected && selectedTeam ? (
-        <JiraFieldMappingCatalogPanel
-          key={`catalog:${selected.id}:${selectedTeam.id}`}
-          integration={selected}
-          teamId={selectedTeam.id}
-          teamName={selectedTeam.name}
-          teamJiraKeyPrefix={selectedTeam.jira_key_prefix}
-          projects={projects}
-          onReadinessChange={onReadinessChange}
-        />
+      {hasDuplicateIntegrations ? (
+        <div className="rounded-[var(--radius-sm)] border border-danger/40 bg-danger/10 px-3 py-2.5 text-sm text-danger">
+          Há mais de uma integração vinculada a este time. A tela carregou a
+          mais recente; corrija os dados antes de operar. O schema atual exige
+          uma integração por time.
+        </div>
       ) : null}
 
-      {integrations.length > 0 ? (
-        <section className="space-y-3">
-          <FormSectionHeader
-            title="Integrações"
-            description={`${integrations.length} configurada(s).`}
+      <SectionShell
+        title="Resumo do contexto"
+        description="Indicadores locais do time selecionado (já sincronizados)."
+      >
+        <div className="ui-kpi-grid--hero">
+          <KpiMetricCard
+            variant="hero"
+            label="Issues locais"
+            value={String(issueCount)}
+            tone="info"
           />
-          <DataTable minWidthClassName="min-w-[720px]">
+          <KpiMetricCard
+            variant="hero"
+            label="Projetos"
+            value={String(projects.length)}
+            tone="info"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Snapshots flow"
+            value={String(flowMetricsCount)}
+            tone="brand"
+            hint="flow_v1"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Integração"
+            value={
+              !selected
+                ? "Nova"
+                : selected.is_enabled
+                  ? "Habilitada"
+                  : "Off"
+            }
+            tone={
+              !selected
+                ? "neutral"
+                : selected.is_enabled
+                  ? "success"
+                  : "warning"
+            }
+            hint={
+              mappingReadiness.ready
+                ? "Mapeamento pronto"
+                : "Mapeamento pendente"
+            }
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Último sync OK"
+            value={
+              lastOkSync
+                ? new Date(lastOkSync).toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "—"
+            }
+            tone={lastOkSync ? "success" : "neutral"}
+          />
+        </div>
+      </SectionShell>
+
+      <SectionShell
+        title={
+          selected
+            ? `Configuração · ${selectedTeam.name}`
+            : `Criar integração · ${selectedTeam.name}`
+        }
+        description={
+          selected
+            ? "Campos e credenciais exclusivos do time em contexto."
+            : "Salve a configuração antes de testar conexão ou rodar o sync."
+        }
+      >
+        <div className="ui-dashboard-panel">
+          <form action={saveAction} className="space-y-5">
+            <input type="hidden" name="teamId" value={selectedTeam.id} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Nome" htmlFor="name">
+                <input
+                  id="name"
+                  name="name"
+                  required
+                  defaultValue={
+                    selected?.name ?? `Jira · ${selectedTeam.name}`
+                  }
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
+                label="Base URL"
+                htmlFor="baseUrl"
+                hint="Ex.: https://sua-empresa.atlassian.net"
+              >
+                <input
+                  id="baseUrl"
+                  name="baseUrl"
+                  type="url"
+                  required
+                  defaultValue={selected?.base_url ?? ""}
+                  placeholder="https://empresa.atlassian.net"
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField label="E-mail da conta API" htmlFor="email">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  defaultValue={selected?.email ?? ""}
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
+                label="Secret ref (env)"
+                htmlFor="apiTokenSecretRef"
+                hint="Nome da variável, nunca o token. Ex.: JIRA_TOKEN_PRIME"
+              >
+                <input
+                  id="apiTokenSecretRef"
+                  name="apiTokenSecretRef"
+                  required
+                  defaultValue={selected?.api_token_secret_ref ?? ""}
+                  placeholder="JIRA_TOKEN_PRIME"
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
+                label="Project keys"
+                htmlFor="projectKeys"
+                hint="Separados por vírgula. Vazio = todos os projetos visíveis (cuidado com volume). Seed sugerido = prefixo do time."
+              >
+                <input
+                  id="projectKeys"
+                  name="projectKeys"
+                  defaultValue={
+                    selected?.project_keys?.join(", ") ??
+                    selectedTeam.jira_key_prefix ??
+                    ""
+                  }
+                  placeholder="AP, PE"
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
+                label="Janela inicial (dias)"
+                htmlFor="syncWindowDays"
+                hint="Usada no primeiro sync (full)."
+              >
+                <input
+                  id="syncWindowDays"
+                  name="syncWindowDays"
+                  type="number"
+                  min={1}
+                  max={730}
+                  defaultValue={selected?.sync_window_days ?? 90}
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
+                label="Overlap de segurança (min)"
+                htmlFor="safetyOverlapMinutes"
+              >
+                <input
+                  id="safetyOverlapMinutes"
+                  name="safetyOverlapMinutes"
+                  type="number"
+                  min={0}
+                  max={1440}
+                  defaultValue={selected?.safety_overlap_minutes ?? 15}
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
+                label="JQL extra (AND) — opcional"
+                htmlFor="jqlExtra"
+                className="sm:col-span-2"
+                hint={
+                  selected?.jql_extra?.trim()
+                    ? `Valor salvo: ${selected.jql_extra.trim()}. Apague o campo e salve para remover o filtro. Não inclua ORDER BY.`
+                    : "Opcional. Deixe vazio para sync sem filtro adicional. Não inclua ORDER BY. Ex.: statusCategory != Done"
+                }
+              >
+                <input
+                  id="jqlExtra"
+                  name="jqlExtra"
+                  defaultValue={selected?.jql_extra ?? ""}
+                  placeholder="(vazio = sem filtro extra)"
+                  className="ui-input"
+                  autoComplete="off"
+                />
+              </FormField>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <FormCheck>
+                <input
+                  type="checkbox"
+                  name="isEnabled"
+                  defaultChecked={selected?.is_enabled ?? false}
+                  className="ui-checkbox mt-0.5"
+                />
+                <span>Integração habilitada</span>
+              </FormCheck>
+              <FormCheck>
+                <input
+                  type="checkbox"
+                  name="includeChangelog"
+                  defaultChecked={selected?.include_changelog ?? true}
+                  className="ui-checkbox mt-0.5"
+                />
+                <span>Coletar changelog (status/assignee)</span>
+              </FormCheck>
+              <FormCheck>
+                <input
+                  type="checkbox"
+                  name="includeWorklogs"
+                  defaultChecked={selected?.include_worklogs ?? true}
+                  className="ui-checkbox mt-0.5"
+                />
+                <span>Coletar worklogs</span>
+              </FormCheck>
+            </div>
+
+            <FormFeedback
+              error={saveState.error}
+              success={
+                saveState.success ??
+                (saved ? `Integração de ${selectedTeam.name} salva.` : null)
+              }
+            />
+            <FormActions
+              primary={{
+                label: "Salvar integração",
+                loadingLabel: "Salvando...",
+                pending: savePending,
+              }}
+            />
+          </form>
+        </div>
+      </SectionShell>
+
+      {selected && selectedTeam ? (
+        <SectionShell
+          title="Mapeamento de campos"
+          description="Campos custom do Jira usados no Compilado e no fluxo."
+        >
+          <JiraFieldMappingCatalogPanel
+            key={`catalog:${selected.id}:${selectedTeam.id}`}
+            integration={selected}
+            teamId={selectedTeam.id}
+            teamName={selectedTeam.name}
+            teamJiraKeyPrefix={selectedTeam.jira_key_prefix}
+            projects={projects}
+            onReadinessChange={onReadinessChange}
+          />
+        </SectionShell>
+      ) : null}
+
+      <SectionShell
+        title="Operações"
+        description={
+          selected
+            ? "Teste de conexão e pipeline de sync orquestrado."
+            : `Salve primeiro a integração de ${selectedTeam.name}.`
+        }
+      >
+        {selected ? (
+          <div className="ui-dashboard-panel space-y-5">
+            <form action={testAction} className="space-y-3">
+              <input type="hidden" name="integrationId" value={selected.id} />
+              <input type="hidden" name="teamId" value={selectedTeam.id} />
+              <FormFeedback
+                error={testState.error}
+                success={testState.success}
+              />
+              <FormActions
+                primary={{
+                  label: "Testar conexão",
+                  loadingLabel: "Testando...",
+                  pending: testPending,
+                }}
+              />
+            </form>
+
+            <div className="border-t border-border/70 pt-4">
+              <JiraSyncPipelinePanel
+                integrationId={selected.id}
+                teamId={selectedTeam.id}
+                enabled={selected.is_enabled}
+                mappingReady={mappingReadiness.ready}
+                mappingPendingLabels={mappingReadiness.pendingLabels}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="ui-dashboard-panel text-sm text-muted-foreground">
+            Depois de salvar, você poderá testar a conexão e rodar o sync
+            orquestrado.
+          </div>
+        )}
+      </SectionShell>
+
+      {integrations.length > 0 ? (
+        <SectionShell
+          title="Integrações cadastradas"
+          description={`${integrations.length} configurada(s) · troque o time no filtro acima para editar outra.`}
+        >
+          <DataTable minWidthClassName="min-w-[720px]" stickyFirstColumn>
             <thead>
               <tr>
                 <th>Time</th>
                 <th>Nome</th>
-                <th>Projetos</th>
+                <th className="hidden sm:table-cell">Projetos</th>
                 <th>Status</th>
-                <th>Cursor</th>
-                <th>Último sync OK</th>
-                <th></th>
+                <th className="hidden md:table-cell">Último sync OK</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -383,84 +492,45 @@ export function JiraAdminPanel({
                 const team = teams.find((item) => item.id === row.team_id);
                 const isCurrent = row.id === selected?.id;
                 return (
-                <tr
-                  key={row.id}
-                  className={isCurrent ? "bg-brand-soft/50" : undefined}
-                  aria-current={isCurrent ? "true" : undefined}
-                >
-                  <td>{team?.name ?? row.team_id.slice(0, 8)}</td>
-                  <td className="font-medium">{row.name}</td>
-                  <td className="text-muted-foreground">
-                    {row.project_keys.length
-                      ? row.project_keys.join(", ")
-                      : "todos"}
-                  </td>
-                  <td>{row.is_enabled ? "habilitada" : "off"}</td>
-                  <td className="text-muted-foreground whitespace-nowrap">
-                    {row.sync_cursor_updated_at ?? "—"}
-                  </td>
-                  <td className="text-muted-foreground whitespace-nowrap">
-                    {row.last_successful_sync_at ?? "—"}
-                  </td>
-                  <td>
-                    <Link
-                      href={`/app/jira?teamId=${row.team_id}`}
-                      className="ui-btn-ghost"
-                    >
-                      {isCurrent ? "Em edição" : "Editar"}
-                    </Link>
-                  </td>
-                </tr>
+                  <tr
+                    key={row.id}
+                    className={isCurrent ? "bg-brand-soft/50" : undefined}
+                    aria-current={isCurrent ? "true" : undefined}
+                  >
+                    <td className="font-medium">
+                      {team?.name ?? row.team_id.slice(0, 8)}
+                    </td>
+                    <td>{row.name}</td>
+                    <td className="hidden text-muted-foreground sm:table-cell">
+                      {row.project_keys.length
+                        ? row.project_keys.join(", ")
+                        : "todos"}
+                    </td>
+                    <td>{row.is_enabled ? "Habilitada" : "Off"}</td>
+                    <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
+                      {row.last_successful_sync_at ?? "—"}
+                    </td>
+                    <td className="text-right">
+                      <Link
+                        href={`/app/jira?teamId=${row.team_id}`}
+                        className="ui-btn-ghost"
+                      >
+                        {isCurrent ? "Em edição" : "Abrir"}
+                      </Link>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
           </DataTable>
-        </section>
+        </SectionShell>
       ) : null}
 
-      {selected ? (
-        <section className="ui-card space-y-5 p-4 sm:p-5">
-          <form action={testAction} className="space-y-3">
-            <input type="hidden" name="integrationId" value={selected.id} />
-            <input type="hidden" name="teamId" value={selectedTeam.id} />
-            <FormFeedback error={testState.error} success={testState.success} />
-            <FormActions
-              primary={{
-                label: "Testar conexão",
-                loadingLabel: "Testando...",
-                pending: testPending,
-              }}
-            />
-          </form>
-
-          <div className="border-t border-border/60 pt-4">
-            <JiraSyncPipelinePanel
-              integrationId={selected.id}
-              teamId={selectedTeam.id}
-              enabled={selected.is_enabled}
-              mappingReady={mappingReadiness.ready}
-              mappingPendingLabels={mappingReadiness.pendingLabels}
-            />
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Issues locais: {issueCount} · Projetos sync: {projects.length} ·
-            snapshots flow_v1: {flowMetricsCount}
-          </p>
-        </section>
-      ) : (
-        <section className="ui-card space-y-2 p-4 sm:p-5">
-          <h2 className="ui-form-section-title">Operações</h2>
-          <p className="text-sm text-muted-foreground">
-            Salve primeiro a integração de {selectedTeam.name}. Depois você
-            poderá testar a conexão e rodar o sync orquestrado.
-          </p>
-        </section>
-      )}
-
       {recentRuns.length > 0 ? (
-        <section className="space-y-3">
-          <FormSectionHeader title="Últimas execuções" />
+        <SectionShell
+          title="Últimas execuções"
+          description="Histórico recente de sync do time em contexto."
+        >
           <DataTable minWidthClassName="min-w-[800px]">
             <thead>
               <tr>
@@ -468,10 +538,10 @@ export function JiraAdminPanel({
                 <th>Modo</th>
                 <th>Status</th>
                 <th>Issues</th>
-                <th>Reproc.</th>
-                <th>Worklogs</th>
-                <th>Stop</th>
-                <th>API</th>
+                <th className="hidden sm:table-cell">Reproc.</th>
+                <th className="hidden md:table-cell">Worklogs</th>
+                <th className="hidden lg:table-cell">Stop</th>
+                <th className="hidden md:table-cell">API</th>
                 <th>Erro</th>
               </tr>
             </thead>
@@ -503,18 +573,22 @@ export function JiraAdminPanel({
                     <td className="tabular-nums">
                       {run.issues_upserted}/{run.issues_fetched}
                     </td>
-                    <td className="tabular-nums">{reprocessed}</td>
-                    <td className="tabular-nums">
+                    <td className="hidden tabular-nums sm:table-cell">
+                      {reprocessed}
+                    </td>
+                    <td className="hidden tabular-nums md:table-cell">
                       {worklogsFetched}
                       <span className="text-muted-foreground">
                         {" "}
                         / chg {changelogReqs}
                       </span>
                     </td>
-                    <td className="max-w-[10rem] truncate text-muted-foreground">
+                    <td className="hidden max-w-[10rem] truncate text-muted-foreground lg:table-cell">
                       {stopReason}
                     </td>
-                    <td className="tabular-nums">{run.api_requests}</td>
+                    <td className="hidden tabular-nums md:table-cell">
+                      {run.api_requests}
+                    </td>
                     <td className="max-w-xs truncate text-muted-foreground">
                       {run.error_message ?? "—"}
                     </td>
@@ -523,110 +597,95 @@ export function JiraAdminPanel({
               })}
             </tbody>
           </DataTable>
-        </section>
+        </SectionShell>
       ) : null}
 
-      {sampleIssues.length > 0 ? (
-        <section className="space-y-3">
-          <FormSectionHeader
-            title="Amostra de issues"
-            description="Ordenadas por updated_at_jira (local normalizado)."
-          />
-          <DataTable minWidthClassName="min-w-[900px]">
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>Resumo</th>
-                <th>Status</th>
-                <th>Assignee</th>
-                <th>Updated</th>
-                <th>SP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sampleIssues.map((issue) => (
-                <tr key={issue.id}>
-                  <td className="font-medium whitespace-nowrap">
-                    {issue.jira_key}
-                  </td>
-                  <td className="max-w-sm truncate">{issue.summary ?? "—"}</td>
-                  <td>{issue.status ?? "—"}</td>
-                  <td className="text-muted-foreground">
-                    {issue.assignee_display_name ?? "—"}
-                  </td>
-                  <td className="whitespace-nowrap text-muted-foreground">
-                    {issue.updated_at_jira ?? "—"}
-                  </td>
-                  <td className="tabular-nums">
-                    {issue.story_points ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-        </section>
-      ) : null}
+      {sampleIssues.length > 0 || sampleFlowMetrics.length > 0 ? (
+        <div className="grid gap-5 xl:grid-cols-2">
+          {sampleIssues.length > 0 ? (
+            <SectionShell
+              title="Amostra de issues"
+              description="Ordenadas por updated_at_jira (local)."
+            >
+              <DataTable minWidthClassName="min-w-[520px]">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Resumo</th>
+                    <th className="hidden sm:table-cell">Status</th>
+                    <th className="hidden md:table-cell">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sampleIssues.slice(0, 12).map((issue) => (
+                    <tr key={issue.id}>
+                      <td className="font-medium whitespace-nowrap">
+                        {issue.jira_key}
+                      </td>
+                      <td className="max-w-[12rem] truncate">
+                        {issue.summary ?? "—"}
+                      </td>
+                      <td className="hidden sm:table-cell">
+                        {issue.status ?? "—"}
+                      </td>
+                      <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
+                        {issue.updated_at_jira ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </SectionShell>
+          ) : null}
 
-      {sampleFlowMetrics.length > 0 ? (
-        <section className="space-y-3">
-          <FormSectionHeader
-            title="Amostra de métricas de fluxo"
-            description="Snapshots derivados (flow_v1). Lead time / aging / Develop / Staging / reopens."
-          />
-          <DataTable minWidthClassName="min-w-[960px]">
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>Lead</th>
-                <th>Aging</th>
-                <th>→ Develop</th>
-                <th>→ Staging</th>
-                <th>Reopen</th>
-                <th>Dev reentry</th>
-                <th>Assignee Δ</th>
-                <th>Grupo</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sampleFlowMetrics.map((row) => (
-                <tr key={row.id}>
-                  <td className="font-medium whitespace-nowrap">
-                    {issueKeyById[row.issue_id] ?? row.issue_id.slice(0, 8)}
-                  </td>
-                  <td className="tabular-nums">
-                    {formatDurationMs(row.lead_time_ms)}
-                  </td>
-                  <td className="tabular-nums">
-                    {formatDurationMs(row.aging_ms)}
-                  </td>
-                  <td className="tabular-nums">
-                    {formatDurationMs(row.time_to_first_develop_ms)}
-                  </td>
-                  <td className="tabular-nums">
-                    {formatDurationMs(row.time_to_first_staging_ms)}
-                  </td>
-                  <td className="tabular-nums">{row.reopen_count}</td>
-                  <td className="tabular-nums">{row.develop_reentry_count}</td>
-                  <td className="tabular-nums">{row.assignee_change_count}</td>
-                  <td className="text-muted-foreground">
-                    {row.current_status_group ?? "—"}
-                  </td>
-                  <td>
-                    {selected ? (
-                      <a
-                        href={`/app/jira/analytics/issues/${row.issue_id}?integrationId=${selected.id}`}
-                        className="ui-btn-ghost"
-                      >
-                        Auditar
-                      </a>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-        </section>
+          {sampleFlowMetrics.length > 0 ? (
+            <SectionShell
+              title="Amostra de fluxo"
+              description="Snapshots flow_v1 · lead / aging / reopens."
+            >
+              <DataTable minWidthClassName="min-w-[520px]">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Lead</th>
+                    <th>Aging</th>
+                    <th className="hidden sm:table-cell">Reopen</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sampleFlowMetrics.slice(0, 12).map((row) => (
+                    <tr key={row.id}>
+                      <td className="font-medium whitespace-nowrap">
+                        {issueKeyById[row.issue_id] ??
+                          row.issue_id.slice(0, 8)}
+                      </td>
+                      <td className="tabular-nums">
+                        {formatDurationMs(row.lead_time_ms)}
+                      </td>
+                      <td className="tabular-nums">
+                        {formatDurationMs(row.aging_ms)}
+                      </td>
+                      <td className="hidden tabular-nums sm:table-cell">
+                        {row.reopen_count}
+                      </td>
+                      <td className="text-right">
+                        {selected ? (
+                          <Link
+                            href={`/app/jira/analytics/issues/${row.issue_id}?integrationId=${selected.id}`}
+                            className="ui-btn-ghost"
+                          >
+                            Auditar
+                          </Link>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </SectionShell>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

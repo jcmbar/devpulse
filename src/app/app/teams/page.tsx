@@ -26,18 +26,18 @@ export default async function TeamsPage() {
   }
 
   return (
-    <PageShell size="xl">
+    <PageShell size="full">
       <PageHeader
         eyebrow="Organização"
         title="Times"
-        description="Estrutura do time e prefixo Jira para routing de imports. Conexão, sync e analytics ficam na aba Jira."
+        description="Cadastro organizacional e prefixo Jira para routing de imports. Conexão, sync e analytics ficam na aba Jira."
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Link href="/app/jira" className="ui-btn-secondary">
               Ir para Jira
             </Link>
             <Link href="/app/teams/sanitation" className="ui-btn-secondary">
-              Saneamento (team_id)
+              Saneamento
             </Link>
           </div>
         }

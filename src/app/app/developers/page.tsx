@@ -1,5 +1,4 @@
 import { AccessStatusBadge } from "@/components/access-status-badge";
-import { AdminToolbar } from "@/components/admin-toolbar";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { DataTable, EmptyState } from "@/components/surface";
 import { ListPagination } from "@/components/list-pagination";
@@ -7,6 +6,7 @@ import { ListSearchForm } from "@/components/list-search-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { TeamFilterForm } from "@/components/team-filter";
+import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import {
@@ -66,6 +66,30 @@ function toHasJiraAccountFilter(
     return false;
   }
   return null;
+}
+
+function filterSummaryLabel(input: {
+  teamName: string | null;
+  activeFilter: ActiveListFilter;
+  jiraAccountFilter: JiraAccountListFilter;
+  q: string;
+}): string {
+  const parts: string[] = [];
+  parts.push(input.teamName ? `Time ${input.teamName}` : "Todos os times");
+  if (input.activeFilter === "active") {
+    parts.push("ativos");
+  } else if (input.activeFilter === "inactive") {
+    parts.push("inativos");
+  }
+  if (input.jiraAccountFilter === "with") {
+    parts.push("com Jira ID");
+  } else if (input.jiraAccountFilter === "without") {
+    parts.push("sem Jira ID");
+  }
+  if (input.q) {
+    parts.push(`busca “${input.q}”`);
+  }
+  return parts.join(" · ");
 }
 
 export default async function DevelopersAdminPage({
@@ -138,6 +162,22 @@ export default async function DevelopersAdminPage({
         : "Não foi possível carregar o status de acesso.";
   }
 
+  const selectedTeamId =
+    query.teamFilter.kind === "team" ? query.teamFilter.teamId : null;
+  const selectedTeamName =
+    selectedTeamId != null
+      ? (teams.find((team) => team.id === selectedTeamId)?.name ?? null)
+      : query.teamFilter.kind === "unassigned"
+        ? "Sem time"
+        : null;
+
+  const activeFiltersLabel = filterSummaryLabel({
+    teamName: selectedTeamName,
+    activeFilter: query.activeFilter,
+    jiraAccountFilter: query.jiraAccountFilter,
+    q: query.q,
+  });
+
   return (
     <PageShell size="full">
       <FilterPersistenceSync
@@ -155,7 +195,7 @@ export default async function DevelopersAdminPage({
       <PageHeader
         eyebrow="Cadastro"
         title="Developers"
-        description="Cadastro administrativo. Time, status e Jira Account ID podem ser alterados na lista; use Editar para os demais campos."
+        description="Gerencie o cadastro do time: filtros à esquerda, edição rápida na lista e detalhes completos em Editar."
         actions={
           <Link href="/app/developers/new" className="ui-btn-primary">
             <Plus className="size-3.5" strokeWidth={2} />
@@ -164,47 +204,69 @@ export default async function DevelopersAdminPage({
         }
       />
 
-      <AdminToolbar>
-        <Suspense
-          fallback={
-            <p className="text-sm text-muted-foreground">Carregando filtro…</p>
-          }
-        >
-          <TeamFilterForm
-            teams={teams}
-            defaultTeamId={query.teamParam}
-            persistScope="admin-developers"
-          />
-        </Suspense>
-        <Suspense
-          fallback={
-            <p className="text-sm text-muted-foreground">Carregando busca…</p>
-          }
-        >
-          <ListSearchForm
-            defaultQuery={query.q}
-            placeholder="Nome ou e-mail…"
-          />
-        </Suspense>
-        <Suspense
-          fallback={
-            <p className="text-sm text-muted-foreground">Carregando filtros…</p>
-          }
-        >
-          <DeveloperListColumnFilters
-            activeFilter={query.activeFilter}
-            jiraAccountFilter={query.jiraAccountFilter}
-          />
-        </Suspense>
-        <DeveloperJiraAccountBatchLookup
-          candidateIds={jiraLookupCandidates}
-        />
-      </AdminToolbar>
+      <FilterBar>
+        <div className="space-y-3.5">
+          <div className="ui-filter-bar__fields lg:grid-cols-2">
+            <div className="ui-filter-bar__field">
+              <Suspense
+                fallback={
+                  <p className="text-sm text-muted-foreground">
+                    Carregando time…
+                  </p>
+                }
+              >
+                <TeamFilterForm
+                  teams={teams}
+                  defaultTeamId={query.teamParam}
+                  persistScope="admin-developers"
+                  className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:gap-2"
+                />
+              </Suspense>
+            </div>
+            <div className="ui-filter-bar__field">
+              <Suspense
+                fallback={
+                  <p className="text-sm text-muted-foreground">
+                    Carregando busca…
+                  </p>
+                }
+              >
+                <ListSearchForm
+                  defaultQuery={query.q}
+                  placeholder="Nome ou e-mail…"
+                  className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:gap-2"
+                />
+              </Suspense>
+            </div>
+          </div>
+
+          <div className="border-t border-border/70 pt-3">
+            <p className="mb-2 ui-filter-bar__label">Refinar lista</p>
+            <Suspense
+              fallback={
+                <p className="text-sm text-muted-foreground">
+                  Carregando filtros…
+                </p>
+              }
+            >
+              <DeveloperListColumnFilters
+                activeFilter={query.activeFilter}
+                jiraAccountFilter={query.jiraAccountFilter}
+                embedded
+              />
+            </Suspense>
+          </div>
+        </div>
+      </FilterBar>
+
+      <DeveloperJiraAccountBatchLookup
+        candidateIds={jiraLookupCandidates}
+      />
 
       {accessLookupError ? (
-        <p className="text-sm text-amber-800 dark:text-amber-200">
+        <div className="rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100">
           Status de acesso indisponível: {accessLookupError}
-        </p>
+        </div>
       ) : null}
 
       {developers.length === 0 ? (
@@ -225,114 +287,130 @@ export default async function DevelopersAdminPage({
           }
         />
       ) : (
-        <div className="space-y-3">
-          <DataTable minWidthClassName="min-w-[980px]">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Time</th>
-                <th>Jira Account ID</th>
-                <th className="hidden md:table-cell">E-mail</th>
-                <th>Cadastro</th>
-                <th>Acesso</th>
-                <th className="hidden lg:table-cell">Profile</th>
-                <th>Cards</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {developers.map((developer) => {
-                const access = accessByDeveloperId.get(developer.id);
-                const accessDate = formatAccessDate(
-                  access?.relevantAt ?? null,
-                );
+        <SectionShell
+          title="Lista"
+          description={
+            <>
+              {paged.total} developer{paged.total === 1 ? "" : "s"}
+              {" · "}
+              <span className="text-foreground">{activeFiltersLabel}</span>
+              {" · "}
+              página {paged.page} de {paged.totalPages}
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <DataTable minWidthClassName="min-w-0 lg:min-w-[960px]" stickyFirstColumn>
+              <thead>
+                <tr>
+                  <th>Developer</th>
+                  <th>Time</th>
+                  <th>Jira Account ID</th>
+                  <th>Cadastro</th>
+                  <th className="hidden md:table-cell">Acesso</th>
+                  <th className="hidden lg:table-cell">Cards</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {developers.map((developer) => {
+                  const access = accessByDeveloperId.get(developer.id);
+                  const accessDate = formatAccessDate(
+                    access?.relevantAt ?? null,
+                  );
 
-                return (
-                  <tr key={developer.id}>
-                    <td className="font-medium">{developer.full_name}</td>
-                    <td>
-                      <DeveloperTeamInline
-                        developerId={developer.id}
-                        teamId={developer.team_id}
-                        teams={teams}
-                      />
-                    </td>
-                    <td>
-                      <DeveloperJiraAccountInline
-                        developerId={developer.id}
-                        jiraAccountId={developer.jira_account_id}
-                        email={developer.email}
-                      />
-                    </td>
-                    <td className="hidden md:table-cell">
-                      {developer.email ?? "—"}
-                    </td>
-                    <td>
-                      <DeveloperActiveInline
-                        developerId={developer.id}
-                        isActive={developer.is_active}
-                      />
-                    </td>
-                    <td>
-                      {access ? (
-                        <div className="space-y-1">
-                          <AccessStatusBadge
-                            kind={access.kind}
-                            label={access.label}
-                            title={access.description}
-                          />
-                          {accessDate && access.relevantAtLabel ? (
-                            <p className="text-xs text-muted-foreground">
-                              {access.relevantAtLabel} {accessDate}
+                  return (
+                    <tr key={developer.id}>
+                      <td>
+                        <div className="min-w-[9rem] sm:min-w-[12rem]">
+                          <p className="font-medium text-foreground">
+                            {developer.full_name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {developer.email ?? "Sem e-mail"}
+                          </p>
+                          {developer.profile ? (
+                            <p className="mt-0.5 hidden truncate text-[11px] text-muted-foreground lg:block">
+                              Profile:{" "}
+                              {developer.profile.full_name ??
+                                developer.profile.email}
+                              {" · "}
+                              {getRoleLabel(developer.profile.role)}
                             </p>
-                          ) : null}
+                          ) : (
+                            <p className="mt-0.5 hidden text-[11px] text-muted-foreground lg:block">
+                              Sem vínculo de profile
+                            </p>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="hidden lg:table-cell">
-                      {developer.profile ? (
-                        <span>
-                          {developer.profile.full_name ??
-                            developer.profile.email}
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · {getRoleLabel(developer.profile.role)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Sem vínculo
-                        </span>
-                      )}
-                    </td>
-                    <td>{developer.cards_count}</td>
-                    <td className="text-right">
-                      <Link
-                        href={`/app/developers/${developer.id}`}
-                        className="underline-offset-4 hover:underline"
-                      >
-                        Editar
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
-          <ListPagination
-            pathname="/app/developers"
-            page={paged.page}
-            totalPages={paged.totalPages}
-            total={paged.total}
-            pageSize={paged.pageSize}
-            teamId={query.teamParam || null}
-            q={query.q || null}
-            active={query.activeFilter}
-            jiraId={query.jiraAccountFilter}
-          />
-        </div>
+                      </td>
+                      <td>
+                        <DeveloperTeamInline
+                          developerId={developer.id}
+                          teamId={developer.team_id}
+                          teams={teams}
+                        />
+                      </td>
+                      <td>
+                        <DeveloperJiraAccountInline
+                          developerId={developer.id}
+                          jiraAccountId={developer.jira_account_id}
+                          email={developer.email}
+                        />
+                      </td>
+                      <td>
+                        <DeveloperActiveInline
+                          developerId={developer.id}
+                          isActive={developer.is_active}
+                        />
+                      </td>
+                      <td className="hidden md:table-cell">
+                        {access ? (
+                          <div className="space-y-1">
+                            <AccessStatusBadge
+                              kind={access.kind}
+                              label={access.label}
+                              title={access.description}
+                            />
+                            {accessDate && access.relevantAtLabel ? (
+                              <p className="text-xs text-muted-foreground">
+                                {access.relevantAtLabel} {accessDate}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="hidden tabular-nums lg:table-cell">
+                        {developer.cards_count}
+                      </td>
+                      <td className="text-right">
+                        <Link
+                          href={`/app/developers/${developer.id}`}
+                          className="ui-btn-ghost"
+                        >
+                          Editar
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </DataTable>
+            <ListPagination
+              pathname="/app/developers"
+              page={paged.page}
+              totalPages={paged.totalPages}
+              total={paged.total}
+              pageSize={paged.pageSize}
+              teamId={query.teamParam || null}
+              q={query.q || null}
+              active={query.activeFilter}
+              jiraId={query.jiraAccountFilter}
+            />
+          </div>
+        </SectionShell>
       )}
     </PageShell>
   );
