@@ -7,6 +7,7 @@ import {
   approveMonthlyClosing,
   createMonthlyClosingAttachmentSignedUrl,
   finalizeMonthlyClosing,
+  rejectMonthlyClosing,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
   uploadMonthlyClosingAttachment,
@@ -61,6 +62,7 @@ export async function submitMonthlyClosingAction(input: {
   closingId: string;
   importId: string;
   sourceMode?: string | null;
+  developerResubmissionNotes?: string | null;
 }): Promise<MonthlyClosingActionResult> {
   try {
     const { profile, developer } = await getAppContext();
@@ -77,6 +79,7 @@ export async function submitMonthlyClosingAction(input: {
       importId: input.importId,
       sourceMode: input.sourceMode ?? "auto",
       actorUserId: profile.id,
+      developerResubmissionNotes: input.developerResubmissionNotes,
     });
 
     revalidatePath("/app");
@@ -116,6 +119,32 @@ export async function approveMonthlyClosingAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível aprovar o fechamento.",
+    };
+  }
+}
+
+export async function rejectMonthlyClosingAction(input: {
+  closingId: string;
+  managerRejectionNotes: string;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile } = await requireTeamAccess();
+    const closing = await rejectMonthlyClosing({
+      closingId: input.closingId,
+      managerRejectionNotes: input.managerRejectionNotes,
+      actorUserId: profile.id,
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath(`/app/gestor/fechamentos/${closing.id}`);
+    return { ok: true, closingId: closing.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reprovar o fechamento.",
     };
   }
 }

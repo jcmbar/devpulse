@@ -72,6 +72,16 @@ function mapClosing(row: Record<string, unknown>): MonthlyClosing {
       (row.manager_approved_by_user_id as string | null) ?? null,
     finalized_by_user_id: (row.finalized_by_user_id as string | null) ?? null,
     manager_invoice_notes: (row.manager_invoice_notes as string | null) ?? null,
+    manager_rejection_notes:
+      (row.manager_rejection_notes as string | null) ?? null,
+    manager_rejected_at: (row.manager_rejected_at as string | null) ?? null,
+    manager_rejected_by_user_id:
+      (row.manager_rejected_by_user_id as string | null) ?? null,
+    developer_resubmission_notes:
+      (row.developer_resubmission_notes as string | null) ?? null,
+    resubmitted_at: (row.resubmitted_at as string | null) ?? null,
+    resubmitted_by_user_id:
+      (row.resubmitted_by_user_id as string | null) ?? null,
     jira_changed_after_finalized: Boolean(row.jira_changed_after_finalized),
     jira_changed_after_finalized_at:
       (row.jira_changed_after_finalized_at as string | null) ?? null,
@@ -165,6 +175,53 @@ export async function getMonthlyClosingForDeveloperMonth(input: {
     throw new Error(`Falha ao carregar fechamento mensal: ${error.message}`);
   }
   return data ? mapClosing(data as Record<string, unknown>) : null;
+}
+
+export async function listMonthlyClosingsForDeveloperYear(input: {
+  developerId: string;
+  year: number;
+}): Promise<MonthlyClosing[]> {
+  const yearPrefix = `${input.year}-`;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .select("*")
+    .eq("developer_id", input.developerId)
+    .like("year_month", `${yearPrefix}%`)
+    .order("year_month", { ascending: true });
+
+  if (error) {
+    throw new Error(`Falha ao listar fechamentos do ano: ${error.message}`);
+  }
+
+  return (data ?? []).map((row) => mapClosing(row as Record<string, unknown>));
+}
+
+/** All monthly closings in a calendar year for the gestor status matrix. */
+export async function listMonthlyClosingsForGestorYear(input: {
+  year: number;
+  teamId?: string | null;
+}): Promise<MonthlyClosing[]> {
+  const yearPrefix = `${input.year}-`;
+  const supabase = await createClient();
+  let query = supabase
+    .from("monthly_closings")
+    .select("*")
+    .like("year_month", `${yearPrefix}%`)
+    .order("year_month", { ascending: true });
+
+  if (input.teamId) {
+    query = query.eq("team_id", input.teamId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(
+      `Falha ao listar fechamentos do ano (gestor): ${error.message}`,
+    );
+  }
+
+  return (data ?? []).map((row) => mapClosing(row as Record<string, unknown>));
 }
 
 export async function listMonthlyClosingsInReview(input?: {
@@ -519,6 +576,8 @@ export async function submitMonthlyClosingForReview(input: {
   importId: string;
   sourceMode: string | null;
   actorUserId: string;
+  /** Required when resubmitting from rejected. */
+  developerResubmissionNotes?: string | null;
 }): Promise<MonthlyClosing> {
   const closing = await getMonthlyClosingById(input.closingId);
   if (!closing) {
@@ -527,10 +586,20 @@ export async function submitMonthlyClosingForReview(input: {
   if (closing.developer_id !== input.developerId) {
     throw new Error("Você só pode enviar o próprio fechamento.");
   }
-  if (closing.status !== "open") {
-    throw new Error("Só é possível enviar fechamentos com status Aberto.");
+  if (closing.status !== "open" && closing.status !== "rejected") {
+    throw new Error(
+      "Só é possível enviar fechamentos Abertos ou com ajuste necessário.",
+    );
   }
   assertEditableClosing(closing);
+
+  const isResubmit = closing.status === "rejected";
+  const resubmissionNotes = (input.developerResubmissionNotes ?? "").trim();
+  if (isResubmit && !resubmissionNotes) {
+    throw new Error(
+      "Informe a resposta/justificativa ao reenviar o fechamento.",
+    );
+  }
 
   const audit = await loadMonthlyClosingAuditForDeveloper({
     developerId: input.developerId,
@@ -551,6 +620,7 @@ export async function submitMonthlyClosingForReview(input: {
 
   const supabase = await createClient();
   const now = new Date().toISOString();
+  const fromStatus = closing.status;
 
   const { error: deleteError } = await supabase
     .from("monthly_closing_items")
@@ -605,24 +675,36 @@ export async function submitMonthlyClosingForReview(input: {
   await appendEvent({
     closingId: closing.id,
     eventType: "snapshot_generated",
-    fromStatus: "open",
-    toStatus: "open",
+    fromStatus,
+    toStatus: fromStatus,
     actorUserId: input.actorUserId,
-    payload: { itemCount: itemRows.length, importId: input.importId },
+    payload: {
+      itemCount: itemRows.length,
+      importId: input.importId,
+      resubmit: isResubmit,
+    },
   });
+
+  const updatePayload: Record<string, unknown> = {
+    status: "in_review",
+    import_id: input.importId,
+    source_mode: input.sourceMode,
+    snapshot_generated_at: now,
+    submitted_at: now,
+    submitted_by_user_id: input.actorUserId,
+  };
+
+  if (isResubmit) {
+    updatePayload.developer_resubmission_notes = resubmissionNotes;
+    updatePayload.resubmitted_at = now;
+    updatePayload.resubmitted_by_user_id = input.actorUserId;
+  }
 
   const { data, error } = await supabase
     .from("monthly_closings")
-    .update({
-      status: "in_review",
-      import_id: input.importId,
-      source_mode: input.sourceMode,
-      snapshot_generated_at: now,
-      submitted_at: now,
-      submitted_by_user_id: input.actorUserId,
-    })
+    .update(updatePayload)
     .eq("id", closing.id)
-    .eq("status", "open")
+    .eq("status", fromStatus)
     .select("*")
     .single();
 
@@ -633,11 +715,67 @@ export async function submitMonthlyClosingForReview(input: {
   const updated = mapClosing(data as Record<string, unknown>);
   await appendEvent({
     closingId: closing.id,
-    eventType: "submitted_for_review",
-    fromStatus: "open",
+    eventType: isResubmit ? "developer_resubmitted" : "submitted_for_review",
+    fromStatus,
     toStatus: "in_review",
     actorUserId: input.actorUserId,
-    payload: { itemCount: itemRows.length },
+    payload: {
+      itemCount: itemRows.length,
+      hasResubmissionNotes: isResubmit,
+    },
+  });
+
+  return updated;
+}
+
+export async function rejectMonthlyClosing(input: {
+  closingId: string;
+  managerRejectionNotes: string;
+  actorUserId: string;
+}): Promise<MonthlyClosing> {
+  const notes = input.managerRejectionNotes.trim();
+  if (!notes) {
+    throw new Error(
+      "A observação da reprovação é obrigatória (descreva a inconsistência).",
+    );
+  }
+
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.status !== "in_review") {
+    throw new Error("Só é possível reprovar fechamentos em revisão.");
+  }
+  assertEditableClosing(closing);
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update({
+      status: "rejected",
+      manager_rejection_notes: notes,
+      manager_rejected_at: now,
+      manager_rejected_by_user_id: input.actorUserId,
+    })
+    .eq("id", closing.id)
+    .eq("status", "in_review")
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao reprovar fechamento: ${error.message}`);
+  }
+
+  const updated = mapClosing(data as Record<string, unknown>);
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "manager_rejected",
+    fromStatus: "in_review",
+    toStatus: "rejected",
+    actorUserId: input.actorUserId,
+    payload: { noteLength: notes.length },
   });
 
   return updated;

@@ -117,9 +117,14 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
           </>
         }
         actions={
-          <Link href="/app/gestor" className="ui-btn-secondary">
-            Voltar ao dashboard
-          </Link>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link href="/app/gestor/fechamentos" className="ui-btn-secondary">
+              Voltar aos fechamentos
+            </Link>
+            <Link href="/app/gestor" className="ui-btn-ghost">
+              Dashboard
+            </Link>
+          </div>
         }
       />
 

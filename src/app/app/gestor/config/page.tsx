@@ -5,10 +5,12 @@ import {
   WeekdayCapacityForm,
 } from "@/app/app/gestor/config-forms";
 import { HolidaysAdminPanel } from "@/app/app/gestor/holidays-admin-panel";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { endOfMonth, startOfMonth } from "@/lib/metrics/date-range";
 import {
   computeMonthlyRequiredHours,
@@ -38,6 +40,11 @@ export default async function GestorConfigPage({
 }: ConfigPageProps) {
   await requireTeamAccess();
   const params = await searchParams;
+  await restorePersistedFiltersOrRedirect({
+    scope: "gestor-config",
+    pathname: "/app/gestor/config",
+    searchParams: params,
+  });
 
   const now = new Date();
   const year = Number(params.year) || now.getUTCFullYear();
@@ -78,6 +85,13 @@ export default async function GestorConfigPage({
 
   return (
     <PageShell size="xl">
+      <FilterPersistenceSync
+        scope="gestor-config"
+        params={{
+          year: String(year),
+          month: String(month),
+        }}
+      />
       <PageHeader
         eyebrow="Configuração"
         title="Capacidade e faixas"
@@ -94,7 +108,7 @@ export default async function GestorConfigPage({
       </Surface>
 
       <Surface className="space-y-4">
-        <form className="flex flex-wrap items-end gap-3">
+        <form method="get" className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="holidayScope" value={scopeFilter} />
           <label className="space-y-1 text-sm">
             <span className="font-medium">Ano (capacidade / feriados)</span>

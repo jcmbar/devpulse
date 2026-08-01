@@ -25,6 +25,8 @@ type KpiMetricCardProps = {
   tone?: KpiMetricTone;
   className?: string;
   title?: string;
+  /** Colored header band — executive dashboard hierarchy. */
+  variant?: "default" | "hero";
 };
 
 /**
@@ -38,7 +40,29 @@ export function KpiMetricCard({
   tone = "neutral",
   className,
   title,
+  variant = "default",
 }: KpiMetricCardProps) {
+  if (variant === "hero") {
+    return (
+      <div
+        className={cn(
+          "ui-kpi-hero",
+          TONE_CLASS[tone],
+          className,
+        )}
+        title={title}
+      >
+        <div className="ui-kpi-hero__band">
+          <span className="ui-kpi-hero__band-label">{label}</span>
+        </div>
+        <div className="ui-kpi-hero__body">
+          <p className="ui-kpi-hero__value">{value}</p>
+          {hint ? <div className="ui-kpi-hero__hint">{hint}</div> : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn("ui-kpi-card", TONE_CLASS[tone], className)}

@@ -2,6 +2,11 @@ import Link from "next/link";
 import { CompiladoDateFilter } from "@/components/compilado-date-filter";
 import { CompiladoProvenanceBadge } from "@/components/compilado-provenance-badge";
 import {
+  DashboardComplementGrid,
+  DashboardRankList,
+} from "@/components/dashboard/dashboard-complement-grid";
+import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
+import {
   GestorMetricAuditButton,
   type GestorAuditFilterContext,
 } from "@/components/gestor/metric-audit-button";
@@ -9,6 +14,7 @@ import { RunSyncNowButton } from "@/components/gestor/run-sync-now-button";
 import { GestorSourceFilter } from "@/components/gestor-source-filter";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { PerformanceBandsLegend } from "@/components/performance-bands-legend";
@@ -16,6 +22,7 @@ import { DataTable } from "@/components/surface";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
   formatDateRangeLabel,
   resolveCompiladoDateRange,
@@ -23,13 +30,14 @@ import {
 import {
   formatDeliveryIndex,
 } from "@/lib/metrics/developer-period";
+import { buildMonthlyTrendFromMatrix } from "@/lib/metrics/monthly-trend";
 import {
   buildDeliveryIndexCalcExplain,
   buildUtilizationCalcExplain,
 } from "@/lib/metrics/metric-calc-explain";
-import { GestorClosingsInReviewSection } from "@/components/monthly-closing/gestor-closings-in-review";
 import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
 import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
+import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { buildGestorAnaliticoHref } from "@/lib/metrics/gestor-analitico-href";
 import {
   compiladoSourceModeLabel,
@@ -46,7 +54,6 @@ import {
   getGestorDashboard,
 } from "@/services/gestor/dashboard";
 import { listJiraIntegrations } from "@/services/integrations/jira";
-import { listMonthlyClosingsInReview, listFinalizedClosingsWithJiraDrift } from "@/services/monthly-closings";
 import { listTeamsAdmin } from "@/services/teams";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import {
@@ -136,6 +143,11 @@ export default async function GestorDashboardPage({
 }: GestorPageProps) {
   await requireTeamAccess();
   const params = await searchParams;
+  await restorePersistedFiltersOrRedirect({
+    scope: "gestor-dashboard",
+    pathname: "/app/gestor",
+    searchParams: params,
+  });
   const dataSource = parseCompiladoSourceMode(params.source);
   const teamFilter = parseTeamListFilter(params.teamId);
   const selectedTeamId =
@@ -163,27 +175,23 @@ export default async function GestorDashboardPage({
     defaultEnd: seed.selectedBatch?.period_end ?? null,
   });
 
-  const [dashboard, closingsInReview, driftClosings] = await Promise.all([
-    getGestorDashboard({
-      // Only pass URL override — auto resolution happens inside getGestorDashboard.
-      importId: params.importId ?? null,
-      dateRange,
-      dataSource,
-      teamId: selectedTeamId,
-    }),
-    listMonthlyClosingsInReview({
-      teamId: selectedTeamId,
-      yearMonth: dateRange.mode === "month" ? dateRange.month : null,
-    }),
-    listFinalizedClosingsWithJiraDrift({
-      teamId: selectedTeamId,
-      yearMonth: dateRange.mode === "month" ? dateRange.month : null,
-    }),
-  ]);
+  const dashboard = await getGestorDashboard({
+    // Only pass URL override — auto resolution happens inside getGestorDashboard.
+    importId: params.importId ?? null,
+    dateRange,
+    dataSource,
+    teamId: selectedTeamId,
+  });
 
   const selectedImportId = dashboard.selectedBatch?.id ?? null;
   const { teamMetrics, ranking, monthlyMatrix, thresholds, provenance } =
     dashboard;
+  const monthlyTrend = buildMonthlyTrendFromMatrix(monthlyMatrix);
+  const pendingJustifications = ranking.reduce(
+    (sum, row) =>
+      sum + row.pendingDelayJustifications + row.pendingReworkJustifications,
+    0,
+  );
   const auditFilterContext: GestorAuditFilterContext = {
     importId: selectedImportId,
     from: dateRange.start,
@@ -245,6 +253,17 @@ export default async function GestorDashboardPage({
 
   return (
     <PageShell size="full">
+      <FilterPersistenceSync
+        scope="gestor-dashboard"
+        params={{
+          teamId: teamParam,
+          source: sourceParam,
+          month:
+            dateRange.mode === "month" ? (dateRange.month ?? undefined) : undefined,
+          from: dateRange.mode === "custom" ? dateRange.start : undefined,
+          to: dateRange.mode === "custom" ? dateRange.end : undefined,
+        }}
+      />
       <PageHeader
         eyebrow="Operação"
         title="Dashboard do gestor"
@@ -271,27 +290,42 @@ export default async function GestorDashboardPage({
           </>
         }
         actions={
-          <div className="flex w-full flex-col gap-2 sm:items-end">
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-              <Link href={analiticoHref} className="ui-btn-secondary justify-center">
-                Visão analítica
-              </Link>
-              <Link href={configHref} className="ui-btn-secondary justify-center">
-                Capacidade
-              </Link>
-            </div>
+          <div className="flex w-full flex-wrap items-center gap-1.5 sm:justify-end">
+            <Link href={analiticoHref} className="ui-btn-secondary">
+              Visão analítica
+            </Link>
+            <Link href={configHref} className="ui-btn-secondary">
+              Capacidade
+            </Link>
             {syncTarget ? (
               <RunSyncNowButton
                 integrationId={syncTarget.id}
                 teamId={syncTarget.team_id}
               />
             ) : (
-              <Link href="/app/jira" className="ui-btn-primary w-full text-center sm:w-auto">
+              <Link href="/app/jira" className="ui-btn-primary">
                 Configurar Jira
               </Link>
             )}
           </div>
         }
+      />
+
+      <AppViewTabs
+        tabs={[
+          {
+            href: teamParam ? `/app/gestor?teamId=${teamParam}` : "/app/gestor",
+            label: "Dashboard",
+            active: true,
+          },
+          {
+            href: teamParam
+              ? `/app/gestor/fechamentos?teamId=${teamParam}`
+              : "/app/gestor/fechamentos",
+            label: "Fechamentos",
+            active: false,
+          },
+        ]}
       />
 
       <FilterBar>
@@ -323,6 +357,7 @@ export default async function GestorDashboardPage({
                   from: preservedWithSource.from,
                   to: preservedWithSource.to,
                 }}
+                persistScope="gestor-dashboard"
                 embedded
               />
             </div>
@@ -337,6 +372,7 @@ export default async function GestorDashboardPage({
                   from: preservedWithSource.from,
                   to: preservedWithSource.to,
                 }}
+                persistScope="gestor-dashboard"
                 embedded
               />
             </div>
@@ -353,6 +389,7 @@ export default async function GestorDashboardPage({
                   from: preservedWithSource.from,
                   to: preservedWithSource.to,
                 }}
+                persistScope="gestor-dashboard"
                 embedded
               />
             </div>
@@ -364,15 +401,11 @@ export default async function GestorDashboardPage({
             activeRange={dateRange}
             monthOptions={dashboard.monthOptions}
             preservedParams={{ source: sourceParam, teamId: teamParam }}
+            persistScope="gestor-dashboard"
             embedded
           />
         </div>
       </FilterBar>
-
-      <GestorClosingsInReviewSection
-        closings={closingsInReview}
-        driftClosings={driftClosings}
-      />
 
       {dashboard.selectedBatch == null ? (
         <div className="space-y-2 rounded-[var(--radius-sm)] border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
@@ -384,10 +417,10 @@ export default async function GestorDashboardPage({
       ) : (
         <>
           <SectionShell
-            title="Resumo do time"
+            title="Indicadores do time"
             description={
               <>
-                Indicadores com Entrega TU em{" "}
+                Entrega TU em{" "}
                 <span className="font-medium text-foreground">
                   {formatDateRangeLabel(dateRange)}
                 </span>
@@ -395,24 +428,29 @@ export default async function GestorDashboardPage({
               </>
             }
           >
-            <div className="ui-kpi-grid">
+            <div className="ui-kpi-grid--hero">
               <KpiMetricCard
+                variant="hero"
                 label="Developers ativos"
                 value={String(dashboard.activeDevelopersCount)}
                 tone="info"
               />
               <KpiMetricCard
-                label="Com cards no período"
+                variant="hero"
+                label="Com cards"
                 value={String(dashboard.developersWithCardsCount)}
                 tone="info"
+                hint="No período filtrado"
               />
               <KpiMetricCard
+                variant="hero"
                 label="Cards"
                 value={String(teamMetrics.totalCards)}
                 tone="info"
                 hint="Entrega TU no período"
               />
               <KpiMetricCard
+                variant="hero"
                 label="Aproveitamento"
                 value={
                   <MetricCalcTooltip
@@ -425,12 +463,12 @@ export default async function GestorDashboardPage({
                 hint={
                   <>
                     C {teamMetrics.totalCards} · P{" "}
-                    {teamMetrics.utilizationPenalty} · C_aprov{" "}
-                    {teamMetrics.utilizedCardEquivalents}
+                    {teamMetrics.utilizationPenalty}
                   </>
                 }
               />
               <KpiMetricCard
+                variant="hero"
                 label="Índice de Entrega"
                 value={
                   <MetricCalcTooltip
@@ -443,11 +481,13 @@ export default async function GestorDashboardPage({
                 hint="Q × √C (time)"
               />
               <KpiMetricCard
+                variant="hero"
                 label="No prazo"
                 value={String(teamMetrics.onTimeCards)}
                 tone="success"
               />
               <KpiMetricCard
+                variant="hero"
                 label="Atraso"
                 value={String(teamMetrics.delayedCardsNet)}
                 tone={teamMetrics.delayedCardsNet > 0 ? "danger" : "neutral"}
@@ -458,21 +498,10 @@ export default async function GestorDashboardPage({
                 }
               />
               <KpiMetricCard
+                variant="hero"
                 label="Retrabalho"
                 value={String(teamMetrics.reworkCards)}
                 tone={teamMetrics.reworkCards > 0 ? "warning" : "neutral"}
-              />
-              <KpiMetricCard
-                label="Diff horas"
-                value={formatHours(teamMetrics.totalDifferenceHours)}
-                tone={
-                  teamMetrics.totalDifferenceHours > 0
-                    ? "warning"
-                    : teamMetrics.totalDifferenceHours < 0
-                      ? "success"
-                      : "neutral"
-                }
-                hint="gasto − estimado"
               />
             </div>
 
@@ -523,15 +552,79 @@ export default async function GestorDashboardPage({
               ) : (
                 <p>{dashboard.holidayScopeNote}</p>
               )}
-              {dashboard.capacityPeriod.spansMultipleMonths ? (
-                <p>
-                  Intervalo multi-mês: a matriz mostra aproveitamento mês a mês;
-                  Previsto × Realizado no ranking soma as horas do intervalo
-                  inteiro.
-                </p>
-              ) : null}
             </div>
           </SectionShell>
+
+          <MonthlyTrendChart
+            title="Acompanhamento mensal do time"
+            description="Série mensal a partir da matriz Compilado já calculada para o filtro."
+            points={monthlyTrend}
+            averagesNote
+          />
+
+          <DashboardComplementGrid
+            mixTitle="Qualidade do time"
+            mixItems={[
+              {
+                label: "No prazo",
+                value: teamMetrics.onTimeCards,
+                total: teamMetrics.totalCards,
+                tone: "success",
+              },
+              {
+                label: "Atraso líquido",
+                value: teamMetrics.delayedCardsNet,
+                total: teamMetrics.totalCards,
+                tone: "danger",
+                detail:
+                  teamMetrics.delayedCardsAccepted > 0
+                    ? `bruto ${teamMetrics.delayedCardsGross} · acatado ${teamMetrics.delayedCardsAccepted}`
+                    : undefined,
+              },
+              {
+                label: "Retrabalho",
+                value: teamMetrics.reworkCards,
+                total: teamMetrics.totalCards,
+                tone: "warning",
+                detail:
+                  teamMetrics.reworkWeightTotal > 0
+                    ? `peso ${teamMetrics.reworkWeightTotal}`
+                    : undefined,
+              },
+            ]}
+            hoursTitle="Previsto × realizado"
+            hoursItems={[
+              {
+                label: "Previsto",
+                value: formatHours(teamMetrics.totalEstimateHours),
+              },
+              {
+                label: "Realizado",
+                value: formatHours(teamMetrics.totalTimeSpentHours),
+              },
+              {
+                label: "Diff",
+                value: formatHours(teamMetrics.totalDifferenceHours),
+                hint: "gasto − estimado",
+              },
+              {
+                label: "Justificativas pendentes",
+                value: String(pendingJustifications),
+                hint: "Atraso + retrabalho no ranking",
+              },
+            ]}
+            thirdTitle="Topo do ranking"
+            thirdDescription="Mesma ordenação do ranking completo (Índice de Entrega)."
+            thirdContent={
+              <DashboardRankList
+                items={ranking.slice(0, 5).map((row) => ({
+                  name: row.fullName,
+                  href: `/app/developers/${row.developerId}`,
+                  meta: `Índ. ${formatDeliveryIndex(row.metrics.deliveryIndex)} · ${formatPercent(row.metrics.utilizationRate)}`,
+                }))}
+              />
+            }
+          />
 
           <SectionShell
             title="Ranking do período"

@@ -1,5 +1,6 @@
 import { ImportForm } from "@/app/app/imports/import-form";
 import { AdminToolbar } from "@/components/admin-toolbar";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { DataTable, EmptyState, Surface } from "@/components/surface";
 import { ListPagination } from "@/components/list-pagination";
 import { ListSearchForm } from "@/components/list-search-form";
@@ -12,6 +13,7 @@ import {
   listEmptyMessage,
   parseAdminListQuery,
 } from "@/lib/admin-list-query";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { listImportsAdminPaged } from "@/services/imports";
 import { listTeamsAdmin } from "@/services/teams";
 import { formatTeamLabel } from "@/services/teams/labels";
@@ -30,6 +32,11 @@ type ImportsPageProps = {
 export default async function ImportsPage({ searchParams }: ImportsPageProps) {
   await requireImportAccess();
   const params = await searchParams;
+  await restorePersistedFiltersOrRedirect({
+    scope: "admin-imports",
+    pathname: "/app/imports",
+    searchParams: params,
+  });
   const query = parseAdminListQuery(params, { pageSize: 15 });
 
   if (query.teamIdNeedsCanonicalize) {
@@ -66,6 +73,12 @@ export default async function ImportsPage({ searchParams }: ImportsPageProps) {
 
   return (
     <PageShell size="xl">
+      <FilterPersistenceSync
+        scope="admin-imports"
+        params={{
+          teamId: query.teamParam || undefined,
+        }}
+      />
       <PageHeader
         eyebrow="Pipeline"
         title="Importação de planilha"
@@ -108,7 +121,11 @@ export default async function ImportsPage({ searchParams }: ImportsPageProps) {
               <p className="text-sm text-muted-foreground">Carregando filtro…</p>
             }
           >
-            <TeamFilterForm teams={teams} defaultTeamId={query.teamParam} />
+            <TeamFilterForm
+              teams={teams}
+              defaultTeamId={query.teamParam}
+              persistScope="admin-imports"
+            />
           </Suspense>
           <Suspense
             fallback={

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { buildAuditHref } from "@/components/jira-analytics/build-audit-href";
 import { DashboardFilters } from "@/components/jira-analytics/dashboard-filters";
 import { FlowHistorySection } from "@/components/jira-analytics/flow-history-section";
@@ -12,6 +13,7 @@ import { StatusGroupBars } from "@/components/jira-analytics/status-group-bars";
 import { ThroughputChart } from "@/components/jira-analytics/throughput-chart";
 import { WipAgingPanel } from "@/components/jira-analytics/wip-aging-panel";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import type { JiraStatusGroup } from "@/types/jira-flow-analytics";
 import {
   getFlowDashboardReadModel,
@@ -47,6 +49,11 @@ const STATUS_GROUP_VALUES = new Set([
 export default async function JiraAnalyticsPage({ searchParams }: PageProps) {
   await requireTeamAccess();
   const params = searchParams ? await searchParams : {};
+  await restorePersistedFiltersOrRedirect({
+    scope: "jira-analytics",
+    pathname: "/app/jira/analytics",
+    searchParams: params,
+  });
   const [integrations, teams] = await Promise.all([
     listJiraIntegrations(),
     listTeamsAdmin(),
@@ -140,6 +147,18 @@ export default async function JiraAnalyticsPage({ searchParams }: PageProps) {
 
   return (
     <PageShell>
+      <FilterPersistenceSync
+        scope="jira-analytics"
+        params={{
+          integrationId: selectedId,
+          teamId: effectiveTeamId || undefined,
+          from: fromDate,
+          to: toDate,
+          statusGroup: statusGroup === "all" ? undefined : statusGroup,
+          issueType: issueType === "all" ? undefined : issueType,
+          bucket,
+        }}
+      />
       <PageHeader
         title="Dashboard de fluxo"
         description={`Operação e gestão · ${selected?.name ?? selectedId} · flow_v1`}

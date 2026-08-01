@@ -1,14 +1,20 @@
-import { AppHome } from "@/app/app/app-home";
+import { AppHome, type DeveloperHomeTab } from "@/app/app/app-home";
 import { OnboardingForm } from "@/app/app/onboarding-form";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
+import type { DeveloperClosingYearMonthRow } from "@/components/monthly-closing/developer-closings-year-view";
 import { getAppContext } from "@/lib/auth/app-context";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
+  endOfMonth,
   listYearMonthsBetween,
   resolveCompiladoDateRange,
+  startOfMonth,
 } from "@/lib/metrics/date-range";
 import { computeDeveloperPeriodMetrics } from "@/lib/metrics/developer-period";
+import { buildMonthlyTrendFromCards } from "@/lib/metrics/monthly-trend";
 import { findUnlinkedDeveloperByEmail } from "@/services/developers";
 import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot";
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
@@ -17,6 +23,7 @@ import {
   getMonthlyClosingForDeveloperMonth,
   listMonthlyClosingAttachments,
   listMonthlyClosingItems,
+  listMonthlyClosingsForDeveloperYear,
   loadMonthlyClosingAuditForDeveloper,
 } from "@/services/monthly-closings";
 import type {
@@ -30,8 +37,54 @@ type AppPageProps = {
     from?: string;
     to?: string;
     month?: string;
+    tab?: string;
+    closingYear?: string;
+    detailMonth?: string;
   }>;
 };
+
+function parseTab(value: string | undefined): DeveloperHomeTab {
+  return value === "fechamentos" ? "fechamentos" : "cards";
+}
+
+function buildAppHref(input: {
+  tab: DeveloperHomeTab;
+  importId?: string | null;
+  month?: string | null;
+  from?: string | null;
+  to?: string | null;
+  closingYear?: number | null;
+  detailMonth?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  if (input.tab !== "cards") {
+    params.set("tab", input.tab);
+  }
+  if (input.importId) {
+    params.set("importId", input.importId);
+  }
+  if (input.tab === "cards") {
+    if (input.month) {
+      params.set("month", input.month);
+    }
+    if (input.from) {
+      params.set("from", input.from);
+    }
+    if (input.to) {
+      params.set("to", input.to);
+    }
+  }
+  if (input.tab === "fechamentos") {
+    if (input.closingYear != null) {
+      params.set("closingYear", String(input.closingYear));
+    }
+    if (input.detailMonth) {
+      params.set("detailMonth", input.detailMonth);
+    }
+  }
+  const query = params.toString();
+  return query ? `/app?${query}` : "/app";
+}
 
 export default async function AppPage({ searchParams }: AppPageProps) {
   const { profile, developer } = await getAppContext();
@@ -53,8 +106,13 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   }
 
   const params = await searchParams;
+  await restorePersistedFiltersOrRedirect({
+    scope: "developer-home",
+    pathname: "/app",
+    searchParams: params,
+  });
+  const activeTab = parseTab(params.tab);
 
-  // Home do developer: sempre snapshot automático (origem ativa).
   const seed = await resolveCompiladoSnapshot({
     mode: "auto",
     importId: null,
@@ -139,8 +197,82 @@ export default async function AppPage({ searchParams }: AppPageProps) {
     acceptedReworkKeys,
   });
 
-  const closingYearMonth =
-    dateRange.mode === "month" ? dateRange.month : null;
+  const monthlyTrend = buildMonthlyTrendFromCards(cards, {
+    acceptedDelayKeys,
+    acceptedReworkKeys,
+  });
+
+  const yearFromOptions = monthOptions.map((m) => Number(m.slice(0, 4)));
+  const closingYears = [
+    ...new Set([
+      ...yearFromOptions,
+      new Date().getUTCFullYear(),
+      ...(params.closingYear ? [Number(params.closingYear)] : []),
+    ]),
+  ]
+    .filter((year) => Number.isFinite(year))
+    .sort((a, b) => a - b);
+
+  const defaultClosingYear =
+    dateRange.month != null
+      ? Number(dateRange.month.slice(0, 4))
+      : (closingYears[closingYears.length - 1] ?? new Date().getUTCFullYear());
+
+  const closingSelectedYear = Number.isFinite(Number(params.closingYear))
+    ? Number(params.closingYear)
+    : defaultClosingYear;
+
+  const closingDetailMonth =
+    activeTab === "fechamentos" &&
+    params.detailMonth &&
+    /^\d{4}-\d{2}$/.test(params.detailMonth)
+      ? params.detailMonth
+      : null;
+
+  let closingYearRows: DeveloperClosingYearMonthRow[] = [];
+  if (activeTab === "fechamentos") {
+    const yearMonths = Array.from({ length: 12 }, (_, index) => {
+      const month = String(index + 1).padStart(2, "0");
+      return `${closingSelectedYear}-${month}`;
+    });
+
+    const [yearClosings, yearCards] = await Promise.all([
+      listMonthlyClosingsForDeveloperYear({
+        developerId: developer.id,
+        year: closingSelectedYear,
+      }),
+      selectedImportId != null
+        ? listJiraCardsByDeveloperAndImport({
+            developerId: developer.id,
+            importId: selectedImportId,
+            rangeStart: startOfMonth(`${closingSelectedYear}-01`),
+            rangeEnd: endOfMonth(`${closingSelectedYear}-12`),
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const closingByMonth = new Map(
+      yearClosings.map((row) => [row.year_month, row]),
+    );
+
+    closingYearRows = yearMonths.map((yearMonth) => {
+      const monthCards = yearCards.filter(
+        (card) =>
+          card.unit_test_delivery_on != null &&
+          card.unit_test_delivery_on.slice(0, 7) === yearMonth,
+      );
+      return {
+        yearMonth,
+        metrics: computeDeveloperPeriodMetrics(monthCards, {
+          acceptedDelayKeys,
+          acceptedReworkKeys,
+        }),
+        closing: closingByMonth.get(yearMonth) ?? null,
+      };
+    });
+  }
+
+  const closingYearMonth = closingDetailMonth;
 
   const monthlyClosing =
     closingYearMonth != null
@@ -197,8 +329,6 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         blocksSubmit: false,
         blockReasons: [],
       }));
-      closingCanSubmit = false;
-      closingBlockingCount = 0;
     } else {
       const audit = await loadMonthlyClosingAuditForDeveloper({
         developerId: developer.id,
@@ -209,26 +339,73 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       closingCanSubmit = audit.canSubmit;
       closingBlockingCount = audit.blockingCount;
     }
+  } else if (
+    closingYearMonth != null &&
+    selectedImportId != null &&
+    (monthlyClosing == null || monthlyClosing.started_at == null)
+  ) {
+    // Preview readiness before start when month detail is open.
+    const audit = await loadMonthlyClosingAuditForDeveloper({
+      developerId: developer.id,
+      importId: selectedImportId,
+      yearMonth: closingYearMonth,
+    });
+    closingAuditRows = audit.auditRows;
+    closingCanSubmit = audit.canSubmit;
+    closingBlockingCount = audit.blockingCount;
   }
 
+  const cardsTabHref = buildAppHref({
+    tab: "cards",
+    importId: selectedImportId,
+    month: dateRange.mode === "month" ? dateRange.month : null,
+    from: dateRange.mode === "custom" ? dateRange.start : null,
+    to: dateRange.mode === "custom" ? dateRange.end : null,
+  });
+
+  const fechamentosTabHref = buildAppHref({
+    tab: "fechamentos",
+    importId: selectedImportId,
+    closingYear: closingSelectedYear,
+  });
+
   return (
-    <AppHome
-      profile={profile}
-      developer={developer}
-      selectedImportId={selectedImportId}
-      dateRange={dateRange}
-      monthOptions={monthOptions}
-      cards={cards}
-      metrics={metrics}
-      provenance={resolved.provenance}
-      delayJustificationsByKey={delayJustificationsByKey}
-      reworkJustificationsByKey={reworkJustificationsByKey}
-      monthlyClosing={monthlyClosing}
-      closingYearMonth={closingYearMonth}
-      closingAuditRows={closingAuditRows}
-      closingCanSubmit={closingCanSubmit}
-      closingBlockingCount={closingBlockingCount}
-      closingAttachments={closingAttachments}
-    />
+    <>
+      <FilterPersistenceSync
+        scope="developer-home"
+        params={{
+          tab: activeTab,
+          month: dateRange.mode === "month" ? dateRange.month : undefined,
+          from: dateRange.mode === "custom" ? dateRange.start : undefined,
+          to: dateRange.mode === "custom" ? dateRange.end : undefined,
+          closingYear: String(closingSelectedYear),
+        }}
+      />
+      <AppHome
+        profile={profile}
+        developer={developer}
+        selectedImportId={selectedImportId}
+        dateRange={dateRange}
+        monthOptions={monthOptions}
+        cards={cards}
+        metrics={metrics}
+        monthlyTrend={monthlyTrend}
+        provenance={resolved.provenance}
+        delayJustificationsByKey={delayJustificationsByKey}
+        reworkJustificationsByKey={reworkJustificationsByKey}
+        activeTab={activeTab}
+        cardsTabHref={cardsTabHref}
+        fechamentosTabHref={fechamentosTabHref}
+        closingYears={closingYears}
+        closingSelectedYear={closingSelectedYear}
+        closingYearRows={closingYearRows}
+        closingDetailMonth={closingDetailMonth}
+        monthlyClosing={monthlyClosing}
+        closingAuditRows={closingAuditRows}
+        closingCanSubmit={closingCanSubmit}
+        closingBlockingCount={closingBlockingCount}
+        closingAttachments={closingAttachments}
+      />
+    </>
   );
 }

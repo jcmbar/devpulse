@@ -1,5 +1,6 @@
 "use client";
 
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import type { Team } from "@/types/team";
@@ -29,8 +30,10 @@ export function JiraTeamContextSelect({
       aria-label="Time em contexto"
       onChange={(event) => {
         const teamId = event.target.value;
+        const href = `/app/jira?teamId=${encodeURIComponent(teamId)}`;
+        persistFiltersFromHref("jira-admin", href);
         startTransition(() => {
-          router.push(`/app/jira?teamId=${encodeURIComponent(teamId)}`);
+          router.push(href);
         });
       }}
     >

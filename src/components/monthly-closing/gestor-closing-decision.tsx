@@ -4,6 +4,7 @@ import {
   approveMonthlyClosingAction,
   finalizeMonthlyClosingAction,
   getMonthlyClosingAttachmentUrlAction,
+  rejectMonthlyClosingAction,
 } from "@/app/app/monthly-closing-actions";
 import { cn } from "@/lib/utils";
 import type {
@@ -24,7 +25,10 @@ export function GestorClosingDecisionPanel({
 }) {
   const router = useRouter();
   const notesId = useId();
+  const rejectId = useId();
   const [notes, setNotes] = useState(closing.manager_invoice_notes ?? "");
+  const [rejectionNotes, setRejectionNotes] = useState("");
+  const [mode, setMode] = useState<"approve" | "reject">("approve");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -39,6 +43,21 @@ export function GestorClosingDecisionPanel({
       const result = await approveMonthlyClosingAction({
         closingId: closing.id,
         managerInvoiceNotes: notes,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function reject() {
+    setError(null);
+    startTransition(async () => {
+      const result = await rejectMonthlyClosingAction({
+        closingId: closing.id,
+        managerRejectionNotes: rejectionNotes,
       });
       if (!result.ok) {
         setError(result.error);
@@ -93,39 +112,163 @@ export function GestorClosingDecisionPanel({
         </div>
       ) : null}
 
-      {closing.status === "in_review" ? (
-        <section className="space-y-3 rounded-[var(--radius)] border border-brand/25 bg-brand-soft/40 p-4 dark:bg-brand/10">
-          <div>
-            <h3 className="text-sm font-semibold tracking-tight">
-              Aprovar fechamento
-            </h3>
+      {closing.status === "rejected" ? (
+        <section className="space-y-2 rounded-[var(--radius)] border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm">
+          <h3 className="font-semibold tracking-tight">
+            Devolvido ao developer
+          </h3>
+          <p className="text-pretty whitespace-pre-wrap">
+            {closing.manager_rejection_notes}
+          </p>
+          {closing.manager_rejected_at ? (
             <p className="text-xs text-muted-foreground">
-              Revise o snapshot e informe os dados para emissão da nota fiscal.
+              Reprovado em{" "}
+              {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
             </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {closing.status === "in_review" &&
+      closing.manager_rejection_notes ? (
+        <section className="space-y-1.5 rounded-[var(--radius-sm)] border border-rose-500/30 bg-rose-500/5 px-3 py-3 text-sm">
+          <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            Última devolução do gestor
+          </h3>
+          <p className="text-pretty whitespace-pre-wrap">
+            {closing.manager_rejection_notes}
+          </p>
+          {closing.manager_rejected_at ? (
+            <p className="text-xs text-muted-foreground">
+              {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {closing.status === "in_review" &&
+      closing.developer_resubmission_notes ? (
+        <section className="space-y-1.5 rounded-[var(--radius-sm)] border border-border px-3 py-3 text-sm">
+          <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            Resposta do developer (reenvio)
+          </h3>
+          <p className="text-pretty whitespace-pre-wrap">
+            {closing.developer_resubmission_notes}
+          </p>
+          {closing.resubmitted_at ? (
+            <p className="text-xs text-muted-foreground">
+              Reenviado em{" "}
+              {new Date(closing.resubmitted_at).toLocaleString("pt-BR")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {closing.status === "in_review" ? (
+        <section className="space-y-3 rounded-[var(--radius)] border border-border p-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("approve");
+                setError(null);
+              }}
+              className={cn(
+                "rounded-[var(--radius-sm)] border px-3 py-1.5 text-sm font-medium",
+                mode === "approve"
+                  ? "border-brand/40 bg-brand-soft text-foreground"
+                  : "border-border hover:bg-muted",
+              )}
+            >
+              Aprovar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("reject");
+                setError(null);
+              }}
+              className={cn(
+                "rounded-[var(--radius-sm)] border px-3 py-1.5 text-sm font-medium",
+                mode === "reject"
+                  ? "border-rose-500/40 bg-rose-500/15 text-rose-950 dark:text-rose-100"
+                  : "border-border hover:bg-muted",
+              )}
+            >
+              Reprovar com observação
+            </button>
           </div>
-          <div className="space-y-1.5">
-            <label htmlFor={notesId} className="text-sm font-medium">
-              Informações para emissão de NF
-            </label>
-            <textarea
-              id={notesId}
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              rows={4}
-              placeholder="Dados para emissão da nota (razão social, CNPJ, descrição, valores, etc.)"
-              className="ui-textarea min-h-[7rem]"
-            />
-          </div>
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
-          <button
-            type="button"
-            onClick={approve}
-            disabled={pending || !notes.trim()}
-            className="ui-btn-primary"
-          >
-            {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Aprovar e fechar
-          </button>
+
+          {mode === "approve" ? (
+            <div className="space-y-3 rounded-[var(--radius-sm)] border border-brand/25 bg-brand-soft/40 p-3 dark:bg-brand/10">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight">
+                  Aprovar fechamento
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Informe os dados para emissão da nota fiscal.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor={notesId} className="text-sm font-medium">
+                  Informações para emissão de NF
+                </label>
+                <textarea
+                  id={notesId}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  rows={4}
+                  placeholder="Dados para emissão da nota (razão social, CNPJ, descrição, valores, etc.)"
+                  className="ui-textarea min-h-[7rem]"
+                />
+              </div>
+              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              <button
+                type="button"
+                onClick={approve}
+                disabled={pending || !notes.trim()}
+                className="ui-btn-primary"
+              >
+                {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                Aprovar e fechar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-[var(--radius-sm)] border border-rose-500/35 bg-rose-500/10 p-3">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight">
+                  Reprovar com observação
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Descreva a inconsistência. O developer verá este texto e
+                  poderá ajustar/reenviar.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor={rejectId} className="text-sm font-medium">
+                  Observação obrigatória
+                </label>
+                <textarea
+                  id={rejectId}
+                  value={rejectionNotes}
+                  onChange={(event) => setRejectionNotes(event.target.value)}
+                  rows={4}
+                  placeholder="Ex.: card AP-123 sem justificativa coerente; horas divergentes do Jira…"
+                  className="ui-textarea min-h-[7rem]"
+                />
+              </div>
+              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              <button
+                type="button"
+                onClick={reject}
+                disabled={pending || !rejectionNotes.trim()}
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-rose-500/45 bg-rose-500/15 px-3.5 text-sm font-semibold text-rose-950 disabled:opacity-50 dark:text-rose-100"
+              >
+                {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                Devolver ao developer
+              </button>
+            </div>
+          )}
         </section>
       ) : null}
 

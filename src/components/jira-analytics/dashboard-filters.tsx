@@ -1,3 +1,9 @@
+"use client";
+
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import { FormEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
+
 type IntegrationOption = {
   id: string;
   name: string;
@@ -34,8 +40,7 @@ const STATUS_GROUPS = [
 ] as const;
 
 /**
- * GET form — preserves query params for shareable dashboard URLs.
- * Presentational only; filtering is applied in the read layer.
+ * GET-style filters with persistence of last-used durable params.
  */
 export function DashboardFilters({
   integrations,
@@ -43,6 +48,25 @@ export function DashboardFilters({
   issueTypes,
   values,
 }: DashboardFiltersProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const params = new URLSearchParams();
+    for (const [key, value] of formData.entries()) {
+      const trimmed = String(value).trim();
+      if (trimmed) {
+        params.set(key, trimmed);
+      }
+    }
+    const query = params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+    persistFiltersFromHref("jira-analytics", href);
+    router.push(href);
+  }
+
   return (
     <section className="ui-card space-y-3 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -51,7 +75,7 @@ export function DashboardFilters({
           Período → throughput / lead / reopen. Aging e WIP usam snapshot atual.
         </p>
       </div>
-      <form className="flex flex-wrap items-end gap-3" method="get">
+      <form className="flex flex-wrap items-end gap-3" onSubmit={onSubmit}>
         <label className="ui-field">
           <span className="ui-label">Integração</span>
           <select

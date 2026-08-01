@@ -1,5 +1,7 @@
 "use client";
 
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import type { FilterScope } from "@/lib/filters/persist";
 import { TEAM_FILTER_PARAM } from "@/lib/teams/team-filter";
 import type { Team } from "@/types/team";
 import { useRouter } from "next/navigation";
@@ -12,6 +14,7 @@ type GestorTeamFilterProps = {
   preservedParams?: Record<string, string | undefined>;
   /** Compact control for FilterBar. */
   embedded?: boolean;
+  persistScope?: FilterScope;
 };
 
 function buildHref(
@@ -38,6 +41,7 @@ export function GestorTeamFilter({
   selectedTeamId,
   preservedParams,
   embedded = false,
+  persistScope,
 }: GestorTeamFilterProps) {
   const router = useRouter();
   const value = selectedTeamId ?? "";
@@ -49,7 +53,11 @@ export function GestorTeamFilter({
       value={value}
       onChange={(event) => {
         const next = event.target.value.trim() || null;
-        router.push(buildHref(basePath, next, preservedParams));
+        const href = buildHref(basePath, next, preservedParams);
+        if (persistScope) {
+          persistFiltersFromHref(persistScope, href);
+        }
+        router.push(href);
       }}
       className={embedded ? "ui-select w-full min-w-0" : "ui-select max-w-xl"}
       aria-label="Time"

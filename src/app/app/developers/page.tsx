@@ -1,5 +1,6 @@
 import { AccessStatusBadge } from "@/components/access-status-badge";
 import { AdminToolbar } from "@/components/admin-toolbar";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { DataTable, EmptyState } from "@/components/surface";
 import { ListPagination } from "@/components/list-pagination";
 import { ListSearchForm } from "@/components/list-search-form";
@@ -15,6 +16,7 @@ import {
   type ActiveListFilter,
   type JiraAccountListFilter,
 } from "@/lib/admin-list-query";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
   formatAccessDate,
   resolveDevelopersAccessInfoMap,
@@ -71,6 +73,11 @@ export default async function DevelopersAdminPage({
 }: DevelopersAdminPageProps) {
   await requireTeamAccess();
   const params = await searchParams;
+  await restorePersistedFiltersOrRedirect({
+    scope: "admin-developers",
+    pathname: "/app/developers",
+    searchParams: params,
+  });
   const query = parseAdminListQuery(params, { pageSize: 20 });
 
   const listHrefInput = {
@@ -133,6 +140,18 @@ export default async function DevelopersAdminPage({
 
   return (
     <PageShell size="full">
+      <FilterPersistenceSync
+        scope="admin-developers"
+        params={{
+          teamId: query.teamParam || undefined,
+          active:
+            query.activeFilter !== "all" ? query.activeFilter : undefined,
+          jiraId:
+            query.jiraAccountFilter !== "all"
+              ? query.jiraAccountFilter
+              : undefined,
+        }}
+      />
       <PageHeader
         eyebrow="Cadastro"
         title="Developers"
@@ -151,7 +170,11 @@ export default async function DevelopersAdminPage({
             <p className="text-sm text-muted-foreground">Carregando filtro…</p>
           }
         >
-          <TeamFilterForm teams={teams} defaultTeamId={query.teamParam} />
+          <TeamFilterForm
+            teams={teams}
+            defaultTeamId={query.teamParam}
+            persistScope="admin-developers"
+          />
         </Suspense>
         <Suspense
           fallback={

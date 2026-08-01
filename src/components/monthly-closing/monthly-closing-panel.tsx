@@ -33,6 +33,8 @@ export function MonthlyClosingStatusBadge({
           "border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-100",
         status === "in_review" &&
           "border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-100",
+        status === "rejected" &&
+          "border-rose-500/45 bg-rose-500/15 text-rose-950 dark:text-rose-100",
         status === "closed" &&
           "border-violet-500/40 bg-violet-500/15 text-violet-950 dark:text-violet-100",
         status === "finalized" &&
@@ -141,6 +143,7 @@ export function MonthlyClosingControls({
 }: MonthlyClosingControlsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [resubmissionNotes, setResubmissionNotes] = useState("");
   const [pending, startTransition] = useTransition();
   const status: MonthlyClosingStatus = closing?.status ?? "open";
   const started = closing != null && closing.started_at != null;
@@ -172,7 +175,7 @@ export function MonthlyClosingControls({
     });
   }
 
-  function submitClosing() {
+  function submitClosing(developerResubmissionNotes?: string) {
     if (!closing || !importId) {
       return;
     }
@@ -182,24 +185,27 @@ export function MonthlyClosingControls({
         closingId: closing.id,
         importId,
         sourceMode,
+        developerResubmissionNotes,
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      setResubmissionNotes("");
       router.refresh();
     });
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
-      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+    <div className="flex w-full max-w-xl flex-col gap-2 lg:max-w-none lg:items-end">
+      <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
         <MonthlyClosingStatusBadge status={status} />
         <span className="text-xs text-muted-foreground">
           {formatYearMonthLabel(yearMonth)}
         </span>
       </div>
 
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start lg:justify-end">
       {status === "open" && !started ? (
         <button
           type="button"
@@ -220,7 +226,7 @@ export function MonthlyClosingControls({
       {status === "open" && started ? (
         <button
           type="button"
-          onClick={submitClosing}
+          onClick={() => submitClosing()}
           disabled={pending || !canSubmit || !importId}
           className="ui-btn-primary"
           title={
@@ -234,7 +240,62 @@ export function MonthlyClosingControls({
         </button>
       ) : null}
 
-      {status === "open" && started && blockingCount > 0 ? (
+      {status === "rejected" && closing ? (
+        <div className="w-full space-y-2 rounded-[var(--radius-sm)] border border-rose-500/40 bg-rose-500/10 p-3 text-left">
+          <p className="text-sm font-semibold text-rose-950 dark:text-rose-100">
+            Fechamento devolvido pelo gestor
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Ajuste o necessário (inclusive no Jira, se precisar) e reenvie com
+            uma resposta.
+          </p>
+          {closing.manager_rejection_notes ? (
+            <div className="rounded-[var(--radius-sm)] border border-border bg-[var(--surface)] px-2.5 py-2">
+              <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Observação do gestor
+              </p>
+              <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">
+                {closing.manager_rejection_notes}
+              </p>
+              {closing.manager_rejected_at ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <label className="block space-y-1 text-xs">
+            <span className="font-semibold">Sua resposta (obrigatória)</span>
+            <textarea
+              value={resubmissionNotes}
+              onChange={(event) => setResubmissionNotes(event.target.value)}
+              rows={3}
+              placeholder="Explique o ajuste feito / justificativa do reenvio…"
+              className="ui-textarea min-h-[4.5rem] text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => submitClosing(resubmissionNotes)}
+            disabled={
+              pending || !canSubmit || !importId || !resubmissionNotes.trim()
+            }
+            className="ui-btn-primary w-full sm:w-auto"
+            title={
+              !canSubmit
+                ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
+                : undefined
+            }
+          >
+            {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            Reenviar para análise
+          </button>
+        </div>
+      ) : null}
+
+      {(status === "open" || status === "rejected") &&
+      started &&
+      blockingCount > 0 ? (
         <p className="max-w-[18rem] text-xs text-warning text-pretty sm:text-right">
           {blockingCount} card(s) bloqueiam o envio.
         </p>
@@ -263,6 +324,7 @@ export function MonthlyClosingControls({
           {error}
         </p>
       ) : null}
+      </div>
     </div>
   );
 }
@@ -284,6 +346,7 @@ export function MonthlyClosingAuditSection({
   const status = closing.status;
   const show =
     status === "open" ||
+    status === "rejected" ||
     status === "in_review" ||
     status === "closed" ||
     status === "finalized";
@@ -295,8 +358,8 @@ export function MonthlyClosingAuditSection({
     <SectionShell
       title="Auditoria do fechamento"
       description={
-        status === "open"
-          ? "Revise todos os cards entregues no mês antes de enviar ao gestor."
+        status === "open" || status === "rejected"
+          ? "Revise os cards entregues no mês. Após ajustes (inclusive no Jira), reenvie ao gestor."
           : "Base congelada no envio ao gestor (snapshot)."
       }
     >

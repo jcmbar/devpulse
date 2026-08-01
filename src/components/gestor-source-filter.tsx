@@ -1,6 +1,8 @@
 "use client";
 
 import { FormField } from "@/components/ui/form";
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import type { FilterScope } from "@/lib/filters/persist";
 import {
   COMPILADO_SOURCE_MODES,
   compiladoSourceModeLabel,
@@ -14,6 +16,7 @@ type GestorSourceFilterProps = {
   preservedParams?: Record<string, string | undefined>;
   /** Compact control for FilterBar (no card / helper copy). */
   embedded?: boolean;
+  persistScope?: FilterScope;
 };
 
 function buildHref(
@@ -39,6 +42,7 @@ export function GestorSourceFilter({
   selected,
   preservedParams,
   embedded = false,
+  persistScope,
 }: GestorSourceFilterProps) {
   const router = useRouter();
 
@@ -49,7 +53,11 @@ export function GestorSourceFilter({
       value={selected}
       onChange={(event) => {
         const next = event.target.value as CompiladoSourceMode;
-        router.push(buildHref(basePath, next, preservedParams));
+        const href = buildHref(basePath, next, preservedParams);
+        if (persistScope) {
+          persistFiltersFromHref(persistScope, href);
+        }
+        router.push(href);
       }}
       className={embedded ? "ui-select w-full min-w-0" : "ui-select max-w-xl"}
       aria-label="Modo de fonte"

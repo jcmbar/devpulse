@@ -1,6 +1,8 @@
 "use client";
 
 import { FormField } from "@/components/ui/form";
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import type { FilterScope } from "@/lib/filters/persist";
 import { useRouter } from "next/navigation";
 import type { ImportBatchOption } from "@/types/import-period";
 
@@ -12,6 +14,7 @@ type ImportBatchSelectorProps = {
   preservedParams?: Record<string, string | undefined>;
   /** Compact control for FilterBar. */
   embedded?: boolean;
+  persistScope?: FilterScope;
 };
 
 function formatBatchLabel(batch: ImportBatchOption): string {
@@ -53,6 +56,7 @@ export function ImportBatchSelector({
   basePath,
   preservedParams,
   embedded = false,
+  persistScope,
 }: ImportBatchSelectorProps) {
   const router = useRouter();
 
@@ -71,7 +75,11 @@ export function ImportBatchSelector({
       value={selectedImportId ?? ""}
       onChange={(event) => {
         const value = event.target.value || null;
-        router.push(buildHref(basePath, value, preservedParams));
+        const href = buildHref(basePath, value, preservedParams);
+        if (persistScope) {
+          persistFiltersFromHref(persistScope, href);
+        }
+        router.push(href);
       }}
       className={
         embedded ? "ui-select w-full min-w-0 max-w-full" : "ui-select max-w-xl"

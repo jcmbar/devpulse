@@ -106,7 +106,7 @@ export function GestorClosingsInReviewSection({
                       className="text-sm font-medium text-brand underline-offset-4 hover:underline"
                     >
                       {row.status === "in_review"
-                        ? "Revisar / aprovar"
+                        ? "Revisar / decidir"
                         : "Validar / finalizar"}
                     </Link>
                   </td>

@@ -1,6 +1,8 @@
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { JiraAdminPanel } from "@/app/app/jira/jira-admin-panel";
 import {
   countIssueFlowMetrics,
@@ -26,6 +28,11 @@ type PageProps = {
 export default async function JiraIntegrationsPage({ searchParams }: PageProps) {
   await requireTeamAccess();
   const params = searchParams ? await searchParams : {};
+  await restorePersistedFiltersOrRedirect({
+    scope: "jira-admin",
+    pathname: "/app/jira",
+    searchParams: params,
+  });
 
   const [teams, integrations] = await Promise.all([
     listTeamsAdmin(),
@@ -76,6 +83,13 @@ export default async function JiraIntegrationsPage({ searchParams }: PageProps) 
 
   return (
     <PageShell>
+      <FilterPersistenceSync
+        scope="jira-admin"
+        params={{
+          teamId: selectedTeam?.id,
+          integrationId: selected?.id,
+        }}
+      />
       <PageHeader
         title="Jira"
         description="Fonte da verdade da integração: conexão, sync, mapeamentos e analytics. Times cuidam só da organização e do prefixo de imports."

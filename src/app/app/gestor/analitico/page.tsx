@@ -2,11 +2,13 @@ import Link from "next/link";
 import { AnalyticalBaseView } from "@/components/gestor/analytical-base-view";
 import { CompiladoDateFilter } from "@/components/compilado-date-filter";
 import { CompiladoProvenanceBadge } from "@/components/compilado-provenance-badge";
+import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { GestorSourceFilter } from "@/components/gestor-source-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
   formatDateRangeLabel,
   resolveCompiladoDateRange,
@@ -44,6 +46,11 @@ function parseClassification(
 export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
   await requireTeamAccess();
   const params = await searchParams;
+  await restorePersistedFiltersOrRedirect({
+    scope: "gestor-analitico",
+    pathname: "/app/gestor/analitico",
+    searchParams: params,
+  });
   const dataSource = parseCompiladoSourceMode(params.source);
 
   const seed = await resolveCompiladoSnapshot({
@@ -101,6 +108,16 @@ export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
 
   return (
     <PageShell size="full">
+      <FilterPersistenceSync
+        scope="gestor-analitico"
+        params={{
+          source: sourceParam,
+          month:
+            dateRange.mode === "month" ? (dateRange.month ?? undefined) : undefined,
+          from: dateRange.mode === "custom" ? dateRange.start : undefined,
+          to: dateRange.mode === "custom" ? dateRange.end : undefined,
+        }}
+      />
       <PageHeader
         eyebrow="Operação · Gestor"
         title="Visão analítica"
@@ -138,6 +155,7 @@ export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
           class: preservedWithSource.class,
           q: preservedWithSource.q,
         }}
+        persistScope="gestor-analitico"
       />
 
       {base.provenance ? (
@@ -166,6 +184,7 @@ export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
           class: preservedWithSource.class,
           q: preservedWithSource.q,
         }}
+        persistScope="gestor-analitico"
       />
 
       <CompiladoDateFilter
@@ -180,6 +199,7 @@ export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
           class: preservedWithSource.class,
           q: preservedWithSource.q,
         }}
+        persistScope="gestor-analitico"
       />
 
       {base.selectedBatch == null ? (

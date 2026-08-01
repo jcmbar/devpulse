@@ -1,6 +1,8 @@
 "use client";
 
 import { TeamSelect } from "@/components/team-select";
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import type { FilterScope } from "@/lib/filters/persist";
 import { patchAdminListSearchParams } from "@/lib/admin-list-query";
 import {
   TEAM_FILTER_PARAM,
@@ -16,6 +18,7 @@ type TeamFilterFormProps = {
   defaultTeamId?: string | null;
   includeUnassigned?: boolean;
   className?: string;
+  persistScope?: FilterScope;
 };
 
 export function TeamFilterForm({
@@ -23,6 +26,7 @@ export function TeamFilterForm({
   defaultTeamId = "",
   includeUnassigned = true,
   className = "flex flex-wrap items-end gap-3",
+  persistScope,
 }: TeamFilterFormProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -36,8 +40,12 @@ export function TeamFilterForm({
       resetPage: true,
     });
     const query = params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+    if (persistScope) {
+      persistFiltersFromHref(persistScope, href);
+    }
     startTransition(() => {
-      router.push(query ? `${pathname}?${query}` : pathname);
+      router.push(href);
     });
   }
 

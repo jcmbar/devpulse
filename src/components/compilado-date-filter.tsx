@@ -1,6 +1,8 @@
 "use client";
 
 import { FormField, FormSectionHeader } from "@/components/ui/form";
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
+import type { FilterScope } from "@/lib/filters/persist";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -18,6 +20,8 @@ type CompiladoDateFilterProps = {
   preservedParams?: Record<string, string | undefined>;
   /** When true, drop outer card chrome (parent already provides FilterBar). */
   embedded?: boolean;
+  /** Persist last-used filters for this surface. */
+  persistScope?: FilterScope;
 };
 
 export function CompiladoDateFilter({
@@ -27,6 +31,7 @@ export function CompiladoDateFilter({
   monthOptions,
   preservedParams,
   embedded = false,
+  persistScope,
 }: CompiladoDateFilterProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"month" | "custom">(activeRange.mode);
@@ -46,7 +51,11 @@ export function CompiladoDateFilter({
       }
     }
     const query = next.toString();
-    router.push(query ? `${basePath}?${query}` : basePath);
+    const href = query ? `${basePath}?${query}` : basePath;
+    if (persistScope) {
+      persistFiltersFromHref(persistScope, href);
+    }
+    router.push(href);
   }
 
   function applyMonth(event: FormEvent<HTMLFormElement>) {

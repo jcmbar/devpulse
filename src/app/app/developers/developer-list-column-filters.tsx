@@ -5,6 +5,7 @@ import {
   type JiraAccountListFilter,
   patchAdminListSearchParams,
 } from "@/lib/admin-list-query";
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
@@ -91,8 +92,10 @@ export function DeveloperListColumnFilters({
       resetPage: true,
     });
     const query = params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+    persistFiltersFromHref("admin-developers", href);
     startTransition(() => {
-      router.push(query ? `${pathname}?${query}` : pathname);
+      router.push(href);
     });
   }
 

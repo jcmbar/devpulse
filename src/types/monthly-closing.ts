@@ -1,6 +1,7 @@
 export type MonthlyClosingStatus =
   | "open"
   | "in_review"
+  | "rejected"
   | "closed"
   | "finalized";
 
@@ -9,6 +10,8 @@ export type MonthlyClosingEventType =
   | "snapshot_generated"
   | "submitted_for_review"
   | "manager_approved"
+  | "manager_rejected"
+  | "developer_resubmitted"
   | "invoice_note_updated"
   | "invoice_uploaded"
   | "boleto_uploaded"
@@ -36,6 +39,12 @@ export type MonthlyClosing = {
   manager_approved_by_user_id: string | null;
   finalized_by_user_id: string | null;
   manager_invoice_notes: string | null;
+  manager_rejection_notes: string | null;
+  manager_rejected_at: string | null;
+  manager_rejected_by_user_id: string | null;
+  developer_resubmission_notes: string | null;
+  resubmitted_at: string | null;
+  resubmitted_by_user_id: string | null;
   jira_changed_after_finalized: boolean;
   jira_changed_after_finalized_at: string | null;
   created_at: string;
@@ -136,6 +145,8 @@ export function monthlyClosingStatusLabel(
       return "Aberto";
     case "in_review":
       return "Em fechamento";
+    case "rejected":
+      return "Ajuste necessário";
     case "closed":
       return "Fechado";
     case "finalized":
