@@ -10,6 +10,7 @@ import {
   unlinkDeveloperProfileAction,
   type DeveloperFormState,
 } from "@/app/app/developers/actions";
+import { getRoleLabel } from "@/lib/auth/role-labels";
 import type { Profile } from "@/types/profile";
 
 const initialState: DeveloperFormState = { error: null };
@@ -71,11 +72,11 @@ export function ProfileLinkPanel({
   return (
     <div className="space-y-5">
       {linkedProfile ? (
-        <div className="ui-card space-y-3 px-4 py-3 text-sm">
+        <div className="space-y-3 text-sm">
           <p className="font-medium">Profile vinculado</p>
           <p>
             {linkedProfile.full_name ?? "Sem nome"} · {linkedProfile.email} ·{" "}
-            {linkedProfile.role}
+            {getRoleLabel(linkedProfile.role)}
           </p>
           <DestructiveAction
             variant="panel"
@@ -154,7 +155,7 @@ export function ProfileLinkPanel({
                   </span>
                   <br />
                   <span className="text-muted-foreground">
-                    {profile.email} · {profile.role}
+                    {profile.email} · {getRoleLabel(profile.role)}
                   </span>
                 </span>
               </label>

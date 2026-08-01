@@ -14,7 +14,7 @@ export function DeveloperAccessSummary({
   const formattedDate = formatAccessDate(access.relevantAt);
 
   return (
-    <div className="space-y-3 rounded-md border border-border px-4 py-3">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         <AccessStatusBadge
           kind={access.kind}

@@ -29,13 +29,13 @@ export function DeveloperForm({ mode, developer, teams }: DeveloperFormProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="ui-dashboard-panel space-y-5">
       {mode === "edit" && developer ? (
         <input type="hidden" name="developerId" value={developer.id} />
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Nome" htmlFor="fullName" className="sm:col-span-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <FormField label="Nome" htmlFor="fullName" className="sm:col-span-2 lg:col-span-3">
           <input
             id="fullName"
             name="fullName"
@@ -65,69 +65,68 @@ export function DeveloperForm({ mode, developer, teams }: DeveloperFormProps) {
             className="ui-input"
           />
         </FormField>
+
+        <FormField
+          label="Time"
+          htmlFor="teamId"
+          hint="team_id estruturado; código auxiliar sincroniza feriados de escopo time."
+        >
+          <TeamSelect
+            id="teamId"
+            name="teamId"
+            teams={teams}
+            defaultValue={developer?.team_id ?? ""}
+            includeEmpty
+            emptyLabel="Sem time"
+          />
+        </FormField>
+
+        <FormField label="Estado" htmlFor="stateCode">
+          <input
+            id="stateCode"
+            name="stateCode"
+            type="text"
+            placeholder="BR-SP"
+            defaultValue={developer?.state_code ?? ""}
+            className="ui-input"
+          />
+        </FormField>
+
+        <FormField label="Cidade" htmlFor="cityCode">
+          <input
+            id="cityCode"
+            name="cityCode"
+            type="text"
+            placeholder="BR-SP-SAO_PAULO"
+            defaultValue={developer?.city_code ?? ""}
+            className="ui-input"
+          />
+        </FormField>
       </div>
 
-      <FormField
-        label="Time"
-        htmlFor="teamId"
-        hint="Vínculo estruturado via team_id. O código auxiliar sincroniza com teams.code para feriados de escopo time."
-      >
-        <TeamSelect
-          id="teamId"
-          name="teamId"
-          teams={teams}
-          defaultValue={developer?.team_id ?? ""}
-          includeEmpty
-          emptyLabel="Sem time"
-        />
-      </FormField>
+      <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <FormCheck>
+          <input
+            type="checkbox"
+            name="isActive"
+            defaultChecked={developer?.is_active ?? true}
+            className="ui-checkbox mt-0.5"
+          />
+          <span>Developer ativo</span>
+        </FormCheck>
 
-      <fieldset className="ui-fieldset">
-        <legend className="ui-legend">Localidade</legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Estado" htmlFor="stateCode">
-            <input
-              id="stateCode"
-              name="stateCode"
-              type="text"
-              placeholder="BR-SP"
-              defaultValue={developer?.state_code ?? ""}
-              className="ui-input"
-            />
-          </FormField>
-          <FormField label="Cidade" htmlFor="cityCode">
-            <input
-              id="cityCode"
-              name="cityCode"
-              type="text"
-              placeholder="BR-SP-SAO_PAULO"
-              defaultValue={developer?.city_code ?? ""}
-              className="ui-input"
-            />
-          </FormField>
+        <div className="flex min-w-0 flex-col gap-2 sm:items-end">
+          <FormFeedback error={state.error} />
+          <FormActions
+            primary={{
+              label:
+                mode === "create" ? "Cadastrar developer" : "Salvar alterações",
+              loadingLabel: "Salvando...",
+              pending: isPending,
+            }}
+          />
         </div>
-      </fieldset>
-
-      <FormCheck>
-        <input
-          type="checkbox"
-          name="isActive"
-          defaultChecked={developer?.is_active ?? true}
-          className="ui-checkbox mt-0.5"
-        />
-        <span>Developer ativo</span>
-      </FormCheck>
-
-      <FormFeedback error={state.error} />
-
-      <FormActions
-        primary={{
-          label:
-            mode === "create" ? "Cadastrar developer" : "Salvar alterações",
-          loadingLabel: "Salvando...",
-          pending: isPending,
-        }}
-      />
+      </div>
     </form>
   );
 }

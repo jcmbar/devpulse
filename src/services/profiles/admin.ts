@@ -61,3 +61,24 @@ export async function getProfileByIdAdmin(
 
   return data;
 }
+
+/** Updates only `profiles.role` (login privileges), not developer productivity fields. */
+export async function updateProfileRoleAdmin(input: {
+  profileId: string;
+  role: UserRole;
+}): Promise<Profile> {
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("profiles")
+    .update({ role: input.role })
+    .eq("id", input.profileId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update profile role: ${error.message}`);
+  }
+
+  return data;
+}

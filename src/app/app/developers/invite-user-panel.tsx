@@ -24,12 +24,15 @@ type InviteUserPanelProps = {
   developerId: string;
   developerEmail: string | null;
   developerFullName: string | null;
+  /** Skip internal title when wrapped by SectionShell. */
+  embedded?: boolean;
 };
 
 export function InviteUserPanel({
   developerId,
   developerEmail,
   developerFullName,
+  embedded = false,
 }: InviteUserPanelProps) {
   const router = useRouter();
   const emailsMatchDefault = Boolean(developerEmail);
@@ -53,7 +56,7 @@ export function InviteUserPanel({
   }, [developerEmail]);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-4">
       <input type="hidden" name="developerId" value={developerId} />
       <input
         type="hidden"
@@ -61,55 +64,63 @@ export function InviteUserPanel({
         value={developerEmail ?? ""}
       />
 
-      <FormSectionHeader
-        title="Convidar usuário de acesso"
-        description={
-          <>
-            <p>{helper}</p>
-            <p className="mt-1">
-              O convidado define a senha em `/set-password` ao abrir o link do
-              e-mail.
-            </p>
-          </>
-        }
-      />
-
-      <FormField label="E-mail" htmlFor="inviteEmail">
-        <input
-          id="inviteEmail"
-          name="email"
-          type="email"
-          required
-          defaultValue={developerEmail ?? ""}
-          className="ui-input"
+      {embedded ? (
+        <p className="text-sm text-muted-foreground">
+          {helper} O convidado define a senha em `/set-password`.
+        </p>
+      ) : (
+        <FormSectionHeader
+          title="Convidar usuário de acesso"
+          description={
+            <>
+              <p>{helper}</p>
+              <p className="mt-1">
+                O convidado define a senha em `/set-password` ao abrir o link do
+                e-mail.
+              </p>
+            </>
+          }
         />
-      </FormField>
+      )}
 
-      <FormField label="Nome" htmlFor="inviteFullName">
-        <input
-          id="inviteFullName"
-          name="fullName"
-          type="text"
-          required
-          defaultValue={developerFullName ?? ""}
-          className="ui-input"
-        />
-      </FormField>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField label="E-mail" htmlFor="inviteEmail">
+          <input
+            id="inviteEmail"
+            name="email"
+            type="email"
+            required
+            defaultValue={developerEmail ?? ""}
+            className="ui-input"
+          />
+        </FormField>
 
-      <FormField label="Role inicial" htmlFor="inviteRole">
-        <select
-          id="inviteRole"
-          name="role"
-          defaultValue="dev"
-          className="ui-select"
-        >
-          {ROLE_OPTIONS.map((role) => (
-            <option key={role} value={role}>
-              {getRoleLabel(role)}
-            </option>
-          ))}
-        </select>
-      </FormField>
+        <FormField label="Nome" htmlFor="inviteFullName">
+          <input
+            id="inviteFullName"
+            name="fullName"
+            type="text"
+            required
+            defaultValue={developerFullName ?? ""}
+            className="ui-input"
+          />
+        </FormField>
+
+        <FormField label="Role inicial" htmlFor="inviteRole">
+          <select
+            id="inviteRole"
+            name="role"
+            defaultValue="dev"
+            className="ui-select"
+          >
+            {ROLE_OPTIONS.map((role) => (
+              <option key={role} value={role}>
+                {getRoleLabel(role)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      </div>
 
       <FormCheck>
         <input

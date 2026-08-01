@@ -11,6 +11,7 @@ import { inviteAccessUser } from "@/services/auth/invite-user";
 import { resendAccessInvite } from "@/services/auth/resend-invite";
 import {
   createDeveloperAdmin,
+  getDeveloperAdmin,
   linkDeveloperProfileAdmin,
   patchDeveloperListFieldsAdmin,
   searchProfilesAdmin,
@@ -22,7 +23,10 @@ import {
   lookupAndFillDeveloperJiraAccount,
   type JiraAccountLookupResult,
 } from "@/services/developers/jira-account-lookup";
-import { isUserRole } from "@/services/profiles/admin";
+import {
+  isUserRole,
+  updateProfileRoleAdmin,
+} from "@/services/profiles/admin";
 import type { Profile } from "@/types/profile";
 
 export type DeveloperFormState = {
@@ -30,6 +34,11 @@ export type DeveloperFormState = {
 };
 
 export type InviteUserFormState = {
+  error: string | null;
+  success: string | null;
+};
+
+export type AccessRoleFormState = {
   error: string | null;
   success: string | null;
 };
@@ -348,6 +357,68 @@ export async function unlinkDeveloperProfileAction(
         error instanceof Error
           ? error.message
           : "Não foi possível desvincular o profile.",
+    };
+  }
+}
+
+/** Updates login privileges (`profiles.role`) for the developer’s linked profile. */
+export async function updateDeveloperAccessRoleAction(
+  _prev: AccessRoleFormState,
+  formData: FormData,
+): Promise<AccessRoleFormState> {
+  const context = await requireTeamAccess();
+
+  const developerId = String(formData.get("developerId") ?? "").trim();
+  const roleRaw = String(formData.get("role") ?? "").trim();
+
+  if (!developerId) {
+    return { error: "Developer inválido.", success: null };
+  }
+
+  if (!isUserRole(roleRaw)) {
+    return { error: "Role inválida.", success: null };
+  }
+
+  try {
+    const developer = await getDeveloperAdmin(developerId);
+    if (!developer?.profile) {
+      return {
+        error:
+          "Vincule um profile antes de alterar privilégios de acesso.",
+        success: null,
+      };
+    }
+
+    if (
+      developer.profile.id === context.user.id &&
+      developer.profile.role === "admin" &&
+      roleRaw !== "admin"
+    ) {
+      return {
+        error:
+          "Você não pode remover o próprio privilégio de administrador.",
+        success: null,
+      };
+    }
+
+    await updateProfileRoleAdmin({
+      profileId: developer.profile.id,
+      role: roleRaw,
+    });
+
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${developerId}`);
+    return {
+      error: null,
+      success: "Privilégios de acesso atualizados.",
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar os privilégios.",
+      success: null,
     };
   }
 }
