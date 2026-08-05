@@ -24,6 +24,7 @@ import {
 } from "@/services/auth/developer-access";
 import { listDevelopersAdminPaged } from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
+import { getJobTitleLabel } from "@/types/developer-compensation";
 import { Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -196,12 +197,12 @@ export default async function DevelopersAdminPage({
       />
       <PageHeader
         eyebrow="Cadastro"
-        title="Developers"
-        description="Gerencie o cadastro do time: filtros à esquerda, edição rápida na lista e detalhes completos em Editar."
+        title="Pessoas"
+        description="Gerencie o cadastro do time: filtros à esquerda, edição rápida na lista e detalhes (dados, acesso e valores) em Editar."
         actions={
           <Link href="/app/developers/new" className="ui-btn-primary">
             <Plus className="size-3.5" strokeWidth={2} />
-            Novo developer
+            Nova pessoa
           </Link>
         }
       />
@@ -280,11 +281,11 @@ export default async function DevelopersAdminPage({
             activeFilter: query.activeFilter,
             jiraAccountFilter: query.jiraAccountFilter,
           })}
-          description="Ajuste filtros, limpe a busca ou cadastre um novo developer."
+          description="Ajuste filtros, limpe a busca ou cadastre uma nova pessoa."
           action={
             <Link href="/app/developers/new" className="ui-btn-primary">
               <Plus className="size-3.5" strokeWidth={2} />
-              Novo developer
+              Nova pessoa
             </Link>
           }
         />
@@ -293,7 +294,7 @@ export default async function DevelopersAdminPage({
           title="Lista"
           description={
             <>
-              {paged.total} developer{paged.total === 1 ? "" : "s"}
+              {paged.total} pessoa{paged.total === 1 ? "" : "s"}
               {" · "}
               <span className="text-foreground">{activeFiltersLabel}</span>
               {" · "}
@@ -305,7 +306,8 @@ export default async function DevelopersAdminPage({
             <DataTable minWidthClassName="min-w-0 lg:min-w-[960px]" stickyFirstColumn>
               <thead>
                 <tr>
-                  <th>Developer</th>
+                  <th>Pessoa</th>
+                  <th className="hidden sm:table-cell">Cargo</th>
                   <th>Time</th>
                   <th>Jira Account ID</th>
                   <th>Cadastro</th>
@@ -345,6 +347,11 @@ export default async function DevelopersAdminPage({
                             </p>
                           )}
                         </div>
+                      </td>
+                      <td className="hidden sm:table-cell">
+                        <span className="text-sm text-foreground">
+                          {getJobTitleLabel(developer.job_title)}
+                        </span>
                       </td>
                       <td>
                         <DeveloperTeamInline

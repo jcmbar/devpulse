@@ -6,6 +6,10 @@ import {
 } from "@/lib/admin-list-query";
 import { resolveTeamLabel } from "@/services/teams/labels";
 import type { Developer } from "@/types/developer";
+import {
+  isDeveloperJobTitle,
+  type DeveloperJobTitle,
+} from "@/types/developer-compensation";
 import type { Profile } from "@/types/profile";
 
 export type DeveloperListItem = Developer & {
@@ -18,6 +22,7 @@ export type CreateDeveloperInput = {
   email: string | null;
   jiraAccountId: string | null;
   isActive: boolean;
+  jobTitle?: DeveloperJobTitle;
   profileId?: string | null;
   teamId?: string | null;
   stateCode?: string;
@@ -30,6 +35,7 @@ export type UpdateDeveloperInput = {
   email: string | null;
   jiraAccountId: string | null;
   isActive: boolean;
+  jobTitle: DeveloperJobTitle;
   teamId?: string | null;
   stateCode?: string;
   cityCode?: string;
@@ -64,6 +70,7 @@ function mapDeveloperRow(row: {
   email: string | null;
   jira_account_id: string | null;
   is_active: boolean;
+  job_title?: string | null;
   team_id?: string | null;
   state_code?: string | null;
   city_code?: string | null;
@@ -71,6 +78,11 @@ function mapDeveloperRow(row: {
   created_at: string;
   updated_at: string;
 }): Developer {
+  const jobRaw = String(row.job_title ?? "developer");
+  const jobTitle: DeveloperJobTitle = isDeveloperJobTitle(jobRaw)
+    ? jobRaw
+    : "developer";
+
   return {
     id: row.id,
     profile_id: row.profile_id,
@@ -78,6 +90,7 @@ function mapDeveloperRow(row: {
     email: row.email,
     jira_account_id: row.jira_account_id,
     is_active: row.is_active,
+    job_title: jobTitle,
     team_id: row.team_id ?? null,
     state_code: normalizeCode(row.state_code),
     city_code: normalizeCode(row.city_code),
@@ -293,6 +306,7 @@ export async function createDeveloperAdmin(
       email: input.email,
       jira_account_id: input.jiraAccountId,
       is_active: input.isActive,
+      job_title: input.jobTitle ?? "developer",
       profile_id: input.profileId ?? null,
       team_id: team.teamId,
       team_code: team.teamCode,
@@ -322,6 +336,7 @@ export async function updateDeveloperAdmin(
       email: input.email,
       jira_account_id: input.jiraAccountId,
       is_active: input.isActive,
+      job_title: input.jobTitle,
       team_id: team.teamId,
       team_code: team.teamCode,
       state_code: normalizeCode(input.stateCode),

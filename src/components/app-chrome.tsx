@@ -65,7 +65,7 @@ export function AppChrome({ profile, children }: AppChromeProps) {
           },
           {
             href: "/app/developers",
-            label: "Developers",
+            label: "Pessoas",
             icon: Users,
             match: (path: string) => path.startsWith("/app/developers"),
           },

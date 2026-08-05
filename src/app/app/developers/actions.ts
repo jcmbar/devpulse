@@ -18,6 +18,7 @@ import {
   searchProfilesAdmin,
   unlinkDeveloperProfileAdmin,
   updateDeveloperAdmin,
+  upsertCurrentDeveloperCompensation,
 } from "@/services/developers";
 import {
   batchLookupDeveloperJiraAccounts,
@@ -28,10 +29,19 @@ import {
   isUserRole,
   updateProfileRoleAdmin,
 } from "@/services/profiles/admin";
+import {
+  isCompensationBaseType,
+  isDeveloperJobTitle,
+} from "@/types/developer-compensation";
 import type { Profile } from "@/types/profile";
 
 export type DeveloperFormState = {
   error: string | null;
+};
+
+export type CompensationFormState = {
+  error: string | null;
+  success: string | null;
 };
 
 export type InviteUserFormState = {
@@ -49,6 +59,40 @@ function readOptionalString(formData: FormData, key: string): string | null {
   return value.length > 0 ? value : null;
 }
 
+function readJobTitle(formData: FormData) {
+  const raw = String(formData.get("jobTitle") ?? "developer").trim();
+  return isDeveloperJobTitle(raw) ? raw : null;
+}
+
+function parseNonNegativeNumber(
+  raw: string,
+  label: string,
+): { ok: true; value: number } | { ok: false; error: string } {
+  const normalized = raw.trim().replace(",", ".");
+  if (!normalized) {
+    return { ok: false, error: `Informe ${label}.` };
+  }
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) {
+    return { ok: false, error: `${label} deve ser um número ≥ 0.` };
+  }
+  return { ok: true, value };
+}
+
+function parsePositiveNumber(
+  raw: string,
+  label: string,
+): { ok: true; value: number } | { ok: false; error: string } {
+  const parsed = parseNonNegativeNumber(raw, label);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  if (parsed.value <= 0) {
+    return { ok: false, error: `${label} deve ser maior que zero.` };
+  }
+  return parsed;
+}
+
 export async function createDeveloperAction(
   _prev: DeveloperFormState,
   formData: FormData,
@@ -57,7 +101,12 @@ export async function createDeveloperAction(
 
   const fullName = String(formData.get("fullName") ?? "").trim();
   if (!fullName) {
-    return { error: "Informe o nome do developer." };
+    return { error: "Informe o nome da pessoa." };
+  }
+
+  const jobTitle = readJobTitle(formData);
+  if (!jobTitle) {
+    return { error: "Selecione um cargo válido." };
   }
 
   let developerId: string;
@@ -68,6 +117,7 @@ export async function createDeveloperAction(
       email: readOptionalString(formData, "email"),
       jiraAccountId: readOptionalString(formData, "jiraAccountId"),
       isActive: formData.get("isActive") === "on",
+      jobTitle,
       profileId: readOptionalString(formData, "profileId"),
       teamId: readOptionalString(formData, "teamId"),
       stateCode: readOptionalString(formData, "stateCode") ?? "",
@@ -79,7 +129,7 @@ export async function createDeveloperAction(
       error:
         error instanceof Error
           ? error.message
-          : "Não foi possível criar o developer.",
+          : "Não foi possível criar o cadastro.",
     };
   }
 
@@ -97,11 +147,16 @@ export async function updateDeveloperAction(
   const fullName = String(formData.get("fullName") ?? "").trim();
 
   if (!developerId) {
-    return { error: "Developer inválido." };
+    return { error: "Cadastro inválido." };
   }
 
   if (!fullName) {
-    return { error: "Informe o nome do developer." };
+    return { error: "Informe o nome da pessoa." };
+  }
+
+  const jobTitle = readJobTitle(formData);
+  if (!jobTitle) {
+    return { error: "Selecione um cargo válido." };
   }
 
   try {
@@ -111,6 +166,7 @@ export async function updateDeveloperAction(
       email: readOptionalString(formData, "email"),
       jiraAccountId: readOptionalString(formData, "jiraAccountId"),
       isActive: formData.get("isActive") === "on",
+      jobTitle,
       teamId: readOptionalString(formData, "teamId"),
       stateCode: readOptionalString(formData, "stateCode") ?? "",
       cityCode: readOptionalString(formData, "cityCode") ?? "",
@@ -124,7 +180,91 @@ export async function updateDeveloperAction(
       error:
         error instanceof Error
           ? error.message
-          : "Não foi possível atualizar o developer.",
+          : "Não foi possível atualizar o cadastro.",
+    };
+  }
+}
+
+export async function upsertDeveloperCompensationAction(
+  _prev: CompensationFormState,
+  formData: FormData,
+): Promise<CompensationFormState> {
+  await requireTeamAccess();
+
+  const developerId = String(formData.get("developerId") ?? "").trim();
+  if (!developerId) {
+    return { error: "Cadastro inválido.", success: null };
+  }
+
+  const baseTypeRaw = String(formData.get("baseType") ?? "").trim();
+  if (!isCompensationBaseType(baseTypeRaw)) {
+    return {
+      error: "Tipo do valor base deve ser Fixo ou Variável.",
+      success: null,
+    };
+  }
+
+  const baseAmount = parseNonNegativeNumber(
+    String(formData.get("baseAmount") ?? ""),
+    "o valor base contratual",
+  );
+  if (!baseAmount.ok) {
+    return { error: baseAmount.error, success: null };
+  }
+
+  const hoursDay = parsePositiveNumber(
+    String(formData.get("contractedHoursPerDay") ?? ""),
+    "as horas contratadas por dia",
+  );
+  if (!hoursDay.ok) {
+    return { error: hoursDay.error, success: null };
+  }
+
+  const hoursMonth = parsePositiveNumber(
+    String(formData.get("contractedHoursPerMonth") ?? ""),
+    "as horas contratadas por mês",
+  );
+  if (!hoursMonth.ok) {
+    return { error: hoursMonth.error, success: null };
+  }
+
+  const hourlyRaw = String(formData.get("hourlyRate") ?? "").trim();
+  let hourlyRate: number | null = null;
+  if (hourlyRaw) {
+    const parsed = parseNonNegativeNumber(hourlyRaw, "o valor por hora");
+    if (!parsed.ok) {
+      return { error: parsed.error, success: null };
+    }
+    hourlyRate = parsed.value;
+  }
+
+  const effectiveFrom =
+    readOptionalString(formData, "effectiveFrom") ?? undefined;
+  if (effectiveFrom && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
+    return { error: "Data de vigência inválida.", success: null };
+  }
+
+  try {
+    await upsertCurrentDeveloperCompensation({
+      developerId,
+      baseAmount: baseAmount.value,
+      baseType: baseTypeRaw,
+      hourlyRate,
+      contractedHoursPerDay: hoursDay.value,
+      contractedHoursPerMonth: hoursMonth.value,
+      effectiveFrom,
+      notes: readOptionalString(formData, "notes"),
+    });
+
+    revalidatePath(`/app/developers/${developerId}`);
+    return { error: null, success: "Valores salvos." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar os valores.",
+      success: null,
     };
   }
 }

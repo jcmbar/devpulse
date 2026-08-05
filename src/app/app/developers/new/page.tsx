@@ -13,14 +13,14 @@ export default async function NewDeveloperPage() {
   return (
     <PageShell size="sm">
       <PageHeader
-        title="Novo developer"
-        description="Cadastre um developer para bater com o responsável da planilha. O vínculo com profile pode ser feito depois."
+        title="Nova pessoa"
+        description="Cadastre um colaborador (desenvolvedor, analista, etc.) para bater com o responsável da planilha/Jira. O vínculo com profile e os valores podem ser feitos depois."
         breadcrumb={
           <Link
             href="/app/developers"
             className="underline-offset-4 hover:underline"
           >
-            ← Developers
+            ← Pessoas
           </Link>
         }
       />

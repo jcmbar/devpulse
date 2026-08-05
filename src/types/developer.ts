@@ -1,3 +1,5 @@
+import type { DeveloperJobTitle } from "@/types/developer-compensation";
+
 export type Developer = {
   id: string;
   profile_id: string | null;
@@ -5,6 +7,8 @@ export type Developer = {
   email: string | null;
   jira_account_id: string | null;
   is_active: boolean;
+  /** Professional job title (not profiles.role). */
+  job_title: DeveloperJobTitle;
   /** FK to teams — canonical team assignment. */
   team_id: string | null;
   /** Holiday match: synced from teams.code when team_id is set. */

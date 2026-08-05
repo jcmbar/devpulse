@@ -1,8 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHolidayCode } from "@/lib/metrics/holiday-eligibility";
 import type { Developer } from "@/types/developer";
+import {
+  isDeveloperJobTitle,
+  type DeveloperJobTitle,
+} from "@/types/developer-compensation";
 
 function coerceDeveloper(row: Record<string, unknown>): Developer {
+  const jobRaw = String(row.job_title ?? "developer");
+  const jobTitle: DeveloperJobTitle = isDeveloperJobTitle(jobRaw)
+    ? jobRaw
+    : "developer";
+
   return {
     id: String(row.id),
     profile_id: (row.profile_id as string | null) ?? null,
@@ -10,6 +19,7 @@ function coerceDeveloper(row: Record<string, unknown>): Developer {
     email: (row.email as string | null) ?? null,
     jira_account_id: (row.jira_account_id as string | null) ?? null,
     is_active: Boolean(row.is_active),
+    job_title: jobTitle,
     team_id: (row.team_id as string | null) ?? null,
     state_code: normalizeHolidayCode(row.state_code as string | null),
     city_code: normalizeHolidayCode(row.city_code as string | null),
@@ -125,6 +135,11 @@ export {
   unlinkDeveloperProfileAdmin,
   updateDeveloperAdmin,
 } from "./admin";
+
+export {
+  getCurrentDeveloperCompensation,
+  upsertCurrentDeveloperCompensation,
+} from "./compensation";
 
 export type {
   CreateDeveloperInput,

@@ -14,6 +14,10 @@ import {
   type DeveloperFormState,
 } from "@/app/app/developers/actions";
 import type { DeveloperListItem } from "@/services/developers";
+import {
+  DEVELOPER_JOB_TITLES,
+  DEVELOPER_JOB_TITLE_LABELS,
+} from "@/types/developer-compensation";
 import type { Team } from "@/types/team";
 
 const initialState: DeveloperFormState = { error: null };
@@ -54,6 +58,26 @@ export function DeveloperForm({ mode, developer, teams }: DeveloperFormProps) {
             defaultValue={developer?.email ?? ""}
             className="ui-input"
           />
+        </FormField>
+
+        <FormField
+          label="Cargo / Função"
+          htmlFor="jobTitle"
+          hint="Perfil profissional (não é o privilégio de acesso)."
+        >
+          <select
+            id="jobTitle"
+            name="jobTitle"
+            className="ui-select"
+            defaultValue={developer?.job_title ?? "developer"}
+            required
+          >
+            {DEVELOPER_JOB_TITLES.map((title) => (
+              <option key={title} value={title}>
+                {DEVELOPER_JOB_TITLE_LABELS[title]}
+              </option>
+            ))}
+          </select>
         </FormField>
 
         <FormField label="Jira Account ID (opcional)" htmlFor="jiraAccountId">
@@ -112,7 +136,7 @@ export function DeveloperForm({ mode, developer, teams }: DeveloperFormProps) {
             defaultChecked={developer?.is_active ?? true}
             className="ui-checkbox mt-0.5"
           />
-          <span>Developer ativo</span>
+          <span>Cadastro ativo</span>
         </FormCheck>
 
         <div className="flex min-w-0 flex-col gap-2 sm:items-end">
@@ -120,7 +144,7 @@ export function DeveloperForm({ mode, developer, teams }: DeveloperFormProps) {
           <FormActions
             primary={{
               label:
-                mode === "create" ? "Cadastrar developer" : "Salvar alterações",
+                mode === "create" ? "Cadastrar pessoa" : "Salvar alterações",
               loadingLabel: "Salvando...",
               pending: isPending,
             }}
