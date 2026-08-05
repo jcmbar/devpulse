@@ -11,8 +11,8 @@ Escopo: cards com **Entrega p/ Teste Unitário** (`unit_test_delivery_on`) no pe
 | Símbolo | Nome | Definição |
 |--------|------|-----------|
 | **C** | Cards | Total de cards com `unit_test_delivery_on` no período (lote ativo). |
-| **N** | No prazo | Cards com `unit_test_delivery_on ≤ due_on`. |
-| **A_b** | Atraso bruto | Cards com `unit_test_delivery_on > due_on`. |
+| **N** | No prazo | Cards com `delay_days = 0`. |
+| **A_b** | Atraso bruto | Cards com `delay_days > 0`. |
 | **A_a** | Atraso acatado | Subconjunto de A_b com justificativa `accepted` no mesmo `import_id`. |
 | **A_l** | Atraso líquido | `A_b − A_a` (o que o painel/ranking exibe como Atraso). |
 | **R** | Retrabalho | Soma dos **pesos** de retrabalho detectados via category/labels (`detectRework`): Retrabalho = 1, 2x = 2, 3x = 3, … |
@@ -22,6 +22,11 @@ Escopo: cards com **Entrega p/ Teste Unitário** (`unit_test_delivery_on`) no pe
 | **I** | Índice de Entrega | Qualidade ponderada pelo volume |
 
 Cards sem `due_on` (ou sem Entrega TU) entram em **C**, mas **não** em N nem em A_b.
+
+`delay_days` é o atraso em **dias úteis** (`NETWORKDAYS.INTL` entre `due_on` e
+`unit_test_delivery_on`, com piso em 0). Entrega no fim de semana logo após o
+prazo não acrescenta dia útil, então conta como **No prazo** — a classificação e
+a coluna “Atraso (d)” usam sempre o mesmo número.
 
 ---
 

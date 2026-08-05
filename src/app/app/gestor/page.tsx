@@ -697,7 +697,7 @@ export default async function GestorDashboardPage({
                       className="hidden lg:table-cell"
                       title="Realizado (time spent) / Previsto (estimate_hours). Diff = realizado − previsto."
                     >
-                      Previsto × Realizado
+                      Realizado × Previsto
                     </th>
                   </tr>
                 </thead>

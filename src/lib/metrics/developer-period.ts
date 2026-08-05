@@ -1,3 +1,4 @@
+import { computeDeliveryDelayDays } from "@/lib/metrics/business-days";
 import type { JiraCard } from "@/types/jira-card";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 
@@ -83,9 +84,11 @@ export function formatDeliveryIndex(value: number): string {
  * Same delay/rework rules as `computeDeveloperPeriodMetrics`.
  * Keep UI filters and aggregates on this helper — do not fork formulas.
  *
- * No prazo / Atraso are derived from dates (not from delay_days alone):
- * - on time: unit_test_delivery_on <= due_on
- * - delayed: unit_test_delivery_on > due_on
+ * No prazo / Atraso follow the Compilado business-day rule, so the badge never
+ * disagrees with the "Atraso (d)" column:
+ * - delayed: delay_days > 0 (NETWORKDAYS.INTL between due_on and Entrega TU)
+ * - on time: delay_days == 0, including deliveries on the weekend right after
+ *   due_on, which add no business day
  * - neither: missing due_on or missing Entrega TU
  */
 export function getCardDeliveryFlags(card: JiraCard): CardDeliveryFlags {
@@ -97,7 +100,13 @@ export function getCardDeliveryFlags(card: JiraCard): CardDeliveryFlags {
     return { isOnTime: null, isDelayed: null, isRework };
   }
 
-  if (delivery > due) {
+  // Stored value first: it is what the UI shows in "Atraso (d)".
+  const delayDays =
+    typeof card.delay_days === "number" && Number.isFinite(card.delay_days)
+      ? card.delay_days
+      : computeDeliveryDelayDays({ dueOn: due, deliveryOn: delivery });
+
+  if (delayDays != null && delayDays > 0) {
     return { isOnTime: false, isDelayed: true, isRework };
   }
 

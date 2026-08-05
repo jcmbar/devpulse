@@ -3,7 +3,7 @@ export type DeveloperPeriodMetrics = {
   onTimeCards: number;
   /** Contagem líquida de cards em atraso (bruto − acatados). Painel/ranking. */
   delayedCards: number;
-  /** Cards com Entrega TU > due_on (antes de aceites). */
+  /** Cards com delay_days > 0 em dias úteis (antes de aceites). */
   delayedCardsGross: number;
   /** Subconjunto do bruto com justificativa aceita no lote. */
   delayedCardsAccepted: number;

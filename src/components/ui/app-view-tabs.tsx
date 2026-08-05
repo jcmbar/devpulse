@@ -10,7 +10,7 @@ export type AppViewTab = {
 export function AppViewTabs({ tabs }: { tabs: AppViewTab[] }) {
   return (
     <nav
-      className="flex flex-wrap gap-1 border-b border-border pb-px"
+      className="flex w-fit max-w-full flex-wrap gap-1 rounded-[var(--radius-sm)] border border-border bg-card/70 p-1 shadow-[var(--shadow-sm)]"
       aria-label="Seções"
     >
       {tabs.map((tab) => (
@@ -18,10 +18,10 @@ export function AppViewTabs({ tabs }: { tabs: AppViewTab[] }) {
           key={tab.href}
           href={tab.href}
           className={cn(
-            "rounded-t-[var(--radius-sm)] px-3 py-2 text-sm font-medium transition-colors",
+            "rounded-[calc(var(--radius-sm)-2px)] px-3 py-2 text-sm font-medium transition-[background-color,color,box-shadow] duration-150",
             tab.active
-              ? "border-b-2 border-brand text-foreground"
-              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              ? "bg-brand text-brand-on shadow-[var(--shadow-sm)]"
+              : "text-muted-foreground hover:bg-brand-soft hover:text-brand-foreground",
           )}
           aria-current={tab.active ? "page" : undefined}
         >
