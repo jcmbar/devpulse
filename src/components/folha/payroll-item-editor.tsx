@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  restorePayrollItemCalculatedAction,
   updatePayrollItemAction,
   type PayrollFormState,
 } from "@/app/app/gestor/folha/actions";
@@ -9,9 +10,13 @@ import {
   COMPENSATION_BASE_TYPE_LABELS,
 } from "@/types/developer-compensation";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
-import type { PayrollClosingItemWithIssuer } from "@/types/payroll-closing";
+import type {
+  PayrollAutoAmountField,
+  PayrollClosingItemWithIssuer,
+} from "@/types/payroll-closing";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useState, useTransition } from "react";
 
 const initialState: PayrollFormState = {
   error: null,
@@ -29,16 +34,59 @@ type PayrollItemEditorProps = {
   readOnly?: boolean;
 };
 
+function RestoreCalculatedButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="text-[11px] font-medium text-brand underline-offset-2 hover:underline disabled:opacity-50"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function PayrollItemEditor({
   item,
   issuers,
   attendanceHref,
   readOnly = false,
 }: PayrollItemEditorProps) {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     updatePayrollItemAction,
     initialState,
   );
+  const [restorePending, startRestore] = useTransition();
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const busy = isPending || restorePending;
+  const hasManualAutoField =
+    item.differential_manual || item.travel_manual || item.meal_manual;
+
+  function restore(fields: PayrollAutoAmountField) {
+    setRestoreError(null);
+    startRestore(async () => {
+      const result = await restorePayrollItemCalculatedAction({
+        itemId: item.id,
+        fields,
+      });
+      if (!result.ok) {
+        setRestoreError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   return (
     <tr>
@@ -69,20 +117,29 @@ export function PayrollItemEditor({
         <form action={formAction} className="space-y-2">
           <input type="hidden" name="itemId" value={item.id} />
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-            <label className="space-y-1 text-xs">
-              <span className="text-muted-foreground">
-                Diferencial
-                {item.differential_manual ? " · manual" : ""}
-              </span>
+            <div className="space-y-1 text-xs">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-muted-foreground">
+                  Diferencial
+                  {item.differential_manual ? " · manual" : ""}
+                </span>
+                {!readOnly && item.differential_manual ? (
+                  <RestoreCalculatedButton
+                    label="Restaurar"
+                    disabled={busy}
+                    onClick={() => restore("differential")}
+                  />
+                ) : null}
+              </div>
               <input
                 name="differentialAmount"
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.differential_amount)}
-                disabled={readOnly || isPending}
+                disabled={readOnly || busy}
                 className="ui-input text-sm"
               />
-            </label>
+            </div>
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Descontos</span>
               <input
@@ -90,44 +147,62 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.discounts_amount)}
-                disabled={readOnly || isPending}
+                disabled={readOnly || busy}
                 className="ui-input text-sm"
               />
             </label>
-            <label className="space-y-1 text-xs">
-              <span className="text-muted-foreground">
-                Deslocamento
-                {item.travel_manual ? " · manual" : ""}
-              </span>
+            <div className="space-y-1 text-xs">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-muted-foreground">
+                  Deslocamento
+                  {item.travel_manual ? " · manual" : ""}
+                </span>
+                {!readOnly && item.travel_manual ? (
+                  <RestoreCalculatedButton
+                    label="Restaurar"
+                    disabled={busy}
+                    onClick={() => restore("travel")}
+                  />
+                ) : null}
+              </div>
               <input
                 name="travelAmount"
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.travel_amount)}
-                disabled={readOnly || isPending}
+                disabled={readOnly || busy}
                 className="ui-input text-sm"
               />
-            </label>
-            <label className="space-y-1 text-xs">
-              <span className="text-muted-foreground">
-                Refeição
-                {item.meal_manual ? " · manual" : ""}
-              </span>
+            </div>
+            <div className="space-y-1 text-xs">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-muted-foreground">
+                  Refeição
+                  {item.meal_manual ? " · manual" : ""}
+                </span>
+                {!readOnly && item.meal_manual ? (
+                  <RestoreCalculatedButton
+                    label="Restaurar"
+                    disabled={busy}
+                    onClick={() => restore("meal")}
+                  />
+                ) : null}
+              </div>
               <input
                 name="mealAmount"
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.meal_amount)}
-                disabled={readOnly || isPending}
+                disabled={readOnly || busy}
                 className="ui-input text-sm"
               />
-            </label>
+            </div>
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Empresa NF</span>
               <select
                 name="invoiceIssuerId"
                 defaultValue={item.invoice_issuer_id ?? ""}
-                disabled={readOnly || isPending}
+                disabled={readOnly || busy}
                 className="ui-select text-sm"
               >
                 <option value="">—</option>
@@ -148,15 +223,39 @@ export function PayrollItemEditor({
               })}
             </p>
             {!readOnly ? (
-              <button
-                type="submit"
-                className="ui-btn-secondary text-xs"
-                disabled={isPending}
-              >
-                {isPending ? "Salvando..." : "Salvar linha"}
-              </button>
+              <>
+                <button
+                  type="submit"
+                  className="ui-btn-secondary text-xs"
+                  disabled={busy}
+                >
+                  {isPending ? "Salvando..." : "Salvar linha"}
+                </button>
+                <button
+                  type="button"
+                  className="ui-btn-ghost text-xs"
+                  disabled={busy}
+                  title={
+                    hasManualAutoField
+                      ? "Remove os ajustes manuais desta linha e volta diferencial, deslocamento e refeição ao cálculo automático (cadastro + presença)."
+                      : "Atualiza o snapshot do cadastro nesta linha e recalcula os campos automáticos."
+                  }
+                  onClick={() => restore("all")}
+                >
+                  {restorePending
+                    ? "Restaurando..."
+                    : hasManualAutoField
+                      ? "Restaurar calculados"
+                      : "Recalcular linha"}
+                </button>
+              </>
             ) : null}
             <FormFeedback error={state.error} success={state.success} />
+            {restoreError ? (
+              <p className="text-xs text-destructive" role="alert">
+                {restoreError}
+              </p>
+            ) : null}
           </div>
         </form>
       </td>

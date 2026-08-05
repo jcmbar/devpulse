@@ -7,6 +7,7 @@ import {
   batchUpsertPayrollAttendanceDays,
   getPayrollItem,
   listAttendanceForItem,
+  restorePayrollItemCalculatedAmounts,
   syncPayrollItemsFromCompensation,
   updatePayrollClosingStatus,
   updatePayrollItemAmounts,
@@ -24,6 +25,7 @@ import {
   PAYROLL_CLOSING_STATUSES,
   type PayrollAttendanceKind,
   type PayrollAttendanceDay,
+  type PayrollAutoAmountField,
   type PayrollClosingStatus,
 } from "@/types/payroll-closing";
 
@@ -35,13 +37,17 @@ export type PayrollFormState = {
 function parseMoney(
   raw: string,
   label: string,
+  options?: { allowNegative?: boolean },
 ): { ok: true; value: number } | { ok: false; error: string } {
   const normalized = raw.trim().replace(",", ".");
   if (!normalized) {
     return { ok: false, error: `Informe ${label}.` };
   }
   const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) {
+  if (!Number.isFinite(value)) {
+    return { ok: false, error: `${label} deve ser um número válido.` };
+  }
+  if (!options?.allowNegative && value < 0) {
     return { ok: false, error: `${label} deve ser um número ≥ 0.` };
   }
   return { ok: true, value };
@@ -74,6 +80,7 @@ export async function updatePayrollItemAction(
   const differential = parseMoney(
     String(formData.get("differentialAmount") ?? "0"),
     "o diferencial",
+    { allowNegative: true },
   );
   if (!differential.ok) {
     return { error: differential.error, success: null };
@@ -300,6 +307,43 @@ export async function listAttendanceAction(
   }
 }
 
+export async function restorePayrollItemCalculatedAction(input: {
+  itemId: string;
+  fields?: PayrollAutoAmountField;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireTeamAccess();
+
+  const itemId = input.itemId.trim();
+  if (!itemId) {
+    return { ok: false, error: "Item inválido." };
+  }
+
+  const fields = input.fields ?? "all";
+  if (
+    fields !== "all" &&
+    fields !== "differential" &&
+    fields !== "travel" &&
+    fields !== "meal"
+  ) {
+    return { ok: false, error: "Campo inválido." };
+  }
+
+  try {
+    await restorePayrollItemCalculatedAmounts({ itemId, fields });
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível restaurar os valores calculados.",
+    };
+  }
+
+  revalidateFolha();
+  return { ok: true };
+}
+
 export async function syncPayrollFromCompensationAction(input: {
   yearMonth: string;
   teamId?: string | null;
@@ -316,7 +360,8 @@ export async function syncPayrollFromCompensationAction(input: {
     const result = await syncPayrollItemsFromCompensation({
       yearMonth: input.yearMonth,
       teamId: input.teamId ?? null,
-      resetManualOverrides: true,
+      // Preserve manual overrides; only "Restaurar" clears them.
+      resetManualOverrides: false,
     });
     revalidateFolha();
     return { ok: true, syncedCount: result.syncedCount };

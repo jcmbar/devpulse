@@ -22,6 +22,7 @@ export function PayrollSyncFromCompensationButton({
         type="button"
         className="ui-btn-secondary text-sm"
         disabled={pending}
+        title="Atualiza base, valor hora e diárias pelo cadastro e recalcula só os campos automáticos. Campos marcados como manuais são preservados."
         onClick={() => {
           setError(null);
           setMessage(null);
@@ -37,7 +38,7 @@ export function PayrollSyncFromCompensationButton({
             setMessage(
               result.syncedCount === 0
                 ? "Nenhuma pessoa sincronizada."
-                : `${result.syncedCount} pessoa(s) recalculada(s).`,
+                : `${result.syncedCount} pessoa(s) recalculada(s). Campos manuais preservados.`,
             );
             router.refresh();
           });

@@ -108,3 +108,10 @@ export type PayrollAttendanceDay = {
 export type PayrollClosingItemWithIssuer = PayrollClosingItem & {
   issuer_name: string | null;
 };
+
+/** Auto-calculated Folha fields that can be restored from cadastro + presença. */
+export type PayrollAutoAmountField =
+  | "differential"
+  | "travel"
+  | "meal"
+  | "all";

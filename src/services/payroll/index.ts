@@ -17,6 +17,7 @@ import type { CompensationBaseType } from "@/types/developer-compensation";
 import type {
   PayrollAttendanceDay,
   PayrollAttendanceKind,
+  PayrollAutoAmountField,
   PayrollClosingItem,
   PayrollClosingItemWithIssuer,
   PayrollClosingStatus,
@@ -512,6 +513,70 @@ export async function syncPayrollItemsFromCompensation(input: {
   }
 
   return { syncedCount };
+}
+
+/**
+ * Restore auto-calculated amounts for one person: refresh compensation
+ * snapshot from cadastro, clear manual flags, then recalculate.
+ */
+export async function restorePayrollItemCalculatedAmounts(input: {
+  itemId: string;
+  fields?: PayrollAutoAmountField;
+}): Promise<PayrollClosingItem> {
+  const supabase = await createClient();
+  const { data: row, error } = await supabase
+    .from("payroll_closing_items")
+    .select("*")
+    .eq("id", input.itemId)
+    .single();
+
+  if (error || !row) {
+    throw new Error(`Item não encontrado: ${error?.message ?? ""}`);
+  }
+
+  const item = mapItem(row as Record<string, unknown>);
+  const fields = input.fields ?? "all";
+  const comps = await listCurrentCompensationsByDeveloperIds([
+    item.developer_id,
+  ]);
+  const comp = comps.get(item.developer_id);
+
+  const patch: Record<string, unknown> = {};
+
+  if (comp) {
+    patch.base_amount = comp.base_amount;
+    patch.base_type = comp.base_type;
+    patch.hourly_rate = comp.hourly_rate;
+    patch.contracted_hours_per_day = comp.contracted_hours_per_day;
+    patch.contracted_hours_per_month = comp.contracted_hours_per_month;
+    patch.daily_travel_amount = comp.daily_travel_amount;
+    patch.daily_meal_amount = comp.daily_meal_amount;
+  }
+
+  if (fields === "all" || fields === "differential") {
+    patch.differential_manual = false;
+  }
+  if (fields === "all" || fields === "travel") {
+    patch.travel_manual = false;
+  }
+  if (fields === "all" || fields === "meal") {
+    patch.meal_manual = false;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    const { error: updateError } = await supabase
+      .from("payroll_closing_items")
+      .update(patch)
+      .eq("id", item.id);
+
+    if (updateError) {
+      throw new Error(
+        `Falha ao restaurar valores calculados: ${updateError.message}`,
+      );
+    }
+  }
+
+  return recalculatePayrollItem(item.id);
 }
 
 export async function updatePayrollItemAmounts(input: {
