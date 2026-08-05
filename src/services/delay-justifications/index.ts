@@ -133,15 +133,23 @@ async function listAcceptedKeysByDeveloper(input: {
 /**
  * Pending justifications awaiting gestor decision, per developer, by kind.
  */
-export async function listPendingJustificationCountsByDeveloper(input: {
+/**
+ * Pending justification keys per developer.
+ *
+ * Callers must intersect these with the cards still classified as
+ * atraso/retrabalho: a reclassification (or a Jira re-sync) can leave a pending
+ * request on a card that no longer belongs to the metric, and such a request
+ * cannot be decided from the audit drawer.
+ */
+export async function listPendingJustificationKeysByDeveloper(input: {
   importId: string;
   developerIds?: string[];
   kind: DelayJustificationKind;
-}): Promise<Map<string, number>> {
+}): Promise<Map<string, Set<string>>> {
   const supabase = await createClient();
   let query = supabase
     .from("delay_justification_requests")
-    .select("developer_id")
+    .select("developer_id, jira_key")
     .eq("import_id", input.importId)
     .eq("kind", input.kind)
     .eq("status", "pending");
@@ -157,12 +165,25 @@ export async function listPendingJustificationCountsByDeveloper(input: {
     );
   }
 
-  const map = new Map<string, number>();
+  const map = new Map<string, Set<string>>();
   for (const row of data ?? []) {
     const developerId = String(row.developer_id);
-    map.set(developerId, (map.get(developerId) ?? 0) + 1);
+    const keys = map.get(developerId) ?? new Set<string>();
+    keys.add(normalizeJiraKey(String(row.jira_key)));
+    map.set(developerId, keys);
   }
   return map;
+}
+
+export async function listPendingJustificationCountsByDeveloper(input: {
+  importId: string;
+  developerIds?: string[];
+  kind: DelayJustificationKind;
+}): Promise<Map<string, number>> {
+  const keysByDeveloper = await listPendingJustificationKeysByDeveloper(input);
+  return new Map(
+    [...keysByDeveloper].map(([developerId, keys]) => [developerId, keys.size]),
+  );
 }
 
 /** @deprecated Prefer listPendingJustificationCountsByDeveloper({ kind: "delay" }) */

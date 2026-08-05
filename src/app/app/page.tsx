@@ -57,9 +57,9 @@ function buildAppHref(input: {
   detailMonth?: string | null;
 }): string {
   const params = new URLSearchParams();
-  if (input.tab !== "cards") {
-    params.set("tab", input.tab);
-  }
+  // `tab` is a durable filter: omitting it lets the persisted cookie win and
+  // the restore redirect sends the user back to the previous tab.
+  params.set("tab", input.tab);
   if (input.importId) {
     params.set("importId", input.importId);
   }

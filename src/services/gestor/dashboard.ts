@@ -8,6 +8,7 @@ import {
 import {
   aggregateTeamPeriodMetrics,
   computeDeveloperPeriodMetrics,
+  getCardDeliveryFlags,
   type DeveloperPeriodMetrics,
 } from "@/lib/metrics/developer-period";
 import type { PerformanceThresholds } from "@/lib/metrics/performance-bands";
@@ -34,7 +35,7 @@ import {
 import {
   listAcceptedDelayKeysByDeveloper,
   listAcceptedReworkKeysByDeveloper,
-  listPendingJustificationCountsByDeveloper,
+  listPendingJustificationKeysByDeveloper,
 } from "@/services/delay-justifications";
 
 export type CapacitySignal = "under" | "over" | "balanced" | "unknown";
@@ -155,6 +156,30 @@ function groupCardsByDeveloper(cards: JiraCard[]): Map<string, JiraCard[]> {
     map.set(card.developer_id, list);
   }
   return map;
+}
+
+/**
+ * Pending requests only count while the card is still classified in the metric.
+ * A reclassification can orphan a request, and the gestor has no way to decide
+ * it from the audit drawer (which lists only cards inside the metric).
+ */
+function countPendingJustificationsInMetric(input: {
+  cards: JiraCard[];
+  pendingKeys: Set<string> | undefined;
+  kind: "delay" | "rework";
+}): number {
+  if (!input.pendingKeys || input.pendingKeys.size === 0) {
+    return 0;
+  }
+  let count = 0;
+  for (const card of input.cards) {
+    const flags = getCardDeliveryFlags(card);
+    const inMetric = input.kind === "delay" ? flags.isDelayed : flags.isRework;
+    if (inMetric && input.pendingKeys.has(card.jira_key.trim().toUpperCase())) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function buildMonthlyMatrix(input: {
@@ -296,21 +321,21 @@ export async function getGestorDashboard(input: {
         })
       : new Map<string, Set<string>>();
 
-  const [pendingDelayByDeveloper, pendingReworkByDeveloper] =
+  const [pendingDelayKeysByDeveloper, pendingReworkKeysByDeveloper] =
     selectedBatch != null
       ? await Promise.all([
-          listPendingJustificationCountsByDeveloper({
+          listPendingJustificationKeysByDeveloper({
             importId: selectedBatch.id,
             developerIds: rankingSource.map((developer) => developer.id),
             kind: "delay",
           }),
-          listPendingJustificationCountsByDeveloper({
+          listPendingJustificationKeysByDeveloper({
             importId: selectedBatch.id,
             developerIds: rankingSource.map((developer) => developer.id),
             kind: "rework",
           }),
         ])
-      : [new Map<string, number>(), new Map<string, number>()];
+      : [new Map<string, Set<string>>(), new Map<string, Set<string>>()];
 
   const ranking: GestorRankingRow[] = rankingSource
     .map((developer) => {
@@ -354,10 +379,16 @@ export async function getGestorDashboard(input: {
           teamCode: teamLabel?.code ?? "",
           teamName: teamLabel?.name ?? null,
         },
-        pendingDelayJustifications:
-          pendingDelayByDeveloper.get(developer.id) ?? 0,
-        pendingReworkJustifications:
-          pendingReworkByDeveloper.get(developer.id) ?? 0,
+        pendingDelayJustifications: countPendingJustificationsInMetric({
+          cards,
+          pendingKeys: pendingDelayKeysByDeveloper.get(developer.id),
+          kind: "delay",
+        }),
+        pendingReworkJustifications: countPendingJustificationsInMetric({
+          cards,
+          pendingKeys: pendingReworkKeysByDeveloper.get(developer.id),
+          kind: "rework",
+        }),
       };
     })
     .sort((a, b) => {
