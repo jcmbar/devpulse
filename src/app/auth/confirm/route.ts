@@ -53,7 +53,10 @@ function redirectToNext(request: NextRequest, next: string) {
  * Recommended CTA:
  * `/auth/confirm?token_hash=...&type=invite&redirect_to=/set-password`
  *
- * Also supports legacy `next=` and PKCE `code`.
+ * Also supports legacy `next=` and PKCE `code`. Without any of them the
+ * request comes from the default Supabase template, which returns tokens in
+ * the URL fragment: forward to `/set-password`, where the browser keeps the
+ * fragment and the client establishes the session.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -90,5 +93,5 @@ export async function GET(request: NextRequest) {
     return redirectToNext(request, next);
   }
 
-  return errorRedirect(request, "missing_token");
+  return redirectToNext(request, next);
 }

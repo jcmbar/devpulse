@@ -9,12 +9,16 @@ export function getSiteUrl(): string {
 }
 
 /**
- * Final destination after invite/recovery session is established.
+ * Entry point for invite/recovery links, sent as `redirectTo` to the Admin API.
+ *
+ * Email templates should build the CTA from `{{ .RedirectTo }}` so the link
+ * origin follows the environment that sent the email (local vs produção),
+ * instead of the single global `{{ .SiteURL }}`.
+ *
  * Must be listed in Supabase Authentication → Redirect URLs.
- * Email templates should send users through `/auth/confirm` first.
  */
-export function getSetPasswordRedirectTo(): string {
-  return `${getSiteUrl()}/set-password`;
+export function getAuthConfirmRedirectTo(): string {
+  return `${getSiteUrl()}/auth/confirm`;
 }
 
 export function normalizeEmail(email: string): string {

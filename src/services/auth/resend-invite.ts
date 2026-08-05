@@ -6,7 +6,7 @@ import {
   type AccessInviteTarget,
 } from "@/services/auth/access-status";
 import {
-  getSetPasswordRedirectTo,
+  getAuthConfirmRedirectTo,
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
@@ -108,8 +108,8 @@ export async function resendAccessInvite(
   const email = normalizeEmail(target.email);
 
   const { error } = await admin.auth.resetPasswordForEmail(email, {
-    // Same fallback as invite; Recovery template should use /auth/confirm.
-    redirectTo: getSetPasswordRedirectTo(),
+    // Same entry point as invite; Recovery template appends token_hash.
+    redirectTo: getAuthConfirmRedirectTo(),
   });
 
   if (error) {

@@ -28,12 +28,14 @@ Compatibilidade: se o template padrão do Supabase for mantido, `/set-password` 
 
 **Authentication → URL Configuration**
 
-| Campo | Local | Produção |
-|-------|--------|----------|
-| **Site URL** | `http://localhost:3000` | `https://seu-dominio` |
-| **Redirect URLs** | veja lista abaixo | veja lista abaixo |
+O **Site URL** é único por projeto, então deve apontar para **produção**:
 
-Inclua **todas** estas Redirect URLs (wildcards opcionais):
+| Campo | Valor |
+|-------|--------|
+| **Site URL** | `https://seu-dominio` |
+| **Redirect URLs** | veja lista abaixo |
+
+Inclua **todas** estas Redirect URLs (local + produção):
 
 ```text
 http://localhost:3000/set-password
@@ -44,7 +46,19 @@ https://seu-dominio/auth/confirm
 https://seu-dominio/**
 ```
 
-No app, `NEXT_PUBLIC_SITE_URL` deve ser a mesma origem do **Site URL** (sem barra final). É o valor usado em `redirectTo` da Admin API (`{{ .RedirectTo }}` / fallback).
+O link do e-mail é montado com `{{ .RedirectTo }}`, ou seja, com o
+`NEXT_PUBLIC_SITE_URL` do ambiente que **enviou** o convite. Assim o mesmo
+template serve local e produção sem trocar o Site URL.
+
+Cada ambiente precisa da sua env (`.env.local` em dev, painel do host em
+produção), sempre sem barra final:
+
+```text
+# local
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+# produção (Render → Environment)
+NEXT_PUBLIC_SITE_URL=https://seu-dominio
+```
 
 ---
 
@@ -63,12 +77,15 @@ Você foi convidado para acessar o DevPulse
 CTA obrigatório (já está no HTML):
 
 ```html
-<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&redirect_to=/set-password">
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite&redirect_to=/set-password">
   Criar senha
 </a>
 ```
 
-Não use o `{{ .ConfirmationURL }}` padrão se quiser forçar a rota própria `/auth/confirm`.
+`{{ .RedirectTo }}` já é `<origem-do-ambiente>/auth/confirm`. Não use
+`{{ .SiteURL }}` aqui: ele é global e faria os e-mails de local apontarem
+para produção (e vice-versa). Não use `{{ .ConfirmationURL }}` se quiser
+forçar a rota própria `/auth/confirm`.
 
 ---
 
@@ -85,7 +102,7 @@ Defina sua senha do DevPulse
 **CTA**
 
 ```html
-<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&redirect_to=/set-password">
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery&redirect_to=/set-password">
   Criar senha
 </a>
 ```
@@ -113,7 +130,7 @@ Configure depois em **Project Settings → Authentication → SMTP Settings**.
 |---------|--------|
 | `src/services/auth/invite-user.ts` | `inviteUserByEmail` + sync profile |
 | `src/services/auth/resend-invite.ts` | `resetPasswordForEmail` (reenvio) |
-| `src/services/auth/shared.ts` | `getSiteUrl` / `getSetPasswordRedirectTo` |
+| `src/services/auth/shared.ts` | `getSiteUrl` / `getAuthConfirmRedirectTo` |
 | `src/app/auth/confirm/route.ts` | `verifyOtp` / `exchangeCodeForSession` → redirect |
 | `src/app/set-password/page.tsx` | UI “Crie sua senha” |
 | `src/app/set-password/set-password-form.tsx` | Sessão + `updateUser({ password })` |
@@ -154,7 +171,8 @@ Casos extras:
 
 | Sintoma | Causa provável |
 |---------|----------------|
-| “redirect_uri mismatch” / link não abre o app | Redirect URL não allowlisted ou `Site URL` / `NEXT_PUBLIC_SITE_URL` divergentes |
+| Link do e-mail vem com `localhost` em produção | `NEXT_PUBLIC_SITE_URL` errado no host, ou template ainda usando `{{ .SiteURL }}` |
+| “redirect_uri mismatch” / link não abre o app | `/auth/confirm` do ambiente não está nas Redirect URLs |
 | “invalid_or_expired” | Link já usado, expirado, ou `type` errado no template |
 | E-mail em inglês / CTA genérico | Template Invite ainda padrão — atualize no dashboard |
 | Remetente “Supabase Auth” | Esperado sem custom SMTP |

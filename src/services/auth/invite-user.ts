@@ -3,7 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { linkDeveloperProfileAdmin } from "@/services/developers/admin";
 import {
-  getSetPasswordRedirectTo,
+  getAuthConfirmRedirectTo,
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
@@ -98,9 +98,8 @@ export async function inviteAccessUser(
       full_name: fullName,
       role,
     },
-    // Fallback / {{ .RedirectTo }} when templates use ConfirmationURL.
-    // Branded templates should link to /auth/confirm?token_hash=...&redirect_to=/set-password.
-    redirectTo: getSetPasswordRedirectTo(),
+    // Branded templates read this as {{ .RedirectTo }} and append token_hash.
+    redirectTo: getAuthConfirmRedirectTo(),
   });
 
   if (error) {

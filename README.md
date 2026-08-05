@@ -64,12 +64,14 @@ Guia completo: [`docs/auth-invite-flow.md`](docs/auth-invite-flow.md).
 
 No Supabase → **Authentication → URL Configuration**:
 
-- **Site URL:** `http://localhost:3000` (local) ou o domínio de produção
+- **Site URL:** o domínio de produção (o campo é global; o link do e-mail usa `{{ .RedirectTo }}`)
 - **Redirect URLs:**
   - `http://localhost:3000/set-password`
   - `http://localhost:3000/auth/confirm`
   - (produção) `https://seu-dominio/set-password`
   - (produção) `https://seu-dominio/auth/confirm`
+
+Cada ambiente define seu `NEXT_PUBLIC_SITE_URL` (local no `.env.local`, produção no painel do host).
 
 Templates HTML prontos para colar:
 
@@ -79,7 +81,7 @@ Templates HTML prontos para colar:
 CTA recomendado (Invite):
 
 ```html
-<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&redirect_to=/set-password">
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite&redirect_to=/set-password">
   Criar senha
 </a>
 ```
