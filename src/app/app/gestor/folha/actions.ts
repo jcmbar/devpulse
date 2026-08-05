@@ -4,11 +4,20 @@ import { revalidatePath } from "next/cache";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { upsertInvoiceIssuer } from "@/services/invoice-issuers";
 import {
+  batchUpsertPayrollAttendanceDays,
+  getPayrollItem,
   listAttendanceForItem,
   updatePayrollClosingStatus,
   updatePayrollItemAmounts,
   upsertPayrollAttendanceDay,
 } from "@/services/payroll";
+import {
+  resolveBatchTargetDays,
+  resolveFillMonthDefaultPatches,
+  resolveWorkweekKindPatches,
+  resolveZeroWeekendPatches,
+  type BatchApplyMode,
+} from "@/lib/metrics/payroll-attendance-batch";
 import {
   PAYROLL_ATTENDANCE_KINDS,
   PAYROLL_CLOSING_STATUSES,
@@ -151,6 +160,125 @@ export async function upsertAttendanceDayAction(input: {
 
   revalidateFolha();
   return { ok: true };
+}
+
+export async function batchApplyAttendanceAction(input: {
+  itemId: string;
+  shortcut?:
+    | "fill_month_default"
+    | "workweek_home"
+    | "workweek_presencial"
+    | "zero_weekends"
+    | null;
+  dayKind?: string;
+  hours?: number;
+  weekdays?: number[];
+  rangeStart?: string | null;
+  rangeEnd?: string | null;
+  mode?: BatchApplyMode;
+}): Promise<
+  | { ok: true; updatedCount: number }
+  | { ok: false; error: string }
+> {
+  await requireTeamAccess();
+
+  try {
+    const existing = await listAttendanceForItem(input.itemId);
+    if (existing.length === 0) {
+      return { ok: false, error: "Calendário de presença ainda não gerado." };
+    }
+
+    const payrollItem = await getPayrollItem(input.itemId);
+    if (!payrollItem) {
+      return { ok: false, error: "Item da folha não encontrado." };
+    }
+
+    const contracted = payrollItem.contracted_hours_per_day;
+    const snapshots = existing.map((day) => ({
+      day_on: day.day_on,
+      day_kind: day.day_kind,
+      hours: day.hours,
+    }));
+
+    let patches;
+    switch (input.shortcut) {
+      case "fill_month_default":
+        patches = resolveFillMonthDefaultPatches({
+          days: snapshots,
+          contractedHoursPerDay: contracted,
+        });
+        break;
+      case "workweek_home":
+        patches = resolveWorkweekKindPatches({
+          days: snapshots,
+          dayKind: "home",
+          contractedHoursPerDay: contracted,
+          rangeStart: input.rangeStart,
+          rangeEnd: input.rangeEnd,
+        });
+        break;
+      case "workweek_presencial":
+        patches = resolveWorkweekKindPatches({
+          days: snapshots,
+          dayKind: "presencial",
+          contractedHoursPerDay: contracted,
+          rangeStart: input.rangeStart,
+          rangeEnd: input.rangeEnd,
+        });
+        break;
+      case "zero_weekends":
+        patches = resolveZeroWeekendPatches({
+          days: snapshots,
+          rangeStart: input.rangeStart,
+          rangeEnd: input.rangeEnd,
+        });
+        break;
+      default: {
+        const dayKind = String(input.dayKind ?? "");
+        if (
+          !(PAYROLL_ATTENDANCE_KINDS as readonly string[]).includes(dayKind)
+        ) {
+          return { ok: false, error: "Tipo de dia inválido." };
+        }
+        const hours =
+          input.hours == null || !Number.isFinite(input.hours)
+            ? contracted
+            : input.hours;
+        if (hours < 0) {
+          return { ok: false, error: "Horas inválidas." };
+        }
+        const mode: BatchApplyMode =
+          input.mode === "fill_unfilled" ? "fill_unfilled" : "overwrite";
+        patches = resolveBatchTargetDays({
+          days: snapshots,
+          dayKind: dayKind as PayrollAttendanceKind,
+          hours,
+          weekdays: input.weekdays ?? [],
+          rangeStart: input.rangeStart ?? null,
+          rangeEnd: input.rangeEnd ?? null,
+          mode,
+          contractedHoursPerDay: contracted,
+        });
+        break;
+      }
+    }
+
+    const result = await batchUpsertPayrollAttendanceDays({
+      itemId: input.itemId,
+      patches,
+    });
+
+    revalidateFolha();
+    return { ok: true, updatedCount: result.updatedCount };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível aplicar a presença em lote.",
+    };
+  }
 }
 
 export async function listAttendanceAction(

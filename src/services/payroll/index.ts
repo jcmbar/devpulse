@@ -535,6 +535,42 @@ export async function upsertPayrollAttendanceDay(input: {
   return mapAttendance(data as Record<string, unknown>);
 }
 
+/** Bulk upsert attendance days, then recalculate the payroll item once. */
+export async function batchUpsertPayrollAttendanceDays(input: {
+  itemId: string;
+  patches: Array<{
+    dayOn: string;
+    dayKind: PayrollAttendanceKind;
+    hours: number;
+  }>;
+}): Promise<{ updatedCount: number }> {
+  if (input.patches.length === 0) {
+    return { updatedCount: 0 };
+  }
+
+  const supabase = await createClient();
+  const rows = input.patches.map((patch) => ({
+    payroll_item_id: input.itemId,
+    day_on: patch.dayOn,
+    day_kind: patch.dayKind,
+    hours:
+      patch.dayKind === "presencial" || patch.dayKind === "home"
+        ? Math.max(0, patch.hours)
+        : 0,
+  }));
+
+  const { error } = await supabase
+    .from("payroll_attendance_days")
+    .upsert(rows, { onConflict: "payroll_item_id,day_on" });
+
+  if (error) {
+    throw new Error(`Falha ao aplicar presença em lote: ${error.message}`);
+  }
+
+  await recalculatePayrollItem(input.itemId);
+  return { updatedCount: rows.length };
+}
+
 export async function getPayrollItem(
   itemId: string,
 ): Promise<PayrollClosingItem | null> {
