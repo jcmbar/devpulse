@@ -11,6 +11,8 @@ import {
   type GestorAuditFilterContext,
 } from "@/components/gestor/metric-audit-button";
 import { RunSyncNowButton } from "@/components/gestor/run-sync-now-button";
+import { GestorAutoSyncTrigger } from "@/components/gestor/gestor-auto-sync-trigger";
+import { GestorSyncStatus } from "@/components/gestor/gestor-sync-status";
 import { GestorSourceFilter } from "@/components/gestor-source-filter";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
@@ -53,7 +55,10 @@ import {
   formatGestorMonthLabel,
   getGestorDashboard,
 } from "@/services/gestor/dashboard";
-import { listJiraIntegrations } from "@/services/integrations/jira";
+import {
+  getJiraSyncStatusSummary,
+  listJiraIntegrations,
+} from "@/services/integrations/jira";
 import { listTeamsAdmin } from "@/services/teams";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import {
@@ -244,6 +249,18 @@ export default async function GestorDashboardPage({
     jiraIntegrations[0] ??
     null;
 
+  const autoSyncScope = selectedTeamId
+    ? jiraIntegrations.filter(
+        (row) => row.team_id === selectedTeamId && row.is_enabled,
+      )
+    : jiraIntegrations.filter((row) => row.is_enabled);
+
+  const syncStatusSummaries = (
+    await Promise.all(
+      autoSyncScope.map((row) => getJiraSyncStatusSummary(row.id)),
+    )
+  ).filter((row): row is NonNullable<typeof row> => row != null);
+
   const emptySourceMessage =
     dataSource === "jira"
       ? "Não há lotes Compilado materializados da sync Jira (imports.source = jira). Use “Rodar Sync Agora” ou materialize em /app/jira."
@@ -264,6 +281,7 @@ export default async function GestorDashboardPage({
           to: dateRange.mode === "custom" ? dateRange.end : undefined,
         }}
       />
+      <GestorAutoSyncTrigger teamId={selectedTeamId} />
       <PageHeader
         eyebrow="Operação"
         title="Dashboard do gestor"
@@ -298,10 +316,15 @@ export default async function GestorDashboardPage({
               Capacidade
             </Link>
             {syncTarget ? (
-              <RunSyncNowButton
-                integrationId={syncTarget.id}
-                teamId={syncTarget.team_id}
-              />
+              <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:items-end">
+                {syncStatusSummaries.length > 0 ? (
+                  <GestorSyncStatus initialSummaries={syncStatusSummaries} />
+                ) : null}
+                <RunSyncNowButton
+                  integrationId={syncTarget.id}
+                  teamId={syncTarget.team_id}
+                />
+              </div>
             ) : (
               <Link href="/app/jira" className="ui-btn-primary">
                 Configurar Jira

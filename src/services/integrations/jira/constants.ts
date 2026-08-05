@@ -61,6 +61,39 @@ export const JIRA_SYNC_STATUSES = [
 
 export const JIRA_SYNC_MODES = ["full", "incremental"] as const;
 
+/** How the pipeline was started (stored on jira_sync_runs.trigger_source). */
+export const JIRA_SYNC_TRIGGER_SOURCES = [
+  "manual",
+  "auto_gestor_load",
+] as const;
+
+export type JiraSyncTriggerSource =
+  (typeof JIRA_SYNC_TRIGGER_SOURCES)[number];
+
+/** Default cooldown for gestor auto-sync (minutes). Override with env. */
+export const JIRA_AUTO_SYNC_COOLDOWN_MINUTES_DEFAULT = 60;
+
+/**
+ * Active sync runs older than this are treated as abandoned and marked failed
+ * before a new claim.
+ */
+export const JIRA_SYNC_STALE_MINUTES = 45;
+
+/** Key inside jira_integrations.settings for full-pipeline lease. */
+export const JIRA_PIPELINE_LOCK_SETTINGS_KEY = "pipeline_lock";
+
+export function resolveJiraAutoSyncCooldownMinutes(): number {
+  const raw = process.env.JIRA_AUTO_SYNC_COOLDOWN_MINUTES;
+  if (raw == null || raw.trim() === "") {
+    return JIRA_AUTO_SYNC_COOLDOWN_MINUTES_DEFAULT;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return JIRA_AUTO_SYNC_COOLDOWN_MINUTES_DEFAULT;
+  }
+  return Math.floor(parsed);
+}
+
 /** Default changelog field names when mappings use system fields. */
 export const JIRA_CHANGELOG_FIELDS = {
   status: "status",

@@ -1,7 +1,6 @@
 "use client";
 
-import { runJiraPipelineStepAction } from "@/app/app/jira/pipeline-actions";
-import { JIRA_PIPELINE_STEPS } from "@/app/app/jira/pipeline-shared";
+import { triggerJiraSyncAction } from "@/app/app/jira/pipeline-actions";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -24,27 +23,21 @@ export function RunSyncNowButton({
     setError(null);
 
     startTransition(async () => {
-      let syncRunId: string | null = null;
+      const result = await triggerJiraSyncAction({
+        integrationId,
+        teamId,
+        forceFull: false,
+      });
 
-      for (const step of JIRA_PIPELINE_STEPS) {
-        const result = await runJiraPipelineStepAction({
-          integrationId,
-          teamId,
-          step,
-          forceFull: false,
-          syncRunId,
-        });
-
-        if (result.syncRunId) {
-          syncRunId = result.syncRunId;
-        }
-
-        if (!result.ok) {
-          setError(
-            result.error ?? result.message ?? `Falha em ${step}.`,
-          );
-          return;
-        }
+      if (!result.ok) {
+        setError(
+          result.error ??
+            result.message ??
+            (result.reason === "already_running"
+              ? "Já existe uma sincronização em andamento."
+              : "Falha ao sincronizar."),
+        );
+        return;
       }
 
       setMessage("Sync concluído. Atualizando painel…");

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { asJiraFieldMappings } from "@/lib/jira/field-mappings";
+import { JIRA_SYNC_STALE_MINUTES } from "@/services/integrations/jira/constants";
 import type {
   JiraIntegration,
   JiraIntegrationWriteInput,
@@ -12,6 +13,9 @@ import type {
   JiraIssue,
   JiraProject,
 } from "@/types/jira-integration";
+import type { JiraSyncStatusSummary } from "@/types/jira-sync-status";
+
+export type { JiraSyncStatusSummary };
 
 function asMappings(value: unknown): JiraFieldMappings {
   return asJiraFieldMappings(value);
@@ -257,6 +261,8 @@ export async function createJiraSyncRun(input: {
   jql: string;
   cursorFrom: string;
   cursorTo: string;
+  triggerSource?: string;
+  metrics?: Record<string, unknown>;
 }): Promise<JiraSyncRun> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -265,11 +271,12 @@ export async function createJiraSyncRun(input: {
       integration_id: input.integrationId,
       mode: input.mode,
       status: "pending" satisfies JiraSyncRunStatus,
-      trigger_source: "manual",
+      trigger_source: input.triggerSource ?? "manual",
       created_by: input.createdBy,
       jql: input.jql,
       cursor_from: input.cursorFrom,
       cursor_to: input.cursorTo,
+      metrics: input.metrics ?? {},
     })
     .select("*")
     .single();
@@ -327,6 +334,122 @@ export async function listRecentJiraSyncRuns(
   }
 
   return (data ?? []).map((row) => mapSyncRun(row as Record<string, unknown>));
+}
+
+export async function findActiveJiraSyncRun(
+  integrationId: string,
+): Promise<JiraSyncRun | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jira_sync_runs")
+    .select("*")
+    .eq("integration_id", integrationId)
+    .in("status", ["pending", "running"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao buscar sync run ativo: ${error.message}`);
+  }
+
+  return data ? mapSyncRun(data as Record<string, unknown>) : null;
+}
+
+/**
+ * Marks abandoned pending/running runs as failed so a new sync can claim the
+ * unique active-run index.
+ */
+export async function markStaleJiraSyncRunsFailed(input: {
+  integrationId: string;
+  staleBeforeIso: string;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jira_sync_runs")
+    .update({
+      status: "failed" satisfies JiraSyncRunStatus,
+      finished_at: new Date().toISOString(),
+      error_message: "Sync abandonado (timeout / processo interrompido).",
+      error_details: { reason: "stale_active_run" },
+    })
+    .eq("integration_id", input.integrationId)
+    .in("status", ["pending", "running"])
+    .lt("created_at", input.staleBeforeIso)
+    .select("id");
+
+  if (error) {
+    throw new Error(`Falha ao marcar sync runs stale: ${error.message}`);
+  }
+
+  return data?.length ?? 0;
+}
+
+export async function updateJiraIntegrationSettings(input: {
+  integrationId: string;
+  settings: Record<string, unknown>;
+}): Promise<JiraIntegration> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jira_integrations")
+    .update({ settings: input.settings })
+    .eq("id", input.integrationId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(
+      `Falha ao atualizar settings da integração: ${error.message}`,
+    );
+  }
+
+  return mapIntegration(data as Record<string, unknown>);
+}
+
+export async function getJiraSyncStatusSummary(
+  integrationId: string,
+): Promise<JiraSyncStatusSummary | null> {
+  const integration = await getJiraIntegration(integrationId);
+  if (!integration) {
+    return null;
+  }
+
+  const recent = await listRecentJiraSyncRuns(integrationId, 15);
+  const activeRun =
+    recent.find(
+      (run) => run.status === "pending" || run.status === "running",
+    ) ?? null;
+  const latestRun = recent[0] ?? null;
+  const latestFailedRun =
+    recent.find((run) => run.status === "failed") ?? null;
+
+  const lock = integration.settings.pipeline_lock;
+  let pipelineLocked = false;
+  if (lock != null && typeof lock === "object" && !Array.isArray(lock)) {
+    const lockedAt =
+      typeof (lock as { locked_at?: unknown }).locked_at === "string"
+        ? (lock as { locked_at: string }).locked_at
+        : null;
+    if (lockedAt) {
+      const lockedMs = Date.parse(lockedAt);
+      if (Number.isFinite(lockedMs)) {
+        const ageMinutes = (Date.now() - lockedMs) / 60_000;
+        pipelineLocked = ageMinutes < JIRA_SYNC_STALE_MINUTES;
+      }
+    }
+  }
+
+  return {
+    integrationId: integration.id,
+    teamId: integration.team_id,
+    integrationName: integration.name,
+    isEnabled: integration.is_enabled,
+    lastSuccessfulSyncAt: integration.last_successful_sync_at,
+    activeRun,
+    latestRun,
+    latestFailedRun,
+    pipelineLocked,
+  };
 }
 
 export async function upsertJiraProjects(

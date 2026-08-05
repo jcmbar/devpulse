@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import {
@@ -9,8 +10,15 @@ import {
 import { materializeJiraCompiladoSnapshot } from "@/services/compilado/materialize-jira-snapshot";
 import {
   getJiraIntegration,
+  getJiraSyncStatusSummary,
+  listJiraIntegrations,
   runJiraSync,
+  triggerJiraSync,
 } from "@/services/integrations/jira";
+import type { JiraSyncStatusSummary } from "@/types/jira-sync-status";
+import { findActiveJiraSyncRun } from "@/services/integrations/jira/repositories/integrations";
+import { hasPipelineLock } from "@/services/integrations/jira/sync/pipeline-lock";
+import { shouldAutoSyncJiraIntegration } from "@/services/integrations/jira/sync/should-auto-sync";
 import type {
   JiraPipelineStepId,
   JiraPipelineStepResult,
@@ -73,6 +81,8 @@ export async function runJiraPipelineStepAction(input: {
           integrationId: integration.id,
           createdBy: context.profile.id,
           forceFull: input.forceFull === true,
+          triggerSource: "manual",
+          cooldownBypassed: true,
         });
 
         revalidatePath("/app/jira");
@@ -178,4 +188,144 @@ export async function runJiraPipelineStepAction(input: {
       syncRunId: input.syncRunId ?? null,
     };
   }
+}
+
+export type TriggerJiraSyncActionResult = {
+  ok: boolean;
+  started: boolean;
+  message: string;
+  error?: string;
+  reason?: string;
+  syncRunId?: string | null;
+};
+
+/**
+ * Manual full pipeline (bypasses cooldown, respects lock).
+ */
+export async function triggerJiraSyncAction(input: {
+  integrationId: string;
+  teamId: string;
+  forceFull?: boolean;
+}): Promise<TriggerJiraSyncActionResult> {
+  const context = await requireTeamAccess();
+  await requireIntegrationPair({
+    integrationId: input.integrationId,
+    teamId: input.teamId,
+  });
+
+  const result = await triggerJiraSync({
+    integrationId: input.integrationId,
+    force: true,
+    trigger: "manual",
+    actorUserId: context.profile.id,
+    forceFull: input.forceFull === true,
+  });
+
+  if (result.ok) {
+    return {
+      ok: true,
+      started: true,
+      message: result.message,
+      syncRunId: result.syncRunId,
+    };
+  }
+
+  if (result.started) {
+    return {
+      ok: false,
+      started: true,
+      message: result.message,
+      error: result.error,
+      syncRunId: result.syncRunId,
+    };
+  }
+
+  return {
+    ok: false,
+    started: false,
+    message: result.message,
+    error: result.error,
+    reason: result.reason,
+  };
+}
+
+export type RequestGestorAutoSyncResult = {
+  scheduled: number;
+  skipped: number;
+  integrationIds: string[];
+};
+
+/**
+ * Fire-and-forget auto-sync for gestor page load.
+ * Schedules eligible integrations via `after()` so the action returns immediately.
+ */
+export async function requestGestorAutoSyncAction(input: {
+  /** When set, only that team's integration. When null, all enabled. */
+  teamId: string | null;
+}): Promise<RequestGestorAutoSyncResult> {
+  const context = await requireTeamAccess();
+  const all = await listJiraIntegrations();
+  const scoped = input.teamId
+    ? all.filter((row) => row.team_id === input.teamId && row.is_enabled)
+    : all.filter((row) => row.is_enabled);
+
+  const eligibleIds: string[] = [];
+  let skipped = 0;
+
+  for (const integration of scoped) {
+    const active = await findActiveJiraSyncRun(integration.id);
+    const gate = shouldAutoSyncJiraIntegration({
+      integration,
+      hasActiveRun: active != null,
+      pipelineLocked: hasPipelineLock(integration),
+    });
+    if (!gate.ok) {
+      skipped += 1;
+      continue;
+    }
+    eligibleIds.push(integration.id);
+  }
+
+  if (eligibleIds.length > 0) {
+    const actorUserId = context.profile.id;
+    after(async () => {
+      for (const integrationId of eligibleIds) {
+        try {
+          await triggerJiraSync({
+            integrationId,
+            force: false,
+            trigger: "auto_gestor_load",
+            actorUserId,
+            forceFull: false,
+          });
+        } catch (error) {
+          console.error(
+            "[requestGestorAutoSyncAction] pipeline failed",
+            integrationId,
+            error,
+          );
+        }
+      }
+    });
+  }
+
+  return {
+    scheduled: eligibleIds.length,
+    skipped,
+    integrationIds: eligibleIds,
+  };
+}
+
+export async function getGestorSyncStatusAction(input: {
+  integrationIds: string[];
+}): Promise<JiraSyncStatusSummary[]> {
+  await requireTeamAccess();
+  const summaries: JiraSyncStatusSummary[] = [];
+  for (const id of input.integrationIds) {
+    const summary = await getJiraSyncStatusSummary(id);
+    if (summary) {
+      summaries.push(summary);
+    }
+  }
+  return summaries;
 }

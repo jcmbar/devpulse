@@ -29,6 +29,8 @@ export type RunJiraSyncInput = {
   createdBy: string | null;
   /** Force full window even if cursor exists. */
   forceFull?: boolean;
+  triggerSource?: string;
+  cooldownBypassed?: boolean;
 };
 
 export type RunJiraSyncResult = {
@@ -99,6 +101,10 @@ export async function runJiraSync(
     jql: window.jql,
     cursorFrom: window.cursorFrom.toISOString(),
     cursorTo: window.cursorTo.toISOString(),
+    triggerSource: input.triggerSource ?? "manual",
+    metrics: {
+      cooldown_bypassed: input.cooldownBypassed === true,
+    },
   });
 
   await updateJiraSyncRun(run.id, {
