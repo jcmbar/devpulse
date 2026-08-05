@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PayrollAttendancePanel } from "@/components/folha/payroll-attendance-panel";
 import { PayrollItemEditor } from "@/components/folha/payroll-item-editor";
 import { PayrollMonthStatusControl } from "@/components/folha/payroll-month-status";
+import { PayrollSyncFromCompensationButton } from "@/components/folha/payroll-sync-button";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { PageHeader } from "@/components/page-header";
@@ -160,6 +161,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <PayrollSyncFromCompensationButton
+              yearMonth={month}
+              teamId={selectedTeamId}
+            />
             <Link href="/app/gestor/folha/empresas" className="ui-btn-secondary">
               Empresas emissoras
             </Link>
@@ -229,8 +234,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <h2 className="text-base font-semibold">Sintético mensal</h2>
             <p className="text-sm text-muted-foreground">
               Base + diferencial − descontos + deslocamento + refeição = valor
-              NF. Diferencial variável usa dias presenciais × horas × valor
-              hora; fixo inicia em zero e pode ser editado.
+              NF. Diferencial variável = (horas trabalhadas no mês × valor hora)
+              − base contratual, contando presencial e home office; fixo inicia
+              em zero. Deslocamento e refeição usam os dias presenciais × valor
+              diário do cadastro.
             </p>
           </div>
           <p className="text-sm font-medium tabular-nums">

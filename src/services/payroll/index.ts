@@ -218,6 +218,43 @@ async function ensureAttendanceDefaults(input: {
   }
 }
 
+function sameMoney(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.005;
+}
+
+/** Auto-calculated amounts for an item, before manual overrides. */
+async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
+  presencialDays: number;
+  differential: number;
+  travel: number;
+  meal: number;
+}> {
+  const attendance = await listAttendanceForItem(item.id);
+  const attendanceInput = attendance.map((day) => ({
+    dayKind: day.day_kind,
+    hours: day.hours,
+  }));
+  const presencialDays = countPresencialDays(attendanceInput);
+
+  return {
+    presencialDays,
+    differential: computePayrollDifferential({
+      baseType: item.base_type,
+      baseAmount: item.base_amount,
+      hourlyRate: item.hourly_rate,
+      attendance: attendanceInput,
+    }),
+    travel: computeTravelAmount({
+      presencialDays,
+      dailyTravelAmount: item.daily_travel_amount,
+    }),
+    meal: computeMealAmount({
+      presencialDays,
+      dailyMealAmount: item.daily_meal_amount,
+    }),
+  };
+}
+
 export async function recalculatePayrollItem(
   itemId: string,
 ): Promise<PayrollClosingItem> {
@@ -235,32 +272,14 @@ export async function recalculatePayrollItem(
   }
 
   const item = mapItem(row as Record<string, unknown>);
-  const attendance = await listAttendanceForItem(itemId);
-  const attendanceInput = attendance.map((day) => ({
-    dayKind: day.day_kind,
-    hours: day.hours,
-  }));
-
-  const presencialDays = countPresencialDays(attendanceInput);
-  const suggestedDifferential = computePayrollDifferential({
-    baseType: item.base_type,
-    hourlyRate: item.hourly_rate,
-    attendance: attendanceInput,
-  });
-  const suggestedTravel = computeTravelAmount({
-    presencialDays,
-    dailyTravelAmount: item.daily_travel_amount,
-  });
-  const suggestedMeal = computeMealAmount({
-    presencialDays,
-    dailyMealAmount: item.daily_meal_amount,
-  });
+  const suggested = await suggestPayrollItemAmounts(item);
+  const presencialDays = suggested.presencialDays;
 
   const differential = item.differential_manual
     ? item.differential_amount
-    : suggestedDifferential;
-  const travel = item.travel_manual ? item.travel_amount : suggestedTravel;
-  const meal = item.meal_manual ? item.meal_amount : suggestedMeal;
+    : suggested.differential;
+  const travel = item.travel_manual ? item.travel_amount : suggested.travel;
+  const meal = item.meal_manual ? item.meal_amount : suggested.meal;
   const invoice = computeInvoiceAmount({
     baseAmount: item.base_amount,
     differentialAmount: differential,
@@ -416,6 +435,85 @@ export async function ensurePayrollMonthWithItems(input: {
   };
 }
 
+/**
+ * Re-snapshot compensation (base, hourly rate, travel/meal) onto existing
+ * items and recalculate. Used when cadastro changes after the month opened.
+ */
+export async function syncPayrollItemsFromCompensation(input: {
+  yearMonth: string;
+  teamId?: string | null;
+  /** Drop manual overrides so every amount returns to the calculated value. */
+  resetManualOverrides?: boolean;
+}): Promise<{ syncedCount: number }> {
+  const supabase = await createClient();
+  const { data: closingRow, error: closingError } = await supabase
+    .from("payroll_month_closings")
+    .select("*")
+    .eq("year_month", input.yearMonth)
+    .maybeSingle();
+
+  if (closingError) {
+    throw new Error(`Falha ao carregar folha: ${closingError.message}`);
+  }
+  if (!closingRow) {
+    return { syncedCount: 0 };
+  }
+
+  const closing = mapClosing(closingRow as Record<string, unknown>);
+  const items = await listItemsForClosing(closing.id);
+  const scoped = input.teamId
+    ? items.filter((item) => item.team_id === input.teamId)
+    : items;
+
+  if (scoped.length === 0) {
+    return { syncedCount: 0 };
+  }
+
+  const comps = await listCurrentCompensationsByDeveloperIds(
+    scoped.map((item) => item.developer_id),
+  );
+
+  let syncedCount = 0;
+  for (const item of scoped) {
+    const comp = comps.get(item.developer_id);
+    if (!comp) {
+      continue;
+    }
+
+    const patch: Record<string, unknown> = {
+      base_amount: comp.base_amount,
+      base_type: comp.base_type,
+      hourly_rate: comp.hourly_rate,
+      contracted_hours_per_day: comp.contracted_hours_per_day,
+      contracted_hours_per_month: comp.contracted_hours_per_month,
+      daily_travel_amount: comp.daily_travel_amount,
+      daily_meal_amount: comp.daily_meal_amount,
+    };
+
+    if (input.resetManualOverrides) {
+      patch.differential_manual = false;
+      patch.travel_manual = false;
+      patch.meal_manual = false;
+    }
+
+    const { error } = await supabase
+      .from("payroll_closing_items")
+      .update(patch)
+      .eq("id", item.id);
+
+    if (error) {
+      throw new Error(
+        `Falha ao sincronizar ${item.developer_name}: ${error.message}`,
+      );
+    }
+
+    await recalculatePayrollItem(item.id);
+    syncedCount += 1;
+  }
+
+  return { syncedCount };
+}
+
 export async function updatePayrollItemAmounts(input: {
   itemId: string;
   discountsAmount?: number;
@@ -439,6 +537,7 @@ export async function updatePayrollItemAmounts(input: {
   }
 
   const item = mapItem(row as Record<string, unknown>);
+  const suggested = await suggestPayrollItemAmounts(item);
   const patch: Record<string, unknown> = {};
 
   if (input.discountsAmount != null) {
@@ -447,15 +546,19 @@ export async function updatePayrollItemAmounts(input: {
   if (input.differentialAmount != null) {
     patch.differential_amount = input.differentialAmount;
     patch.differential_manual =
-      input.markDifferentialManual ?? true;
+      input.markDifferentialManual ??
+      !sameMoney(input.differentialAmount, suggested.differential);
   }
   if (input.travelAmount != null) {
     patch.travel_amount = input.travelAmount;
-    patch.travel_manual = input.markTravelManual ?? true;
+    patch.travel_manual =
+      input.markTravelManual ??
+      !sameMoney(input.travelAmount, suggested.travel);
   }
   if (input.mealAmount != null) {
     patch.meal_amount = input.mealAmount;
-    patch.meal_manual = input.markMealManual ?? true;
+    patch.meal_manual =
+      input.markMealManual ?? !sameMoney(input.mealAmount, suggested.meal);
   }
   if (input.invoiceIssuerId !== undefined) {
     patch.invoice_issuer_id = input.invoiceIssuerId;

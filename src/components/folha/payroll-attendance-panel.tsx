@@ -207,7 +207,8 @@ export function PayrollAttendancePanel({
           <p className="text-sm text-muted-foreground">
             Horas padrão:{" "}
             {item.contracted_hours_per_day.toLocaleString("pt-BR")} h/dia.
-            Diferencial variável = horas presenciais × valor hora.
+            Presencial e home office somam horas para o diferencial; só os dias
+            presenciais geram deslocamento e refeição.
           </p>
           <ul className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             {LEGEND.map((row) => (

@@ -6,12 +6,39 @@ export type AttendanceDayInput = {
   hours: number;
 };
 
+/** Hours actually worked in the month (presencial + home office). */
+export function countWorkedHours(attendance: AttendanceDayInput[]): number {
+  let total = 0;
+  for (const day of attendance) {
+    if (day.dayKind !== "presencial" && day.dayKind !== "home") {
+      continue;
+    }
+    const hours = Number.isFinite(day.hours) && day.hours > 0 ? day.hours : 0;
+    total += hours;
+  }
+  return Math.round(total * 100) / 100;
+}
+
+/** Worked hours × hourly rate (presencial + home office). */
+export function computeWorkedAmount(input: {
+  hourlyRate: number | null;
+  attendance: AttendanceDayInput[];
+}): number {
+  const rate = input.hourlyRate;
+  if (rate == null || !Number.isFinite(rate) || rate < 0) {
+    return 0;
+  }
+  return roundMoney(countWorkedHours(input.attendance) * rate);
+}
+
 /**
- * Variable: sum(presencial hours × hourly rate).
+ * Variable: (worked hours × hourly rate) − contractual base.
+ * May be negative when the month has fewer hours than the base covers.
  * Fixed: 0 (manual override allowed in UI).
  */
 export function computePayrollDifferential(input: {
   baseType: CompensationBaseType;
+  baseAmount: number;
   hourlyRate: number | null;
   attendance: AttendanceDayInput[];
 }): number {
@@ -22,15 +49,12 @@ export function computePayrollDifferential(input: {
   if (rate == null || !Number.isFinite(rate) || rate < 0) {
     return 0;
   }
-  let total = 0;
-  for (const day of input.attendance) {
-    if (day.dayKind !== "presencial") {
-      continue;
-    }
-    const hours = Number.isFinite(day.hours) && day.hours > 0 ? day.hours : 0;
-    total += hours * rate;
-  }
-  return roundMoney(total);
+  const worked = computeWorkedAmount({
+    hourlyRate: rate,
+    attendance: input.attendance,
+  });
+  const base = Number.isFinite(input.baseAmount) ? input.baseAmount : 0;
+  return roundMoney(worked - base);
 }
 
 export function countPresencialDays(

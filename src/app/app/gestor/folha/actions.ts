@@ -7,6 +7,7 @@ import {
   batchUpsertPayrollAttendanceDays,
   getPayrollItem,
   listAttendanceForItem,
+  syncPayrollItemsFromCompensation,
   updatePayrollClosingStatus,
   updatePayrollItemAmounts,
   upsertPayrollAttendanceDay,
@@ -105,9 +106,6 @@ export async function updatePayrollItemAction(
       travelAmount: travel.value,
       mealAmount: meal.value,
       invoiceIssuerId,
-      markDifferentialManual: true,
-      markTravelManual: true,
-      markMealManual: true,
     });
   } catch (error) {
     return {
@@ -298,6 +296,37 @@ export async function listAttendanceAction(
         error instanceof Error
           ? error.message
           : "Falha ao carregar presença.",
+    };
+  }
+}
+
+export async function syncPayrollFromCompensationAction(input: {
+  yearMonth: string;
+  teamId?: string | null;
+}): Promise<
+  { ok: true; syncedCount: number } | { ok: false; error: string }
+> {
+  await requireTeamAccess();
+
+  if (!/^\d{4}-\d{2}$/.test(input.yearMonth)) {
+    return { ok: false, error: "Mês inválido." };
+  }
+
+  try {
+    const result = await syncPayrollItemsFromCompensation({
+      yearMonth: input.yearMonth,
+      teamId: input.teamId ?? null,
+      resetManualOverrides: true,
+    });
+    revalidateFolha();
+    return { ok: true, syncedCount: result.syncedCount };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível sincronizar com o cadastro.",
     };
   }
 }
