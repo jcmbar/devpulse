@@ -9,6 +9,7 @@ import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { FilterBar } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
+import { buildGestorNavTabs } from "@/lib/gestor/nav-tabs";
 import {
   parseTeamListFilter,
   teamListFilterParam,
@@ -28,8 +29,7 @@ type PageProps = {
   }>;
 };
 
-function buildGestorHref(input: {
-  path: "/app/gestor" | "/app/gestor/fechamentos";
+function buildFechamentosHref(input: {
   teamId?: string;
   closingYear?: number | null;
 }): string {
@@ -37,11 +37,13 @@ function buildGestorHref(input: {
   if (input.teamId) {
     params.set("teamId", input.teamId);
   }
-  if (input.path === "/app/gestor/fechamentos" && input.closingYear != null) {
+  if (input.closingYear != null) {
     params.set("closingYear", String(input.closingYear));
   }
   const query = params.toString();
-  return query ? `${input.path}?${query}` : input.path;
+  return query
+    ? `/app/gestor/fechamentos?${query}`
+    : "/app/gestor/fechamentos";
 }
 
 export default async function GestorFechamentosPage({ searchParams }: PageProps) {
@@ -182,25 +184,11 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       />
 
       <AppViewTabs
-        tabs={[
-          {
-            href: buildGestorHref({
-              path: "/app/gestor",
-              teamId: teamParam,
-            }),
-            label: "Dashboard",
-            active: false,
-          },
-          {
-            href: buildGestorHref({
-              path: "/app/gestor/fechamentos",
-              teamId: teamParam,
-              closingYear: closingSelectedYear,
-            }),
-            label: "Fechamentos",
-            active: true,
-          },
-        ]}
+        tabs={buildGestorNavTabs({
+          active: "fechamentos",
+          teamId: teamParam,
+          closingYear: closingSelectedYear,
+        })}
       />
 
       <FilterBar>
@@ -224,8 +212,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
               {years.map((year) => (
                 <Link
                   key={year}
-                  href={buildGestorHref({
-                    path: "/app/gestor/fechamentos",
+                  href={buildFechamentosHref({
                     teamId: teamParam,
                     closingYear: year,
                   })}

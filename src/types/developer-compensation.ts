@@ -45,6 +45,8 @@ export type DeveloperCompensation = {
   hourly_rate: number | null;
   contracted_hours_per_day: number;
   contracted_hours_per_month: number;
+  daily_travel_amount: number;
+  daily_meal_amount: number;
   currency: string;
   effective_from: string;
   effective_to: string | null;
@@ -61,6 +63,8 @@ export type UpsertCurrentCompensationInput = {
   hourlyRate: number | null;
   contractedHoursPerDay: number;
   contractedHoursPerMonth: number;
+  dailyTravelAmount: number;
+  dailyMealAmount: number;
   currency?: string;
   effectiveFrom?: string;
   notes?: string | null;

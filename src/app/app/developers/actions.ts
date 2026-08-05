@@ -228,6 +228,22 @@ export async function upsertDeveloperCompensationAction(
     return { error: hoursMonth.error, success: null };
   }
 
+  const travel = parseNonNegativeNumber(
+    String(formData.get("dailyTravelAmount") ?? "0"),
+    "o valor diário de deslocamento",
+  );
+  if (!travel.ok) {
+    return { error: travel.error, success: null };
+  }
+
+  const meal = parseNonNegativeNumber(
+    String(formData.get("dailyMealAmount") ?? "0"),
+    "o valor diário de refeição",
+  );
+  if (!meal.ok) {
+    return { error: meal.error, success: null };
+  }
+
   const hourlyRaw = String(formData.get("hourlyRate") ?? "").trim();
   let hourlyRate: number | null = null;
   if (hourlyRaw) {
@@ -252,6 +268,8 @@ export async function upsertDeveloperCompensationAction(
       hourlyRate,
       contractedHoursPerDay: hoursDay.value,
       contractedHoursPerMonth: hoursMonth.value,
+      dailyTravelAmount: travel.value,
+      dailyMealAmount: meal.value,
       effectiveFrom,
       notes: readOptionalString(formData, "notes"),
     });

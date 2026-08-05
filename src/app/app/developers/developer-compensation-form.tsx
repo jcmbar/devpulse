@@ -157,6 +157,44 @@ export function DeveloperCompensationForm({
         </FormField>
 
         <FormField
+          label="Deslocamento / dia presencial (R$)"
+          htmlFor="dailyTravelAmount"
+          hint="Usado na Folha: dias presenciais × este valor."
+        >
+          <input
+            id="dailyTravelAmount"
+            name="dailyTravelAmount"
+            type="text"
+            inputMode="decimal"
+            defaultValue={
+              compensation
+                ? String(compensation.daily_travel_amount)
+                : "0"
+            }
+            className="ui-input"
+          />
+        </FormField>
+
+        <FormField
+          label="Refeição / dia presencial (R$)"
+          htmlFor="dailyMealAmount"
+          hint="Usado na Folha: dias presenciais × este valor."
+        >
+          <input
+            id="dailyMealAmount"
+            name="dailyMealAmount"
+            type="text"
+            inputMode="decimal"
+            defaultValue={
+              compensation
+                ? String(compensation.daily_meal_amount)
+                : "0"
+            }
+            className="ui-input"
+          />
+        </FormField>
+
+        <FormField
           label="Vigência a partir de"
           htmlFor="effectiveFrom"
           hint="Data de início do valor atual."

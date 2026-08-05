@@ -21,6 +21,8 @@ function mapRow(row: Record<string, unknown>): DeveloperCompensation {
       row.hourly_rate == null ? null : Number(row.hourly_rate),
     contracted_hours_per_day: Number(row.contracted_hours_per_day ?? 0),
     contracted_hours_per_month: Number(row.contracted_hours_per_month ?? 0),
+    daily_travel_amount: Number(row.daily_travel_amount ?? 0),
+    daily_meal_amount: Number(row.daily_meal_amount ?? 0),
     currency: String(row.currency ?? "BRL"),
     effective_from: String(row.effective_from),
     effective_to: (row.effective_to as string | null) ?? null,
@@ -51,6 +53,31 @@ export async function getCurrentDeveloperCompensation(
   return data ? mapRow(data as Record<string, unknown>) : null;
 }
 
+export async function listCurrentCompensationsByDeveloperIds(
+  developerIds: string[],
+): Promise<Map<string, DeveloperCompensation>> {
+  const map = new Map<string, DeveloperCompensation>();
+  if (developerIds.length === 0) {
+    return map;
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("developer_compensation")
+    .select("*")
+    .in("developer_id", developerIds)
+    .eq("is_current", true);
+
+  if (error) {
+    throw new Error(`Falha ao listar valores: ${error.message}`);
+  }
+
+  for (const row of data ?? []) {
+    const mapped = mapRow(row as Record<string, unknown>);
+    map.set(mapped.developer_id, mapped);
+  }
+  return map;
+}
+
 /**
  * Upsert the current compensation row for a person.
  * Does not close history rows yet — V1 edits the active row in place
@@ -69,6 +96,8 @@ export async function upsertCurrentDeveloperCompensation(
     hourly_rate: input.hourlyRate,
     contracted_hours_per_day: input.contractedHoursPerDay,
     contracted_hours_per_month: input.contractedHoursPerMonth,
+    daily_travel_amount: input.dailyTravelAmount,
+    daily_meal_amount: input.dailyMealAmount,
     currency: input.currency ?? "BRL",
     effective_from:
       input.effectiveFrom ??

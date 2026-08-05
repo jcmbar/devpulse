@@ -40,6 +40,7 @@ import {
 import { RankingMetricsLegend } from "@/components/gestor/ranking-metrics-legend";
 import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
+import { buildGestorNavTabs } from "@/lib/gestor/nav-tabs";
 import { buildGestorAnaliticoHref } from "@/lib/metrics/gestor-analitico-href";
 import {
   compiladoSourceModeLabel,
@@ -335,20 +336,10 @@ export default async function GestorDashboardPage({
       />
 
       <AppViewTabs
-        tabs={[
-          {
-            href: teamParam ? `/app/gestor?teamId=${teamParam}` : "/app/gestor",
-            label: "Dashboard",
-            active: true,
-          },
-          {
-            href: teamParam
-              ? `/app/gestor/fechamentos?teamId=${teamParam}`
-              : "/app/gestor/fechamentos",
-            label: "Fechamentos",
-            active: false,
-          },
-        ]}
+        tabs={buildGestorNavTabs({
+          active: "dashboard",
+          teamId: teamParam,
+        })}
       />
 
       <FilterBar>

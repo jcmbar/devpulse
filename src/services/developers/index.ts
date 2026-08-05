@@ -138,6 +138,7 @@ export {
 
 export {
   getCurrentDeveloperCompensation,
+  listCurrentCompensationsByDeveloperIds,
   upsertCurrentDeveloperCompensation,
 } from "./compensation";
 

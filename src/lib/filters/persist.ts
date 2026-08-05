@@ -8,6 +8,7 @@ export type FilterScope =
   | "gestor-dashboard"
   | "gestor-analitico"
   | "gestor-fechamentos"
+  | "gestor-folha"
   | "gestor-config"
   | "admin-developers"
   | "admin-imports"
@@ -32,6 +33,7 @@ export const FILTER_SCOPE_KEYS: Record<FilterScope, readonly string[]> = {
   "gestor-dashboard": ["teamId", "source", "month", "from", "to"],
   "gestor-analitico": ["teamId", "source", "month", "from", "to"],
   "gestor-fechamentos": ["teamId", "closingYear"],
+  "gestor-folha": ["teamId", "month"],
   "gestor-config": ["year", "month"],
   "admin-developers": ["teamId", "active", "jiraId"],
   "admin-imports": ["teamId"],
