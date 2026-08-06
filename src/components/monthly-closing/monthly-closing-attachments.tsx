@@ -23,13 +23,31 @@ type AttachmentSlotProps = {
   type: MonthlyClosingAttachmentType;
   attachment: MonthlyClosingAttachment | null;
   readOnly: boolean;
+  hint?: string | null;
 };
+
+function attachmentStatusText(
+  type: MonthlyClosingAttachmentType,
+  attachment: MonthlyClosingAttachment,
+): string {
+  if (type !== "meal_pix_receipt") {
+    return attachment.is_valid ? " · validado" : "";
+  }
+  if (attachment.is_valid === true) {
+    return " · aceito pelo gestor";
+  }
+  if (attachment.is_valid === false) {
+    return " · recusado — envie novamente";
+  }
+  return " · aguardando aceite do gestor";
+}
 
 function AttachmentSlot({
   closing,
   type,
   attachment,
   readOnly,
+  hint = null,
 }: AttachmentSlotProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +55,18 @@ function AttachmentSlot({
   const [pending, startTransition] = useTransition();
   const label = monthlyClosingAttachmentTypeLabel(type);
   const uploaded = attachment != null;
+  const slotTone =
+    type === "meal_pix_receipt"
+      ? uploaded && attachment.is_valid === true
+        ? "ok"
+        : uploaded && attachment.is_valid === false
+          ? "rejected"
+          : uploaded
+            ? "pending"
+            : "empty"
+      : uploaded
+        ? "ok"
+        : "empty";
 
   function onFileChange(file: File | null) {
     if (!file) {
@@ -77,14 +107,15 @@ function AttachmentSlot({
     <div
       className={cn(
         "min-w-0 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-3",
-        uploaded
-          ? "border-emerald-500/40 bg-emerald-500/10"
-          : "border-border bg-muted/20",
+        slotTone === "ok" && "border-emerald-500/40 bg-emerald-500/10",
+        slotTone === "rejected" && "border-rose-500/40 bg-rose-500/10",
+        slotTone === "pending" && "border-amber-500/40 bg-amber-500/10",
+        slotTone === "empty" && "border-border bg-muted/20",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
-          {uploaded ? (
+          {slotTone === "ok" ? (
             <CheckCircle2
               className="mt-0.5 size-4 shrink-0 text-emerald-700 dark:text-emerald-300"
               strokeWidth={2}
@@ -105,13 +136,23 @@ function AttachmentSlot({
                 title={attachment.original_filename}
               >
                 {attachment.original_filename}
-                {attachment.is_valid ? " · validado" : ""}
+                {attachmentStatusText(type, attachment)}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
                 {readOnly ? "Não enviado" : "Aguardando upload"}
               </p>
             )}
+            {hint ? (
+              <p className="mt-1 text-xs text-muted-foreground text-pretty">
+                {hint}
+              </p>
+            ) : null}
+            {attachment?.review_notes && attachment.is_valid === false ? (
+              <p className="mt-1 text-xs text-rose-700 dark:text-rose-300 text-pretty">
+                Motivo: {attachment.review_notes}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -228,10 +269,13 @@ export function MonthlyClosingAttachmentsPanel({
   closing,
   attachments,
   invoiceIssuer = null,
+  requireMealPixReceipt = false,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
   invoiceIssuer?: InvoiceIssuer | null;
+  /** Cadastro Valores: cobrar comprovante PIX após finalize. */
+  requireMealPixReceipt?: boolean;
 }) {
   if (closing.status !== "closed" && closing.status !== "finalized") {
     return null;
@@ -240,7 +284,14 @@ export function MonthlyClosingAttachmentsPanel({
   const invoice =
     attachments.find((row) => row.type === "invoice_pdf") ?? null;
   const boleto = attachments.find((row) => row.type === "boleto_pdf") ?? null;
-  const readOnly = closing.status === "finalized";
+  const mealPix =
+    attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
+  const docsReadOnly = closing.status === "finalized";
+  const showMealPix =
+    closing.status === "finalized" &&
+    requireMealPixReceipt &&
+    (closing.meal_presencial_days ?? 0) > 0;
+  const mealPixReadOnly = mealPix?.is_valid === true;
 
   return (
     <section className="space-y-3 rounded-[var(--radius)] border border-border bg-[var(--surface)] p-4">
@@ -249,8 +300,10 @@ export function MonthlyClosingAttachmentsPanel({
           Documentos do fechamento
         </h3>
         <p className="text-xs text-muted-foreground">
-          {readOnly
-            ? "Fechamento finalizado — documentos somente leitura."
+          {docsReadOnly
+            ? showMealPix
+              ? "Fechamento finalizado — envie o comprovante PIX de refeição quando solicitado."
+              : "Fechamento finalizado — documentos somente leitura."
             : "Envie a nota fiscal e o boleto em PDF para o gestor finalizar."}
         </p>
       </div>
@@ -276,14 +329,23 @@ export function MonthlyClosingAttachmentsPanel({
           closing={closing}
           type="invoice_pdf"
           attachment={invoice}
-          readOnly={readOnly}
+          readOnly={docsReadOnly}
         />
         <AttachmentSlot
           closing={closing}
           type="boleto_pdf"
           attachment={boleto}
-          readOnly={readOnly}
+          readOnly={docsReadOnly}
         />
+        {showMealPix ? (
+          <AttachmentSlot
+            closing={closing}
+            type="meal_pix_receipt"
+            attachment={mealPix}
+            readOnly={mealPixReadOnly}
+            hint="Obrigatório. Sem aceite do gestor, novos fechamentos ficam bloqueados."
+          />
+        ) : null}
       </div>
     </section>
   );

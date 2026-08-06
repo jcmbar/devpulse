@@ -10,6 +10,7 @@ import { requireTeamAccess } from "@/lib/auth/permissions";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
 import { getDeveloperAdmin } from "@/services/developers/admin";
+import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listInvoiceIssuers, getInvoiceIssuer } from "@/services/invoice-issuers";
 import {
   getMonthlyClosingById,
@@ -101,7 +102,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [developer, items, events, attachments, presenceDays, issuers] =
+  const [developer, items, events, attachments, presenceDays, issuers, compensation] =
     await Promise.all([
       getDeveloperAdmin(closing.developer_id),
       listMonthlyClosingItems(closing.id),
@@ -109,6 +110,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
       listMonthlyClosingAttachments(closing.id),
       listMonthlyClosingPresenceDays(closing.id),
       listInvoiceIssuers({ activeOnly: true }),
+      getCurrentDeveloperCompensation(closing.developer_id),
     ]);
 
   const [folhaIssuerId, selectedIssuer, folhaComparePayload] = await Promise.all([
@@ -158,6 +160,9 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
         folhaCompare={folhaComparePayload.compare}
         userSide={folhaComparePayload.userSide}
         folhaSide={folhaComparePayload.folhaSide}
+        requireMealPixReceipt={
+          compensation?.require_meal_pix_receipt ?? false
+        }
       />
 
       <SectionShell

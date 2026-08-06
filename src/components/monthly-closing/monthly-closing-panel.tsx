@@ -139,6 +139,8 @@ type MonthlyClosingControlsProps = {
   compensation: DeveloperCompensation | null;
   workedHours: number;
   holidays?: ReadonlyArray<{ date: string; name: string }>;
+  /** Bloqueia iniciar/enviar até comprovante PIX aceito. */
+  mealPixBlockReason?: string | null;
 };
 
 export function MonthlyClosingControls({
@@ -151,6 +153,7 @@ export function MonthlyClosingControls({
   compensation,
   workedHours,
   holidays = [],
+  mealPixBlockReason = null,
 }: MonthlyClosingControlsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +165,7 @@ export function MonthlyClosingControls({
   const [pending, startTransition] = useTransition();
   const status: MonthlyClosingStatus = closing?.status ?? "open";
   const started = closing != null && closing.started_at != null;
+  const mealPixBlocked = Boolean(mealPixBlockReason);
 
   if (!yearMonth) {
     return (
@@ -238,17 +242,25 @@ export function MonthlyClosingControls({
         </span>
       </div>
 
+      {mealPixBlockReason ? (
+        <div className="w-full rounded-[var(--radius-sm)] border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-left text-xs text-amber-950 dark:text-amber-100 text-pretty">
+          {mealPixBlockReason}
+        </div>
+      ) : null}
+
       <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start lg:justify-end">
         {status === "open" && !started ? (
           <button
             type="button"
             onClick={startClosing}
-            disabled={pending || !importId}
+            disabled={pending || !importId || mealPixBlocked}
             className="ui-btn-primary"
             title={
-              !importId
-                ? "É necessário um lote Compilado resolvido"
-                : undefined
+              mealPixBlocked
+                ? mealPixBlockReason ?? undefined
+                : !importId
+                  ? "É necessário um lote Compilado resolvido"
+                  : undefined
             }
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -260,12 +272,14 @@ export function MonthlyClosingControls({
           <button
             type="button"
             onClick={() => openValuesModal("submit")}
-            disabled={pending || !canSubmit || !importId}
+            disabled={pending || !canSubmit || !importId || mealPixBlocked}
             className="ui-btn-primary"
             title={
-              !canSubmit
-                ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
-                : undefined
+              mealPixBlocked
+                ? mealPixBlockReason ?? undefined
+                : !canSubmit
+                  ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
+                  : undefined
             }
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -302,12 +316,14 @@ export function MonthlyClosingControls({
             <button
               type="button"
               onClick={() => openValuesModal("resubmit")}
-              disabled={pending || !canSubmit || !importId}
+              disabled={pending || !canSubmit || !importId || mealPixBlocked}
               className="ui-btn-primary w-full sm:w-auto"
               title={
-                !canSubmit
-                  ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
-                  : undefined
+                mealPixBlocked
+                  ? mealPixBlockReason ?? undefined
+                  : !canSubmit
+                    ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
+                    : undefined
               }
             >
               {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}

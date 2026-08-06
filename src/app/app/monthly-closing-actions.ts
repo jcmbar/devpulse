@@ -10,6 +10,7 @@ import {
   createMonthlyClosingAttachmentSignedUrl,
   finalizeMonthlyClosing,
   rejectMonthlyClosing,
+  reviewMealPixReceipt,
   revertMonthlyClosingStatus,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
@@ -246,7 +247,11 @@ export async function uploadMonthlyClosingAttachmentAction(
     const closingId = String(formData.get("closingId") ?? "").trim();
     const typeRaw = String(formData.get("type") ?? "").trim();
     const type: MonthlyClosingAttachmentType | null =
-      typeRaw === "invoice_pdf" || typeRaw === "boleto_pdf" ? typeRaw : null;
+      typeRaw === "invoice_pdf" ||
+      typeRaw === "boleto_pdf" ||
+      typeRaw === "meal_pix_receipt"
+        ? typeRaw
+        : null;
     const file = formData.get("file");
 
     if (!closingId || !type) {
@@ -298,6 +303,42 @@ export async function getMonthlyClosingAttachmentUrlAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível abrir o anexo.",
+    };
+  }
+}
+
+export async function reviewMealPixReceiptAction(input: {
+  closingId: string;
+  accepted: boolean;
+  reviewNotes?: string | null;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile } = await requireTeamAccess();
+
+    const closingId = input.closingId.trim();
+    if (!closingId) {
+      return { ok: false, error: "Fechamento inválido." };
+    }
+
+    await reviewMealPixReceipt({
+      closingId,
+      accepted: input.accepted,
+      reviewNotes: input.reviewNotes,
+      actorUserId: profile.id,
+    });
+
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath("/app/gestor/fechamentos");
+    revalidatePath(`/app/gestor/fechamentos/${closingId}`);
+    return { ok: true, closingId };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível revisar o comprovante PIX.",
     };
   }
 }

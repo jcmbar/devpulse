@@ -47,6 +47,8 @@ export type DeveloperCompensation = {
   contracted_hours_per_month: number;
   daily_travel_amount: number;
   daily_meal_amount: number;
+  /** Cobrar comprovante PIX de reembolso de refeição após finalize. */
+  require_meal_pix_receipt: boolean;
   currency: string;
   effective_from: string;
   effective_to: string | null;
@@ -65,6 +67,7 @@ export type UpsertCurrentCompensationInput = {
   contractedHoursPerMonth: number;
   dailyTravelAmount: number;
   dailyMealAmount: number;
+  requireMealPixReceipt?: boolean;
   currency?: string;
   effectiveFrom?: string;
   notes?: string | null;

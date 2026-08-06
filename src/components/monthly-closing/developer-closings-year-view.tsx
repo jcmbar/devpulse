@@ -47,6 +47,7 @@ type DeveloperClosingsYearViewProps = {
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
+  mealPixBlockReason?: string | null;
 };
 
 function formatPercent(value: number | null): string {
@@ -187,6 +188,7 @@ function MonthDetailPanel({
   developerCompensation,
   closingInvoiceIssuer = null,
   closingHolidays = [],
+  mealPixBlockReason = null,
   empty,
 }: {
   detailRow: DeveloperClosingYearMonthRow | null;
@@ -200,6 +202,7 @@ function MonthDetailPanel({
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
+  mealPixBlockReason?: string | null;
   empty?: boolean;
 }) {
   if (empty || detailRow == null) {
@@ -242,6 +245,7 @@ function MonthDetailPanel({
           compensation={developerCompensation}
           workedHours={detailRow.metrics.totalTimeSpentHours}
           holidays={closingHolidays}
+          mealPixBlockReason={mealPixBlockReason}
         />
       </div>
 
@@ -255,6 +259,9 @@ function MonthDetailPanel({
           closing={detailClosing}
           attachments={detailAttachments}
           invoiceIssuer={closingInvoiceIssuer}
+          requireMealPixReceipt={
+            developerCompensation?.require_meal_pix_receipt ?? false
+          }
         />
       ) : null}
     </div>
@@ -336,6 +343,7 @@ export function DeveloperClosingsYearView({
   developerCompensation,
   closingInvoiceIssuer = null,
   closingHolidays = [],
+  mealPixBlockReason = null,
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
   const detailRow =
@@ -360,6 +368,7 @@ export function DeveloperClosingsYearView({
     developerCompensation,
     closingInvoiceIssuer,
     closingHolidays,
+    mealPixBlockReason,
   };
 
   return (

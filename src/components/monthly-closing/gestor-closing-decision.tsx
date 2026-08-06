@@ -5,6 +5,7 @@ import {
   finalizeMonthlyClosingAction,
   getMonthlyClosingAttachmentUrlAction,
   rejectMonthlyClosingAction,
+  reviewMealPixReceiptAction,
   revertMonthlyClosingStatusAction,
 } from "@/app/app/monthly-closing-actions";
 import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
@@ -39,6 +40,7 @@ export function GestorClosingDecisionPanel({
   selectedIssuer = null,
   valuesMismatch = false,
   valuesMismatchSummary = null,
+  requireMealPixReceipt = false,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
@@ -50,11 +52,14 @@ export function GestorClosingDecisionPanel({
   /** Blocks approve/finalize when Folha × user values diverge. */
   valuesMismatch?: boolean;
   valuesMismatchSummary?: string | null;
+  /** Cadastro Valores: cobrar comprovante PIX após finalize. */
+  requireMealPixReceipt?: boolean;
 }) {
   const router = useRouter();
   const notesId = useId();
   const issuerIdField = useId();
   const rejectId = useId();
+  const mealPixNotesId = useId();
   const initialIssuer =
     closing.invoice_issuer_id ??
     defaultIssuerId ??
@@ -62,6 +67,7 @@ export function GestorClosingDecisionPanel({
   const [issuerId, setIssuerId] = useState(initialIssuer);
   const [notes, setNotes] = useState(closing.manager_invoice_notes ?? "");
   const [rejectionNotes, setRejectionNotes] = useState("");
+  const [mealPixReviewNotes, setMealPixReviewNotes] = useState("");
   const [mode, setMode] = useState<"approve" | "reject">("approve");
   const [error, setError] = useState<string | null>(null);
   const [confirmRevert, setConfirmRevert] = useState(false);
@@ -70,7 +76,13 @@ export function GestorClosingDecisionPanel({
   const invoice =
     attachments.find((row) => row.type === "invoice_pdf") ?? null;
   const boleto = attachments.find((row) => row.type === "boleto_pdf") ?? null;
+  const mealPix =
+    attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
   const canFinalize = Boolean(invoice && boleto);
+  const showMealPix =
+    closing.status === "finalized" &&
+    requireMealPixReceipt &&
+    (closing.meal_presencial_days ?? 0) > 0;
   const revertTarget = monthlyClosingRevertTarget(closing.status);
   const revertLabel = monthlyClosingRevertActionLabel(closing.status);
   const revertDescription = monthlyClosingRevertDescription(closing.status);
@@ -167,6 +179,23 @@ export function GestorClosingDecisionPanel({
         return;
       }
       window.open(result.url, "_blank", "noopener,noreferrer");
+    });
+  }
+
+  function reviewMealPix(accepted: boolean) {
+    setError(null);
+    startTransition(async () => {
+      const result = await reviewMealPixReceiptAction({
+        closingId: closing.id,
+        accepted,
+        reviewNotes: mealPixReviewNotes,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setMealPixReviewNotes("");
+      router.refresh();
     });
   }
 
@@ -522,6 +551,102 @@ export function GestorClosingDecisionPanel({
               </div>
             ))}
           </div>
+
+          {showMealPix ? (
+            <div
+              className={cn(
+                "space-y-3 rounded-[var(--radius-sm)] border px-3 py-3",
+                mealPix?.is_valid === true
+                  ? "border-emerald-500/40 bg-emerald-500/10"
+                  : mealPix?.is_valid === false
+                    ? "border-rose-500/40 bg-rose-500/10"
+                    : mealPix
+                      ? "border-amber-500/40 bg-amber-500/10"
+                      : "border-border bg-muted/20",
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {monthlyClosingAttachmentTypeLabel("meal_pix_receipt")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {mealPix == null
+                      ? "Aguardando envio do developer"
+                      : mealPix.is_valid === true
+                        ? "Aceito"
+                        : mealPix.is_valid === false
+                          ? "Recusado — developer pode reenviar"
+                          : "Pendente de revisão"}
+                  </p>
+                  {mealPix ? (
+                    <p
+                      className="mt-0.5 truncate text-xs text-muted-foreground"
+                      title={mealPix.original_filename}
+                    >
+                      {mealPix.original_filename}
+                    </p>
+                  ) : null}
+                  {mealPix?.review_notes ? (
+                    <p className="mt-1 text-xs text-pretty">
+                      Observação: {mealPix.review_notes}
+                    </p>
+                  ) : null}
+                </div>
+                {mealPix ? (
+                  <button
+                    type="button"
+                    onClick={() => openAttachment(mealPix.file_storage_key)}
+                    disabled={pending}
+                    className="shrink-0 text-xs font-medium text-brand underline-offset-4 hover:underline"
+                  >
+                    Abrir
+                  </button>
+                ) : null}
+              </div>
+              {mealPix && mealPix.is_valid !== true ? (
+                <div className="space-y-2 border-t border-border/60 pt-3">
+                  <label
+                    htmlFor={mealPixNotesId}
+                    className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                  >
+                    Observação da revisão
+                  </label>
+                  <textarea
+                    id={mealPixNotesId}
+                    value={mealPixReviewNotes}
+                    onChange={(event) =>
+                      setMealPixReviewNotes(event.target.value)
+                    }
+                    rows={2}
+                    placeholder="Obrigatória na recusa"
+                    className="ui-input min-h-[4rem] w-full resize-y text-sm"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => reviewMealPix(true)}
+                      disabled={pending}
+                      className="ui-btn-primary text-xs"
+                    >
+                      {pending ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : null}
+                      Aceitar PIX
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => reviewMealPix(false)}
+                      disabled={pending}
+                      className="ui-btn-secondary text-xs"
+                    >
+                      Recusar PIX
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {closing.status === "closed" ? (
             <div className="space-y-2 border-t border-border pt-3">

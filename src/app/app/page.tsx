@@ -23,6 +23,7 @@ import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import { getInvoiceIssuer } from "@/services/invoice-issuers";
 import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
+  getMealPixClosingBlockReason,
   getMonthlyClosingForDeveloperMonth,
   listMonthlyClosingAttachments,
   listMonthlyClosingItems,
@@ -370,6 +371,9 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   const developerCompensation: DeveloperCompensation | null =
     await getCurrentDeveloperCompensation(developer.id);
 
+  const mealPixBlockReason =
+    await getMealPixClosingBlockReason(developer.id);
+
   const closingInvoiceIssuer: InvoiceIssuer | null =
     monthlyClosing?.invoice_issuer_id
       ? await getInvoiceIssuer(monthlyClosing.invoice_issuer_id)
@@ -440,6 +444,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         developerCompensation={developerCompensation}
         closingInvoiceIssuer={closingInvoiceIssuer}
         closingHolidays={closingHolidayEntries}
+        mealPixBlockReason={mealPixBlockReason}
       />
     </>
   );

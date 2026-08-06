@@ -2,11 +2,13 @@ import "server-only";
 
 import {
   endOfMonth,
+  formatYearMonthLabel,
   startOfMonth,
 } from "@/lib/metrics/date-range";
 import { computeClosingSubmitValues } from "@/lib/metrics/closing-submit-values";
 import { getCardDeliveryFlags } from "@/lib/metrics/developer-period";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import type { DelayJustificationRequest } from "@/types/delay-justification";
@@ -41,6 +43,7 @@ function mapAttachment(row: Record<string, unknown>): MonthlyClosingAttachment {
     is_valid: row.is_valid == null ? null : Boolean(row.is_valid),
     validated_at: (row.validated_at as string | null) ?? null,
     validated_by_user_id: (row.validated_by_user_id as string | null) ?? null,
+    review_notes: (row.review_notes as string | null) ?? null,
     created_at: String(row.created_at),
   };
 }
@@ -50,6 +53,94 @@ function assertEditableClosing(closing: MonthlyClosing): void {
     throw new Error(
       "Este fechamento está finalizado e não pode ser alterado.",
     );
+  }
+}
+
+const MEAL_PIX_BLOCK_MESSAGE =
+  "Há comprovante PIX de refeição pendente de envio ou aceite do gestor. Envie o comprovante e aguarde a aceitação antes de efetuar um novo fechamento.";
+
+/**
+ * When compensation requires meal PIX receipts, every finalized closing with
+ * meal days must have an accepted meal_pix_receipt before new closings.
+ */
+export async function getMealPixClosingBlockReason(
+  developerId: string,
+): Promise<string | null> {
+  const compensation = await getCurrentDeveloperCompensation(developerId);
+  if (!compensation?.require_meal_pix_receipt) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data: closings, error } = await supabase
+    .from("monthly_closings")
+    .select("id, year_month, meal_presencial_days")
+    .eq("developer_id", developerId)
+    .eq("status", "finalized")
+    .gt("meal_presencial_days", 0);
+
+  if (error) {
+    throw new Error(
+      `Falha ao verificar comprovantes PIX: ${error.message}`,
+    );
+  }
+  if (!closings?.length) {
+    return null;
+  }
+
+  const closingIds = closings.map((row) => String(row.id));
+  const { data: pixRows, error: pixError } = await supabase
+    .from("monthly_closing_attachments")
+    .select("monthly_closing_id, is_valid")
+    .in("monthly_closing_id", closingIds)
+    .eq("type", "meal_pix_receipt");
+
+  if (pixError) {
+    throw new Error(
+      `Falha ao verificar comprovantes PIX: ${pixError.message}`,
+    );
+  }
+
+  const acceptedByClosing = new Map<string, boolean>();
+  for (const row of pixRows ?? []) {
+    acceptedByClosing.set(
+      String(row.monthly_closing_id),
+      row.is_valid === true,
+    );
+  }
+
+  const pending = closings.filter(
+    (row) => acceptedByClosing.get(String(row.id)) !== true,
+  );
+  if (pending.length === 0) {
+    return null;
+  }
+
+  const months = pending
+    .map((row) => formatYearMonthLabel(String(row.year_month)))
+    .join(", ");
+  return `${MEAL_PIX_BLOCK_MESSAGE} Pendente: ${months}.`;
+}
+
+export async function assertNoPendingMealPixBlockingNewClosing(
+  developerId: string,
+): Promise<void> {
+  const reason = await getMealPixClosingBlockReason(developerId);
+  if (reason) {
+    throw new Error(reason);
+  }
+}
+
+function attachmentUploadEventType(
+  type: MonthlyClosingAttachmentType,
+): MonthlyClosingEventType {
+  switch (type) {
+    case "invoice_pdf":
+      return "invoice_uploaded";
+    case "boleto_pdf":
+      return "boleto_uploaded";
+    case "meal_pix_receipt":
+      return "meal_pix_uploaded";
   }
 }
 
@@ -570,6 +661,8 @@ export async function startMonthlyClosing(input: {
     throw new Error("Mês inválido. Use o formato YYYY-MM.");
   }
 
+  await assertNoPendingMealPixBlockingNewClosing(input.developerId);
+
   const existing = await getMonthlyClosingForDeveloperMonth({
     developerId: input.developerId,
     yearMonth: input.yearMonth,
@@ -656,6 +749,7 @@ export async function submitMonthlyClosingForReview(input: {
     );
   }
   assertEditableClosing(closing);
+  await assertNoPendingMealPixBlockingNewClosing(input.developerId);
 
   const isResubmit = closing.status === "rejected";
   const resubmissionNotes = (input.developerResubmissionNotes ?? "").trim();
@@ -1139,12 +1233,51 @@ export async function uploadMonthlyClosingAttachment(input: {
   if (closing.developer_id !== input.developerId) {
     throw new Error("Você só pode anexar arquivos no próprio fechamento.");
   }
-  if (closing.status !== "closed") {
-    throw new Error(
-      "Anexos só podem ser enviados quando o fechamento está Fechado.",
+
+  const isMealPix = input.type === "meal_pix_receipt";
+  if (isMealPix) {
+    if (closing.status !== "finalized") {
+      throw new Error(
+        "Comprovante PIX só pode ser enviado após a finalização do fechamento.",
+      );
+    }
+    if ((closing.meal_presencial_days ?? 0) <= 0) {
+      throw new Error(
+        "Este fechamento não tem dias de refeição presencial para reembolso.",
+      );
+    }
+    const compensation = await getCurrentDeveloperCompensation(
+      input.developerId,
     );
+    if (!compensation?.require_meal_pix_receipt) {
+      throw new Error(
+        "Comprovante PIX de refeição não é exigido para este cadastro.",
+      );
+    }
+    const existingDocs = await listMonthlyClosingAttachments(closing.id);
+    const hasInvoice = existingDocs.some((row) => row.type === "invoice_pdf");
+    const hasBoleto = existingDocs.some((row) => row.type === "boleto_pdf");
+    if (!hasInvoice || !hasBoleto) {
+      throw new Error(
+        "É necessário ter nota fiscal e boleto anexados antes do comprovante PIX.",
+      );
+    }
+    const currentPix = existingDocs.find(
+      (row) => row.type === "meal_pix_receipt",
+    );
+    if (currentPix?.is_valid === true) {
+      throw new Error(
+        "Comprovante PIX já foi aceito pelo gestor e não pode ser substituído.",
+      );
+    }
+  } else {
+    if (closing.status !== "closed") {
+      throw new Error(
+        "Anexos só podem ser enviados quando o fechamento está Fechado.",
+      );
+    }
+    assertEditableClosing(closing);
   }
-  assertEditableClosing(closing);
 
   const mime = input.file.mimeType.trim().toLowerCase();
   if (mime !== "application/pdf") {
@@ -1190,6 +1323,7 @@ export async function uploadMonthlyClosingAttachment(input: {
         is_valid: null,
         validated_at: null,
         validated_by_user_id: null,
+        review_notes: null,
       })
       .eq("id", current.id)
       .select("*")
@@ -1209,6 +1343,7 @@ export async function uploadMonthlyClosingAttachment(input: {
         mime_type: "application/pdf",
         uploaded_at: now,
         uploaded_by_user_id: input.actorUserId,
+        is_valid: null,
       })
       .select("*")
       .single();
@@ -1220,15 +1355,78 @@ export async function uploadMonthlyClosingAttachment(input: {
 
   await appendEvent({
     closingId: closing.id,
-    eventType:
-      input.type === "invoice_pdf" ? "invoice_uploaded" : "boleto_uploaded",
-    fromStatus: "closed",
-    toStatus: "closed",
+    eventType: attachmentUploadEventType(input.type),
+    fromStatus: closing.status,
+    toStatus: closing.status,
     actorUserId: input.actorUserId,
     payload: {
       type: input.type,
       filename: input.file.originalFilename,
       bytes: input.file.bytes.byteLength,
+    },
+  });
+
+  return saved;
+}
+
+export async function reviewMealPixReceipt(input: {
+  closingId: string;
+  accepted: boolean;
+  reviewNotes?: string | null;
+  actorUserId: string;
+}): Promise<MonthlyClosingAttachment> {
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.status !== "finalized") {
+    throw new Error(
+      "Só é possível revisar o comprovante PIX em fechamentos finalizados.",
+    );
+  }
+
+  const attachments = await listMonthlyClosingAttachments(closing.id);
+  const mealPix =
+    attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
+  if (!mealPix) {
+    throw new Error("Comprovante PIX ainda não foi enviado.");
+  }
+
+  const notes = (input.reviewNotes ?? "").trim();
+  if (!input.accepted && !notes) {
+    throw new Error("Informe o motivo da recusa do comprovante PIX.");
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("monthly_closing_attachments")
+    .update({
+      is_valid: input.accepted,
+      validated_at: now,
+      validated_by_user_id: input.actorUserId,
+      review_notes: notes || null,
+    })
+    .eq("id", mealPix.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(
+      `Falha ao revisar comprovante PIX: ${error.message}`,
+    );
+  }
+
+  const saved = mapAttachment(data as Record<string, unknown>);
+  await appendEvent({
+    closingId: closing.id,
+    eventType: input.accepted ? "meal_pix_accepted" : "meal_pix_rejected",
+    fromStatus: "finalized",
+    toStatus: "finalized",
+    actorUserId: input.actorUserId,
+    payload: {
+      accepted: input.accepted,
+      reviewNotes: notes || null,
     },
   });
 
@@ -1283,7 +1481,8 @@ export async function finalizeMonthlyClosing(input: {
       validated_at: now,
       validated_by_user_id: input.actorUserId,
     })
-    .eq("monthly_closing_id", closing.id);
+    .eq("monthly_closing_id", closing.id)
+    .in("type", ["invoice_pdf", "boleto_pdf"]);
   if (validateError) {
     throw new Error(
       `Falha ao validar anexos: ${validateError.message}`,

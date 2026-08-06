@@ -33,6 +33,7 @@ type GestorClosingReviewTabsProps = {
   folhaCompare: ClosingFolhaCompareResult;
   userSide: ClosingValuesSide | null;
   folhaSide: ClosingValuesSide | null;
+  requireMealPixReceipt?: boolean;
 };
 
 function formatHours(value: number | null): string {
@@ -92,6 +93,7 @@ export function GestorClosingReviewTabs({
   folhaCompare,
   userSide,
   folhaSide,
+  requireMealPixReceipt = false,
 }: GestorClosingReviewTabsProps) {
   const [tab, setTab] = useState<"decisao" | "valores">("decisao");
 
@@ -186,6 +188,7 @@ export function GestorClosingReviewTabs({
                   .map((field) => CLOSING_FOLHA_COMPARE_FIELD_LABELS[field])
                   .join(", ")}.`
           }
+          requireMealPixReceipt={requireMealPixReceipt}
         />
       ) : (
         <section className="space-y-4 rounded-[var(--radius)] border border-border p-4">

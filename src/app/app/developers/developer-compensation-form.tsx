@@ -195,6 +195,29 @@ export function DeveloperCompensationForm({
         </FormField>
 
         <FormField
+          label="Comprovante PIX (refeição)"
+          htmlFor="requireMealPixReceipt"
+          hint="Após finalizar o fechamento com NF e boleto, exige envio do comprovante PIX. Sem aceite do gestor, novos fechamentos ficam bloqueados."
+        >
+          <label
+            htmlFor="requireMealPixReceipt"
+            className="flex min-h-10 cursor-pointer items-start gap-2 rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-2.5 text-sm"
+          >
+            <input
+              id="requireMealPixReceipt"
+              name="requireMealPixReceipt"
+              type="checkbox"
+              value="true"
+              defaultChecked={compensation?.require_meal_pix_receipt ?? false}
+              className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
+            />
+            <span className="text-pretty">
+              Cobrar comprovantes PIX (reembolso refeição)
+            </span>
+          </label>
+        </FormField>
+
+        <FormField
           label="Vigência a partir de"
           htmlFor="effectiveFrom"
           hint="Data de início do valor atual."

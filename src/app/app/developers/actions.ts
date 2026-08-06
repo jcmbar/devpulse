@@ -270,6 +270,9 @@ export async function upsertDeveloperCompensationAction(
       contractedHoursPerMonth: hoursMonth.value,
       dailyTravelAmount: travel.value,
       dailyMealAmount: meal.value,
+      requireMealPixReceipt:
+        String(formData.get("requireMealPixReceipt") ?? "") === "on" ||
+        String(formData.get("requireMealPixReceipt") ?? "") === "true",
       effectiveFrom,
       notes: readOptionalString(formData, "notes"),
     });

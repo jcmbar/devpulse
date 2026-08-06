@@ -15,6 +15,9 @@ export type MonthlyClosingEventType =
   | "invoice_note_updated"
   | "invoice_uploaded"
   | "boleto_uploaded"
+  | "meal_pix_uploaded"
+  | "meal_pix_accepted"
+  | "meal_pix_rejected"
   | "finalized"
   | "status_reverted"
   | "jira_changed_after_finalized_detected";
@@ -143,7 +146,10 @@ export type MonthlyClosingCardAuditRow = {
   blockReasons: string[];
 };
 
-export type MonthlyClosingAttachmentType = "invoice_pdf" | "boleto_pdf";
+export type MonthlyClosingAttachmentType =
+  | "invoice_pdf"
+  | "boleto_pdf"
+  | "meal_pix_receipt";
 
 export type MonthlyClosingAttachment = {
   id: string;
@@ -154,9 +160,11 @@ export type MonthlyClosingAttachment = {
   mime_type: string;
   uploaded_at: string;
   uploaded_by_user_id: string | null;
+  /** For NF/boleto: set on finalize. For meal PIX: null=pendente, true=aceito, false=recusado. */
   is_valid: boolean | null;
   validated_at: string | null;
   validated_by_user_id: string | null;
+  review_notes: string | null;
   created_at: string;
 };
 
@@ -169,7 +177,14 @@ export type MonthlyClosingAttachmentPresence = {
 export function monthlyClosingAttachmentTypeLabel(
   type: MonthlyClosingAttachmentType,
 ): string {
-  return type === "invoice_pdf" ? "Nota fiscal" : "Boleto";
+  switch (type) {
+    case "invoice_pdf":
+      return "Nota fiscal";
+    case "boleto_pdf":
+      return "Boleto";
+    case "meal_pix_receipt":
+      return "Comprovante PIX (refeição)";
+  }
 }
 
 export function monthlyClosingStatusLabel(
