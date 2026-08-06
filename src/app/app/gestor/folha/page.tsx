@@ -27,7 +27,7 @@ import {
   getPayrollItem,
   listAttendanceForItem,
 } from "@/services/payroll";
-import { mapJiraWorklogHoursByDeveloperForMonth } from "@/services/payroll/jira-hours";
+import { mapJiraDeliveryHoursByDeveloperForMonth } from "@/services/payroll/jira-hours";
 import { listTeamsAdmin } from "@/services/teams";
 
 type PageProps = {
@@ -93,9 +93,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   ]);
 
   const { closing, items } = payroll;
-  const jiraHoursByDeveloper = await mapJiraWorklogHoursByDeveloperForMonth({
+  const jiraHoursByDeveloper = await mapJiraDeliveryHoursByDeveloperForMonth({
     yearMonth: month,
     developerIds: items.map((item) => item.developer_id),
+    teamId: selectedTeamId,
   });
   const selectedTeamName =
     selectedTeamId != null
@@ -248,9 +249,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <h2 className="text-base font-semibold">Sintético mensal</h2>
             <p className="text-sm text-muted-foreground">
               Base + diferencial − descontos + deslocamento + refeição = valor
-              NF. Total horas Jira = worklogs apontados no calendário do mês.
-              Diferença contratada = horas Jira − horas/mês do cadastro
-              (negativo = abaixo do mínimo).
+              NF. Total horas Jira = mesma fonte do Gestor (time spent dos cards
+              com entrega no mês). Diferença contratada = horas Jira − horas/mês
+              do cadastro (negativo = abaixo do mínimo; base para futuro banco
+              de horas).
             </p>
           </div>
           <div className="space-y-1 text-right">
