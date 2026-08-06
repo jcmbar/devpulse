@@ -5,6 +5,7 @@ import {
   uploadMonthlyClosingAttachmentAction,
 } from "@/app/app/monthly-closing-actions";
 import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
+import { formatClosingMoney } from "@/lib/metrics/closing-submit-values";
 import { cn } from "@/lib/utils";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
@@ -75,14 +76,14 @@ function AttachmentSlot({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-sm)] border px-3 py-3",
+        "min-w-0 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-3",
         uploaded
           ? "border-emerald-500/40 bg-emerald-500/10"
           : "border-border bg-muted/20",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex items-start gap-2">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
           {uploaded ? (
             <CheckCircle2
               className="mt-0.5 size-4 shrink-0 text-emerald-700 dark:text-emerald-300"
@@ -96,10 +97,13 @@ function AttachmentSlot({
               aria-hidden
             />
           )}
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold">{label} (PDF)</p>
             {uploaded ? (
-              <p className="text-xs text-muted-foreground">
+              <p
+                className="truncate text-xs text-muted-foreground"
+                title={attachment.original_filename}
+              >
                 {attachment.original_filename}
                 {attachment.is_valid ? " · validado" : ""}
               </p>
@@ -110,7 +114,7 @@ function AttachmentSlot({
             )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           {uploaded ? (
             <button
               type="button"
@@ -149,6 +153,73 @@ function AttachmentSlot({
         </div>
       </div>
       {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
+    </div>
+  );
+}
+
+function ClosingValuesSummary({ closing }: { closing: MonthlyClosing }) {
+  const hasValues =
+    closing.compensation_base_amount != null ||
+    closing.differential_amount != null ||
+    closing.travel_amount != null ||
+    closing.meal_amount != null ||
+    closing.invoice_amount != null;
+
+  if (!hasValues) {
+    return null;
+  }
+
+  const rows: { label: string; value: string }[] = [
+    {
+      label: "Valor Base",
+      value: formatClosingMoney(closing.compensation_base_amount),
+    },
+    {
+      label: "Valor Diferencial",
+      value: formatClosingMoney(closing.differential_amount),
+    },
+    {
+      label: "Valor Deslocamento",
+      value: formatClosingMoney(closing.travel_amount),
+    },
+    {
+      label: "Valor Refeição",
+      value: formatClosingMoney(closing.meal_amount),
+    },
+    {
+      label: "Desconto",
+      // Fechamento grava NF sem desconto no envio (descontos ficam na Folha).
+      value: formatClosingMoney(0),
+    },
+    {
+      label: "Valor da nota fiscal",
+      value: formatClosingMoney(closing.invoice_amount),
+    },
+  ];
+
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-3">
+      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+        Valores do fechamento
+      </p>
+      <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-baseline justify-between gap-3 text-sm"
+          >
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd
+              className={cn(
+                "tabular-nums font-medium",
+                row.label === "Valor da nota fiscal" && "font-semibold",
+              )}
+            >
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -199,7 +270,8 @@ export function MonthlyClosingAttachmentsPanel({
           </p>
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <ClosingValuesSummary closing={closing} />
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <AttachmentSlot
           closing={closing}
           type="invoice_pdf"
