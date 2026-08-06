@@ -726,7 +726,15 @@ export async function updatePayrollItemAmounts(input: {
     mealAmount: meal,
   });
 
-  if (item.is_reviewed) {
+  // Only invalidate "conferido" when money fields actually change.
+  // Saving only Empresa NF (or re-saving the same amounts) keeps the review.
+  const amountsChanged =
+    !sameMoney(discounts, item.discounts_amount) ||
+    !sameMoney(differential, item.differential_amount) ||
+    !sameMoney(travel, item.travel_amount) ||
+    !sameMoney(meal, item.meal_amount);
+
+  if (amountsChanged && item.is_reviewed) {
     patch.is_reviewed = false;
     patch.reviewed_at = null;
     patch.reviewed_by = null;
