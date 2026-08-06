@@ -34,8 +34,17 @@ type PayrollItemEditorProps = {
   item: PayrollClosingItemWithIssuer;
   issuers: InvoiceIssuer[];
   attendanceHref: string;
+  jiraHours: number;
+  contractedHoursDelta: number;
   readOnly?: boolean;
 };
+
+function formatHours(value: number): string {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} h`;
+}
 
 function RestoreCalculatedButton({
   label,
@@ -62,6 +71,8 @@ export function PayrollItemEditor({
   item,
   issuers,
   attendanceHref,
+  jiraHours,
+  contractedHoursDelta,
   readOnly = false,
 }: PayrollItemEditorProps) {
   const router = useRouter();
@@ -140,6 +151,27 @@ export function PayrollItemEditor({
           style: "currency",
           currency: "BRL",
         })}
+      </td>
+      <td className="align-top">
+        <p className="tabular-nums font-medium">{formatHours(jiraHours)}</p>
+        <p className="text-[11px] text-muted-foreground">
+          Contratado: {formatHours(item.contracted_hours_per_month)}
+        </p>
+      </td>
+      <td className="align-top">
+        <p
+          className={cn(
+            "tabular-nums font-semibold",
+            contractedHoursDelta < 0 &&
+              "text-red-600 dark:text-red-400",
+            contractedHoursDelta > 0 &&
+              "text-sky-600 dark:text-sky-400",
+            contractedHoursDelta === 0 && "text-muted-foreground",
+          )}
+        >
+          {contractedHoursDelta > 0 ? "+" : ""}
+          {formatHours(contractedHoursDelta)}
+        </p>
       </td>
       <td className="align-top" colSpan={5}>
         <form action={formAction} className="space-y-2">

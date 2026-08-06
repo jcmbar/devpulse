@@ -104,6 +104,18 @@ export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Realizado Jira − horas contratadas/mês. Negativo = abaixo do mínimo. */
+export function computeContractedHoursDelta(input: {
+  jiraHours: number;
+  contractedHoursPerMonth: number;
+}): number {
+  const jira = Number.isFinite(input.jiraHours) ? input.jiraHours : 0;
+  const contracted = Number.isFinite(input.contractedHoursPerMonth)
+    ? input.contractedHoursPerMonth
+    : 0;
+  return Math.round((jira - contracted) * 100) / 100;
+}
+
 /** List YYYY-MM-DD days in a calendar month (UTC date parts). */
 export function listDaysInYearMonth(yearMonth: string): string[] {
   const match = /^(\d{4})-(\d{2})$/.exec(yearMonth);

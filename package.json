@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test:jira-jql": "node --experimental-strip-types --test src/services/integrations/jira/sync/build-jql.test.ts",
     "test:business-days": "node --experimental-strip-types --test src/lib/metrics/business-days.test.ts",
-    "test:payroll": "node --experimental-strip-types --test src/lib/metrics/payroll-calc.test.ts src/lib/metrics/payroll-attendance-batch.test.ts"
+    "test:payroll": "node --experimental-strip-types --test src/lib/metrics/payroll-calc.test.ts src/lib/metrics/payroll-attendance-batch.test.ts src/lib/metrics/payroll-jira-hours.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

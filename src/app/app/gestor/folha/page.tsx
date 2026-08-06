@@ -15,6 +15,9 @@ import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server"
 import { buildGestorNavTabs } from "@/lib/gestor/nav-tabs";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import {
+  computeContractedHoursDelta,
+} from "@/lib/metrics/payroll-calc";
+import {
   parseTeamListFilter,
   teamListFilterParam,
 } from "@/lib/teams/team-filter";
@@ -24,6 +27,7 @@ import {
   getPayrollItem,
   listAttendanceForItem,
 } from "@/services/payroll";
+import { mapJiraWorklogHoursByDeveloperForMonth } from "@/services/payroll/jira-hours";
 import { listTeamsAdmin } from "@/services/teams";
 
 type PageProps = {
@@ -89,6 +93,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   ]);
 
   const { closing, items } = payroll;
+  const jiraHoursByDeveloper = await mapJiraWorklogHoursByDeveloperForMonth({
+    yearMonth: month,
+    developerIds: items.map((item) => item.developer_id),
+  });
   const selectedTeamName =
     selectedTeamId != null
       ? (teams.find((team) => team.id === selectedTeamId)?.name ?? null)
@@ -113,6 +121,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       acc.travel += item.travel_amount;
       acc.meal += item.meal_amount;
       acc.invoice += item.invoice_amount;
+      acc.jiraHours += jiraHoursByDeveloper.get(item.developer_id) ?? 0;
       if (item.is_reviewed) {
         acc.reviewed += 1;
       }
@@ -125,6 +134,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       travel: 0,
       meal: 0,
       invoice: 0,
+      jiraHours: 0,
       reviewed: 0,
     },
   );
@@ -238,10 +248,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <h2 className="text-base font-semibold">Sintético mensal</h2>
             <p className="text-sm text-muted-foreground">
               Base + diferencial − descontos + deslocamento + refeição = valor
-              NF. Diferencial variável = (horas trabalhadas no mês × valor hora)
-              − base contratual, contando presencial e home office; fixo inicia
-              em zero. Deslocamento e refeição usam os dias presenciais × valor
-              diário do cadastro.
+              NF. Total horas Jira = worklogs apontados no calendário do mês.
+              Diferença contratada = horas Jira − horas/mês do cadastro
+              (negativo = abaixo do mínimo).
             </p>
           </div>
           <div className="space-y-1 text-right">
@@ -266,28 +275,39 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             description="Cadastre pessoas ativas no time ou remova o filtro de time."
           />
         ) : (
-          <DataTable minWidthClassName="min-w-[980px]" stickyFirstColumn>
+          <DataTable minWidthClassName="min-w-[1180px]" stickyFirstColumn>
             <thead>
               <tr>
                 <th>Pessoa</th>
                 <th>Base</th>
+                <th>Total horas Jira</th>
+                <th>Diferença contratada</th>
                 <th colSpan={5}>Valores do mês / NF</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <PayrollItemEditor
-                  key={item.id}
-                  item={item}
-                  issuers={issuers}
-                  readOnly={readOnly}
-                  attendanceHref={buildFolhaHref({
-                    teamId: teamParam,
-                    month,
-                    itemId: item.id,
-                  })}
-                />
-              ))}
+              {items.map((item) => {
+                const jiraHours =
+                  jiraHoursByDeveloper.get(item.developer_id) ?? 0;
+                return (
+                  <PayrollItemEditor
+                    key={item.id}
+                    item={item}
+                    issuers={issuers}
+                    readOnly={readOnly}
+                    jiraHours={jiraHours}
+                    contractedHoursDelta={computeContractedHoursDelta({
+                      jiraHours,
+                      contractedHoursPerMonth: item.contracted_hours_per_month,
+                    })}
+                    attendanceHref={buildFolhaHref({
+                      teamId: teamParam,
+                      month,
+                      itemId: item.id,
+                    })}
+                  />
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
@@ -298,6 +318,14 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
                     currency: "BRL",
                   })}
                 </td>
+                <td className="tabular-nums font-medium">
+                  {totals.jiraHours.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  h
+                </td>
+                <td className="text-muted-foreground">—</td>
                 <td colSpan={5} className="text-sm text-muted-foreground">
                   Dif.{" "}
                   {totals.differential.toLocaleString("pt-BR", {
