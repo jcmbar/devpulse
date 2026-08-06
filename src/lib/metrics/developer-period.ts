@@ -9,7 +9,9 @@ export type GestorCardMetricKind =
   | "cards"
   | "onTime"
   | "delayed"
-  | "rework";
+  | "rework"
+  /** Missing due_on (or delivery) — cannot classify No prazo / Atraso. */
+  | "incomplete";
 
 export type CardDeliveryFlags = {
   /** null when dates missing (counts in Cards, not No prazo/Atraso). */
@@ -106,11 +108,21 @@ export function getCardDeliveryFlags(card: JiraCard): CardDeliveryFlags {
       ? card.delay_days
       : computeDeliveryDelayDays({ dueOn: due, deliveryOn: delivery });
 
-  if (delayDays != null && delayDays > 0) {
+  if (delayDays == null) {
+    return { isOnTime: null, isDelayed: null, isRework };
+  }
+
+  if (delayDays > 0) {
     return { isOnTime: false, isDelayed: true, isRework };
   }
 
   return { isOnTime: true, isDelayed: false, isRework };
+}
+
+/** True when the card cannot be classified as on-time or delayed. */
+export function isIncompletePrazoCard(card: JiraCard): boolean {
+  const flags = getCardDeliveryFlags(card);
+  return flags.isOnTime == null && flags.isDelayed == null;
 }
 
 export function cardMatchesMetric(
@@ -128,6 +140,8 @@ export function cardMatchesMetric(
       return flags.isDelayed === true;
     case "rework":
       return flags.isRework;
+    case "incomplete":
+      return flags.isOnTime == null && flags.isDelayed == null;
   }
 }
 
@@ -157,6 +171,8 @@ export function metricCountFromPeriod(
       return metrics.delayedCardsGross;
     case "rework":
       return metrics.reworkCards;
+    case "incomplete":
+      return metrics.incompleteCards;
   }
 }
 
@@ -172,6 +188,7 @@ export function computeDeveloperPeriodMetrics(
   let totalEstimateHours = 0;
   let totalTimeSpentHours = 0;
   let onTimeCards = 0;
+  let incompleteCards = 0;
   let delayedCardsGross = 0;
   let delayedCardsAccepted = 0;
   let reworkCards = 0;
@@ -224,6 +241,8 @@ export function computeDeveloperPeriodMetrics(
       if (acceptedDelays.has(key)) {
         delayedCardsAccepted += 1;
       }
+    } else {
+      incompleteCards += 1;
     }
 
     const status = card.status?.trim() || "Sem status";
@@ -241,6 +260,7 @@ export function computeDeveloperPeriodMetrics(
   return {
     totalCards,
     onTimeCards,
+    incompleteCards,
     delayedCards: delayedCardsNet,
     delayedCardsGross,
     delayedCardsAccepted,
@@ -273,6 +293,7 @@ export function aggregateTeamPeriodMetrics(
 ): DeveloperPeriodMetrics {
   let totalCards = 0;
   let onTimeCards = 0;
+  let incompleteCards = 0;
   let delayedCardsGross = 0;
   let delayedCardsAccepted = 0;
   let delayedCardsNet = 0;
@@ -290,6 +311,7 @@ export function aggregateTeamPeriodMetrics(
   for (const metrics of metricsList) {
     totalCards += metrics.totalCards;
     onTimeCards += metrics.onTimeCards;
+    incompleteCards += metrics.incompleteCards;
     delayedCardsGross += metrics.delayedCardsGross;
     delayedCardsAccepted += metrics.delayedCardsAccepted;
     delayedCardsNet += metrics.delayedCardsNet;
@@ -329,6 +351,7 @@ export function aggregateTeamPeriodMetrics(
   return {
     totalCards,
     onTimeCards,
+    incompleteCards,
     delayedCards: delayedCardsNet,
     delayedCardsGross,
     delayedCardsAccepted,

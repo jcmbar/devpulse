@@ -517,6 +517,15 @@ export default async function GestorDashboardPage({
                 value={String(teamMetrics.reworkCards)}
                 tone={teamMetrics.reworkCards > 0 ? "warning" : "neutral"}
               />
+              <KpiMetricCard
+                variant="hero"
+                label="Atenção"
+                value={String(teamMetrics.incompleteCards)}
+                tone={
+                  teamMetrics.incompleteCards > 0 ? "warning" : "neutral"
+                }
+                hint="Sem data limite / prazo no Jira"
+              />
             </div>
 
             <div className="mt-4 space-y-1.5 text-xs text-muted-foreground">
@@ -605,6 +614,16 @@ export default async function GestorDashboardPage({
                     ? `peso ${teamMetrics.reworkWeightTotal}`
                     : undefined,
               },
+              {
+                label: "Atenção (dados faltantes)",
+                value: teamMetrics.incompleteCards,
+                total: teamMetrics.totalCards,
+                tone: "warning",
+                detail:
+                  teamMetrics.incompleteCards > 0
+                    ? "Sem due_on — fora de No prazo/Atraso"
+                    : undefined,
+              },
             ]}
             hoursTitle="Previsto × realizado"
             hoursItems={[
@@ -683,8 +702,9 @@ export default async function GestorDashboardPage({
               <div className="space-y-3">
                 <RankingMetricsLegend />
                 <DataTable
-                  minWidthClassName="min-w-0 lg:min-w-[1080px]"
+                  minWidthClassName="min-w-0 lg:min-w-[1160px]"
                   stickyFirstColumn
+                  metricGrid
                 >
                 <thead>
                   <tr>
@@ -699,6 +719,11 @@ export default async function GestorDashboardPage({
                       title="Soma dos pesos de Retrabalho / Retrabalho 2x / 3x em category"
                     >
                       Retrabalho
+                    </th>
+                    <th
+                      title="Cards sem data limite (due_on) ou sem dados para classificar No prazo / Atraso. Clique para ver as chaves."
+                    >
+                      Atenção
                     </th>
                     <th title="Aproveitamento — qualidade da entrega. Toque no valor para ver o cálculo.">
                       Aprov.
@@ -786,6 +811,20 @@ export default async function GestorDashboardPage({
                           developerName={row.fullName}
                           filterContext={auditFilterContext}
                           pendingDecisionCount={row.pendingReworkJustifications}
+                        />
+                      </td>
+                      <td>
+                        <GestorMetricAuditButton
+                          metric="incomplete"
+                          count={row.metrics.incompleteCards}
+                          title={
+                            row.metrics.incompleteCards > 0
+                              ? `Cards sem classificação de prazo (ex.: due_on ausente). Total ${row.metrics.totalCards} ≠ no prazo ${row.metrics.onTimeCards} + atraso ${row.metrics.delayedCardsGross}.`
+                              : undefined
+                          }
+                          developerId={row.developerId}
+                          developerName={row.fullName}
+                          filterContext={auditFilterContext}
                         />
                       </td>
                       <td

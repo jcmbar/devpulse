@@ -4,6 +4,7 @@ import {
   endOfMonth,
   startOfMonth,
 } from "@/lib/metrics/date-range";
+import { computeClosingSubmitValues } from "@/lib/metrics/closing-submit-values";
 import { getCardDeliveryFlags } from "@/lib/metrics/developer-period";
 import { createClient } from "@/lib/supabase/server";
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
@@ -19,6 +20,8 @@ import type {
   MonthlyClosingEventType,
   MonthlyClosingItem,
   MonthlyClosingJustificationSnapshot,
+  MonthlyClosingPresenceDay,
+  MonthlyClosingPresenceKind,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
 
@@ -82,6 +85,51 @@ function mapClosing(row: Record<string, unknown>): MonthlyClosing {
     resubmitted_at: (row.resubmitted_at as string | null) ?? null,
     resubmitted_by_user_id:
       (row.resubmitted_by_user_id as string | null) ?? null,
+    travel_presencial_days:
+      row.travel_presencial_days == null
+        ? null
+        : Number(row.travel_presencial_days),
+    meal_presencial_days:
+      row.meal_presencial_days == null
+        ? null
+        : Number(row.meal_presencial_days),
+    travel_amount:
+      row.travel_amount == null ? null : Number(row.travel_amount),
+    meal_amount: row.meal_amount == null ? null : Number(row.meal_amount),
+    differential_amount:
+      row.differential_amount == null
+        ? null
+        : Number(row.differential_amount),
+    invoice_amount:
+      row.invoice_amount == null ? null : Number(row.invoice_amount),
+    compensation_base_amount:
+      row.compensation_base_amount == null
+        ? null
+        : Number(row.compensation_base_amount),
+    compensation_base_type:
+      row.compensation_base_type === "variable" ||
+      row.compensation_base_type === "fixed"
+        ? row.compensation_base_type
+        : null,
+    compensation_hourly_rate:
+      row.compensation_hourly_rate == null
+        ? null
+        : Number(row.compensation_hourly_rate),
+    compensation_daily_travel_amount:
+      row.compensation_daily_travel_amount == null
+        ? null
+        : Number(row.compensation_daily_travel_amount),
+    compensation_daily_meal_amount:
+      row.compensation_daily_meal_amount == null
+        ? null
+        : Number(row.compensation_daily_meal_amount),
+    worked_hours_snapshot:
+      row.worked_hours_snapshot == null
+        ? null
+        : Number(row.worked_hours_snapshot),
+    developer_values_notes:
+      (row.developer_values_notes as string | null) ?? null,
+    values_submitted_at: (row.values_submitted_at as string | null) ?? null,
     jira_changed_after_finalized: Boolean(row.jira_changed_after_finalized),
     jira_changed_after_finalized_at:
       (row.jira_changed_after_finalized_at as string | null) ?? null,
@@ -578,6 +626,19 @@ export async function submitMonthlyClosingForReview(input: {
   actorUserId: string;
   /** Required when resubmitting from rejected. */
   developerResubmissionNotes?: string | null;
+  values: {
+    travelDays: string[];
+    mealDays: string[];
+    valuesNotes?: string | null;
+    workedHours: number;
+    compensation: {
+      baseAmount: number;
+      baseType: "fixed" | "variable";
+      hourlyRate: number | null;
+      dailyTravelAmount: number;
+      dailyMealAmount: number;
+    };
+  };
 }): Promise<MonthlyClosing> {
   const closing = await getMonthlyClosingById(input.closingId);
   if (!closing) {
@@ -600,6 +661,17 @@ export async function submitMonthlyClosingForReview(input: {
       "Informe a resposta/justificativa ao reenviar o fechamento.",
     );
   }
+
+  const computed = computeClosingSubmitValues({
+    baseType: input.values.compensation.baseType,
+    baseAmount: input.values.compensation.baseAmount,
+    hourlyRate: input.values.compensation.hourlyRate,
+    dailyTravelAmount: input.values.compensation.dailyTravelAmount,
+    dailyMealAmount: input.values.compensation.dailyMealAmount,
+    workedHours: input.values.workedHours,
+    travelDays: input.values.travelDays,
+    mealDays: input.values.mealDays,
+  });
 
   const audit = await loadMonthlyClosingAuditForDeveloper({
     developerId: input.developerId,
@@ -629,6 +701,16 @@ export async function submitMonthlyClosingForReview(input: {
   if (deleteError) {
     throw new Error(
       `Falha ao limpar snapshot anterior: ${deleteError.message}`,
+    );
+  }
+
+  const { error: deletePresenceError } = await supabase
+    .from("monthly_closing_presence_days")
+    .delete()
+    .eq("monthly_closing_id", closing.id);
+  if (deletePresenceError) {
+    throw new Error(
+      `Falha ao limpar dias de presença anteriores: ${deletePresenceError.message}`,
     );
   }
 
@@ -672,6 +754,34 @@ export async function submitMonthlyClosingForReview(input: {
     );
   }
 
+  const presenceRows: Array<{
+    monthly_closing_id: string;
+    kind: MonthlyClosingPresenceKind;
+    day_on: string;
+  }> = [
+    ...uniqueSortedDates(input.values.travelDays).map((day_on) => ({
+      monthly_closing_id: closing.id,
+      kind: "travel" as const,
+      day_on,
+    })),
+    ...uniqueSortedDates(input.values.mealDays).map((day_on) => ({
+      monthly_closing_id: closing.id,
+      kind: "meal" as const,
+      day_on,
+    })),
+  ];
+
+  if (presenceRows.length > 0) {
+    const { error: insertPresenceError } = await supabase
+      .from("monthly_closing_presence_days")
+      .insert(presenceRows);
+    if (insertPresenceError) {
+      throw new Error(
+        `Falha ao gravar dias de presença: ${insertPresenceError.message}`,
+      );
+    }
+  }
+
   await appendEvent({
     closingId: closing.id,
     eventType: "snapshot_generated",
@@ -685,6 +795,11 @@ export async function submitMonthlyClosingForReview(input: {
     },
   });
 
+  const valuesNotes =
+    computed.compensationBaseType === "variable"
+      ? (input.values.valuesNotes ?? "").trim() || null
+      : null;
+
   const updatePayload: Record<string, unknown> = {
     status: "in_review",
     import_id: input.importId,
@@ -692,6 +807,20 @@ export async function submitMonthlyClosingForReview(input: {
     snapshot_generated_at: now,
     submitted_at: now,
     submitted_by_user_id: input.actorUserId,
+    travel_presencial_days: computed.travelPresencialDays,
+    meal_presencial_days: computed.mealPresencialDays,
+    travel_amount: computed.travelAmount,
+    meal_amount: computed.mealAmount,
+    differential_amount: computed.differentialAmount,
+    invoice_amount: computed.invoiceAmount,
+    compensation_base_amount: computed.compensationBaseAmount,
+    compensation_base_type: computed.compensationBaseType,
+    compensation_hourly_rate: computed.compensationHourlyRate,
+    compensation_daily_travel_amount: computed.compensationDailyTravelAmount,
+    compensation_daily_meal_amount: computed.compensationDailyMealAmount,
+    worked_hours_snapshot: computed.workedHoursSnapshot,
+    developer_values_notes: valuesNotes,
+    values_submitted_at: now,
   };
 
   if (isResubmit) {
@@ -722,10 +851,47 @@ export async function submitMonthlyClosingForReview(input: {
     payload: {
       itemCount: itemRows.length,
       hasResubmissionNotes: isResubmit,
+      travelDays: computed.travelPresencialDays,
+      mealDays: computed.mealPresencialDays,
+      invoiceAmount: computed.invoiceAmount,
+      differentialAmount: computed.differentialAmount,
     },
   });
 
   return updated;
+}
+
+function uniqueSortedDates(values: string[]): string[] {
+  const set = new Set<string>();
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      set.add(trimmed);
+    }
+  }
+  return [...set].sort();
+}
+
+export async function listMonthlyClosingPresenceDays(
+  closingId: string,
+): Promise<MonthlyClosingPresenceDay[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closing_presence_days")
+    .select("*")
+    .eq("monthly_closing_id", closingId)
+    .order("kind", { ascending: true })
+    .order("day_on", { ascending: true });
+  if (error) {
+    throw new Error(`Falha ao listar dias de presença: ${error.message}`);
+  }
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    monthly_closing_id: String(row.monthly_closing_id),
+    kind: row.kind as MonthlyClosingPresenceKind,
+    day_on: String(row.day_on),
+    created_at: String(row.created_at),
+  }));
 }
 
 export async function rejectMonthlyClosing(input: {
@@ -1053,6 +1219,114 @@ export async function finalizeMonthlyClosing(input: {
     payload: {
       invoiceValidated: true,
       boletoValidated: true,
+    },
+  });
+
+  return updated;
+}
+
+/**
+ * Admin/gestor one-step status rollback:
+ * finalized → closed → in_review → open
+ * rejected → open
+ */
+export async function revertMonthlyClosingStatus(input: {
+  closingId: string;
+  actorUserId: string;
+}): Promise<MonthlyClosing> {
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+
+  const fromStatus = closing.status;
+  const toStatus = (() => {
+    switch (fromStatus) {
+      case "finalized":
+        return "closed" as const;
+      case "closed":
+        return "in_review" as const;
+      case "in_review":
+        return "open" as const;
+      case "rejected":
+        return "open" as const;
+      case "open":
+        return null;
+    }
+  })();
+
+  if (!toStatus) {
+    throw new Error("Este fechamento já está Aberto — não há status anterior.");
+  }
+
+  const supabase = await createClient();
+  const updatePayload: Record<string, unknown> = {
+    status: toStatus,
+  };
+
+  if (fromStatus === "finalized") {
+    updatePayload.finalized_at = null;
+    updatePayload.finalized_by_user_id = null;
+  }
+
+  if (fromStatus === "closed") {
+    updatePayload.closed_at = null;
+    updatePayload.manager_approved_at = null;
+    updatePayload.manager_approved_by_user_id = null;
+  }
+
+  if (toStatus === "open") {
+    updatePayload.submitted_at = null;
+    updatePayload.submitted_by_user_id = null;
+    updatePayload.resubmitted_at = null;
+    updatePayload.resubmitted_by_user_id = null;
+    updatePayload.developer_resubmission_notes = null;
+  }
+
+  if (fromStatus === "rejected") {
+    updatePayload.manager_rejected_at = null;
+    updatePayload.manager_rejected_by_user_id = null;
+  }
+
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update(updatePayload)
+    .eq("id", closing.id)
+    .eq("status", fromStatus)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao reabrir/voltar status: ${error.message}`);
+  }
+
+  const updated = mapClosing(data as Record<string, unknown>);
+
+  if (fromStatus === "finalized" && toStatus === "closed") {
+    const { error: attachmentError } = await supabase
+      .from("monthly_closing_attachments")
+      .update({
+        is_valid: null,
+        validated_at: null,
+        validated_by_user_id: null,
+      })
+      .eq("monthly_closing_id", closing.id);
+    if (attachmentError) {
+      throw new Error(
+        `Fechamento reaberto, mas falhou ao limpar validação dos anexos: ${attachmentError.message}`,
+      );
+    }
+  }
+
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "status_reverted",
+    fromStatus,
+    toStatus,
+    actorUserId: input.actorUserId,
+    payload: {
+      action:
+        fromStatus === "finalized" ? "reopen_finalized" : "step_back_status",
     },
   });
 

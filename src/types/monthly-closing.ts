@@ -16,6 +16,7 @@ export type MonthlyClosingEventType =
   | "invoice_uploaded"
   | "boleto_uploaded"
   | "finalized"
+  | "status_reverted"
   | "jira_changed_after_finalized_detected";
 
 export type MonthlyClosing = {
@@ -45,10 +46,35 @@ export type MonthlyClosing = {
   developer_resubmission_notes: string | null;
   resubmitted_at: string | null;
   resubmitted_by_user_id: string | null;
+  /** Presence / NF values declared by developer at submit. */
+  travel_presencial_days: number | null;
+  meal_presencial_days: number | null;
+  travel_amount: number | null;
+  meal_amount: number | null;
+  differential_amount: number | null;
+  invoice_amount: number | null;
+  compensation_base_amount: number | null;
+  compensation_base_type: "fixed" | "variable" | null;
+  compensation_hourly_rate: number | null;
+  compensation_daily_travel_amount: number | null;
+  compensation_daily_meal_amount: number | null;
+  worked_hours_snapshot: number | null;
+  developer_values_notes: string | null;
+  values_submitted_at: string | null;
   jira_changed_after_finalized: boolean;
   jira_changed_after_finalized_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type MonthlyClosingPresenceKind = "travel" | "meal";
+
+export type MonthlyClosingPresenceDay = {
+  id: string;
+  monthly_closing_id: string;
+  kind: MonthlyClosingPresenceKind;
+  day_on: string;
+  created_at: string;
 };
 
 export type MonthlyClosingItem = {
@@ -151,5 +177,56 @@ export function monthlyClosingStatusLabel(
       return "Fechado";
     case "finalized":
       return "Finalizado";
+  }
+}
+
+/**
+ * One-step status rollback for admin/gestor.
+ * `null` means no further rollback is available.
+ */
+export function monthlyClosingRevertTarget(
+  status: MonthlyClosingStatus,
+): MonthlyClosingStatus | null {
+  switch (status) {
+    case "finalized":
+      return "closed";
+    case "closed":
+      return "in_review";
+    case "in_review":
+      return "open";
+    case "rejected":
+      return "open";
+    case "open":
+      return null;
+  }
+}
+
+export function monthlyClosingRevertActionLabel(
+  from: MonthlyClosingStatus,
+): string | null {
+  const target = monthlyClosingRevertTarget(from);
+  if (!target) {
+    return null;
+  }
+  if (from === "finalized") {
+    return "Reabrir fechamento";
+  }
+  return `Voltar para ${monthlyClosingStatusLabel(target).toLowerCase()}`;
+}
+
+export function monthlyClosingRevertDescription(
+  from: MonthlyClosingStatus,
+): string | null {
+  switch (from) {
+    case "finalized":
+      return "O fechamento volta para Fechado. O developer poderá reenviar NF/boleto e o gestor poderá finalizar de novo.";
+    case "closed":
+      return "Remove a aprovação. O fechamento volta para Em fechamento e o gestor poderá aprovar ou devolver novamente.";
+    case "in_review":
+      return "Cancela o envio. O fechamento volta para Aberto e o developer poderá regenerar o snapshot.";
+    case "rejected":
+      return "Cancela a devolução. O fechamento volta para Aberto.";
+    default:
+      return null;
   }
 }

@@ -36,8 +36,13 @@ type PageProps = {
 
 function parseClassification(
   value: string | undefined,
-): "" | "onTime" | "delayed" | "rework" {
-  if (value === "onTime" || value === "delayed" || value === "rework") {
+): "" | "onTime" | "delayed" | "rework" | "incomplete" {
+  if (
+    value === "onTime" ||
+    value === "delayed" ||
+    value === "rework" ||
+    value === "incomplete"
+  ) {
     return value;
   }
   return "";

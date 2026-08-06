@@ -20,7 +20,7 @@ export type AnalyticalBaseFilterState = {
   developerId: string;
   status: string;
   /** Empty = all cards in period (sintético Cards). */
-  classification: "" | "onTime" | "delayed" | "rework";
+  classification: "" | "onTime" | "delayed" | "rework" | "incomplete";
   q: string;
 };
 
@@ -67,6 +67,8 @@ function rowMatchesClassification(
       return row.isDelayed === true;
     case "rework":
       return row.isRework;
+    case "incomplete":
+      return row.isOnTime == null && row.isDelayed == null;
   }
 }
 
@@ -252,6 +254,7 @@ export function AnalyticalBaseView({
               <option value="onTime">No prazo</option>
               <option value="delayed">Atraso</option>
               <option value="rework">Retrabalho</option>
+              <option value="incomplete">Atenção (dados faltantes)</option>
             </select>
           </label>
 

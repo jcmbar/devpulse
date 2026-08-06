@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GestorClosingDecisionPanel } from "@/components/monthly-closing/gestor-closing-decision";
+import { GestorClosingReviewTabs } from "@/components/monthly-closing/gestor-closing-review-tabs";
 import { MonthlyClosingStatusBadge } from "@/components/monthly-closing/monthly-closing-panel";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
@@ -15,6 +15,7 @@ import {
   listMonthlyClosingAttachments,
   listMonthlyClosingEvents,
   listMonthlyClosingItems,
+  listMonthlyClosingPresenceDays,
 } from "@/services/monthly-closings";
 
 type PageProps = {
@@ -97,12 +98,14 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [developer, items, events, attachments] = await Promise.all([
-    getDeveloperAdmin(closing.developer_id),
-    listMonthlyClosingItems(closing.id),
-    listMonthlyClosingEvents(closing.id),
-    listMonthlyClosingAttachments(closing.id),
-  ]);
+  const [developer, items, events, attachments, presenceDays] =
+    await Promise.all([
+      getDeveloperAdmin(closing.developer_id),
+      listMonthlyClosingItems(closing.id),
+      listMonthlyClosingEvents(closing.id),
+      listMonthlyClosingAttachments(closing.id),
+      listMonthlyClosingPresenceDays(closing.id),
+    ]);
 
   return (
     <PageShell size="xl">
@@ -128,9 +131,10 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
         }
       />
 
-      <GestorClosingDecisionPanel
+      <GestorClosingReviewTabs
         closing={closing}
         attachments={attachments}
+        presenceDays={presenceDays}
       />
 
       <SectionShell

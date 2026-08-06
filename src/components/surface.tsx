@@ -36,6 +36,8 @@ type DataTableProps = {
   minWidthClassName?: string;
   /** Pin first column while scrolling horizontally (mobile-friendly). */
   stickyFirstColumn?: boolean;
+  /** Center numeric columns and draw vertical borders between them. */
+  metricGrid?: boolean;
 };
 
 export function DataTable({
@@ -43,6 +45,7 @@ export function DataTable({
   className,
   minWidthClassName = "min-w-[640px]",
   stickyFirstColumn = false,
+  metricGrid = false,
 }: DataTableProps) {
   return (
     <div className={cn("ui-table-wrap", className)}>
@@ -51,6 +54,7 @@ export function DataTable({
           "ui-table",
           minWidthClassName,
           stickyFirstColumn && "ui-table-sticky-first",
+          metricGrid && "ui-table--metric-grid",
         )}
       >
         {children}

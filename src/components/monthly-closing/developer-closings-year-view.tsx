@@ -14,6 +14,7 @@ import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { formatDeliveryIndex } from "@/lib/metrics/developer-period";
 import { metricsToTrendPoint } from "@/lib/metrics/monthly-trend";
 import { cn } from "@/lib/utils";
+import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import type {
   MonthlyClosing,
@@ -42,6 +43,7 @@ type DeveloperClosingsYearViewProps = {
   detailCanSubmit: boolean;
   detailBlockingCount: number;
   detailAttachments: MonthlyClosingAttachment[];
+  developerCompensation: DeveloperCompensation | null;
 };
 
 function formatPercent(value: number | null): string {
@@ -179,6 +181,7 @@ function MonthDetailPanel({
   detailCanSubmit,
   detailBlockingCount,
   detailAttachments,
+  developerCompensation,
   empty,
 }: {
   detailRow: DeveloperClosingYearMonthRow | null;
@@ -189,6 +192,7 @@ function MonthDetailPanel({
   detailCanSubmit: boolean;
   detailBlockingCount: number;
   detailAttachments: MonthlyClosingAttachment[];
+  developerCompensation: DeveloperCompensation | null;
   empty?: boolean;
 }) {
   if (empty || detailRow == null) {
@@ -228,6 +232,8 @@ function MonthDetailPanel({
           closing={detailClosing}
           canSubmit={detailCanSubmit}
           blockingCount={detailBlockingCount}
+          compensation={developerCompensation}
+          workedHours={detailRow.metrics.totalTimeSpentHours}
         />
       </div>
 
@@ -318,6 +324,7 @@ export function DeveloperClosingsYearView({
   detailCanSubmit,
   detailBlockingCount,
   detailAttachments,
+  developerCompensation,
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
   const detailRow =
@@ -339,6 +346,7 @@ export function DeveloperClosingsYearView({
     detailCanSubmit,
     detailBlockingCount,
     detailAttachments,
+    developerCompensation,
   };
 
   return (

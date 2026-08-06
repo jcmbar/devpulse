@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/auth/app-context";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import {
   approveMonthlyClosing,
   createMonthlyClosingAttachmentSignedUrl,
   finalizeMonthlyClosing,
   rejectMonthlyClosing,
+  revertMonthlyClosingStatus,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
   uploadMonthlyClosingAttachment,
@@ -63,6 +65,10 @@ export async function submitMonthlyClosingAction(input: {
   importId: string;
   sourceMode?: string | null;
   developerResubmissionNotes?: string | null;
+  travelDays: string[];
+  mealDays: string[];
+  valuesNotes?: string | null;
+  workedHours: number;
 }): Promise<MonthlyClosingActionResult> {
   try {
     const { profile, developer } = await getAppContext();
@@ -73,6 +79,15 @@ export async function submitMonthlyClosingAction(input: {
       return { ok: false, error: "Fechamento ou lote inválido." };
     }
 
+    const compensation = await getCurrentDeveloperCompensation(developer.id);
+    if (!compensation) {
+      return {
+        ok: false,
+        error:
+          "Cadastro de valores (compensação) não encontrado. Peça ao gestor para configurar em Developers.",
+      };
+    }
+
     const closing = await submitMonthlyClosingForReview({
       closingId: input.closingId,
       developerId: developer.id,
@@ -80,6 +95,19 @@ export async function submitMonthlyClosingAction(input: {
       sourceMode: input.sourceMode ?? "auto",
       actorUserId: profile.id,
       developerResubmissionNotes: input.developerResubmissionNotes,
+      values: {
+        travelDays: input.travelDays,
+        mealDays: input.mealDays,
+        valuesNotes: input.valuesNotes,
+        workedHours: input.workedHours,
+        compensation: {
+          baseAmount: compensation.base_amount,
+          baseType: compensation.base_type,
+          hourlyRate: compensation.hourly_rate,
+          dailyTravelAmount: compensation.daily_travel_amount,
+          dailyMealAmount: compensation.daily_meal_amount,
+        },
+      },
     });
 
     revalidatePath("/app");
@@ -169,6 +197,34 @@ export async function finalizeMonthlyClosingAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível finalizar o fechamento.",
+    };
+  }
+}
+
+export async function revertMonthlyClosingStatusAction(input: {
+  closingId: string;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile } = await requireTeamAccess();
+    if (!input.closingId.trim()) {
+      return { ok: false, error: "Fechamento inválido." };
+    }
+    const closing = await revertMonthlyClosingStatus({
+      closingId: input.closingId,
+      actorUserId: profile.id,
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath("/app/gestor/fechamentos");
+    revalidatePath(`/app/gestor/fechamentos/${closing.id}`);
+    return { ok: true, closingId: closing.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reabrir/voltar o status do fechamento.",
     };
   }
 }

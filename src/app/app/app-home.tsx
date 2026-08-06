@@ -40,6 +40,7 @@ import {
 } from "@/lib/metrics/metric-calc-explain";
 import type { CompiladoSnapshotProvenance } from "@/services/compilado/resolve-snapshot";
 import type { Developer } from "@/types/developer";
+import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import type { JiraCard } from "@/types/jira-card";
 import type {
@@ -75,6 +76,7 @@ type AppHomeProps = {
   closingCanSubmit: boolean;
   closingBlockingCount: number;
   closingAttachments: MonthlyClosingAttachment[];
+  developerCompensation: DeveloperCompensation | null;
 };
 
 function formatHours(value: number): string {
@@ -152,6 +154,7 @@ export function AppHome({
   closingCanSubmit,
   closingBlockingCount,
   closingAttachments,
+  developerCompensation,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
   const delayCounts = countJustificationStatuses(delayJustificationsByKey);
@@ -617,6 +620,7 @@ export function AppHome({
           detailCanSubmit={closingCanSubmit}
           detailBlockingCount={closingBlockingCount}
           detailAttachments={closingAttachments}
+          developerCompensation={developerCompensation}
         />
       )}
     </PageShell>

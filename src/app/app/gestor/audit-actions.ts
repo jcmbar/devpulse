@@ -206,7 +206,9 @@ export async function lookupGestorKeysOutsidePeriodAction(input: {
           ...(flags.isOnTime ? ["No prazo"] : []),
           ...(flags.isDelayed ? ["Atraso"] : []),
           ...(flags.isRework ? ["Retrabalho"] : []),
-          ...(flags.isOnTime == null ? ["Sem classificação de prazo"] : []),
+          ...(flags.isOnTime == null && flags.isDelayed == null
+            ? ["Atenção"]
+            : []),
         ],
         inclusionNote,
       };

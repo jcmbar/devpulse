@@ -1,6 +1,11 @@
 export type DeveloperPeriodMetrics = {
   totalCards: number;
   onTimeCards: number;
+  /**
+   * Cards no período sem classificação de prazo (ex.: `due_on` ausente).
+   * Explica o gap: totalCards ≠ onTimeCards + delayedCardsGross.
+   */
+  incompleteCards: number;
   /** Contagem líquida de cards em atraso (bruto − acatados). Painel/ranking. */
   delayedCards: number;
   /** Cards com delay_days > 0 em dias úteis (antes de aceites). */

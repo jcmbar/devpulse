@@ -18,6 +18,7 @@ import { buildMonthlyTrendFromCards } from "@/lib/metrics/monthly-trend";
 import { findUnlinkedDeveloperByEmail } from "@/services/developers";
 import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot";
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
+import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import {
   getMonthlyClosingForDeveloperMonth,
@@ -26,6 +27,7 @@ import {
   listMonthlyClosingsForDeveloperYear,
   loadMonthlyClosingAuditForDeveloper,
 } from "@/services/monthly-closings";
+import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type {
   MonthlyClosingAttachment,
   MonthlyClosingCardAuditRow,
@@ -362,6 +364,9 @@ export default async function AppPage({ searchParams }: AppPageProps) {
     closingBlockingCount = audit.blockingCount;
   }
 
+  const developerCompensation: DeveloperCompensation | null =
+    await getCurrentDeveloperCompensation(developer.id);
+
   const cardsTabHref = buildAppHref({
     tab: "cards",
     importId: selectedImportId,
@@ -412,6 +417,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         closingCanSubmit={closingCanSubmit}
         closingBlockingCount={closingBlockingCount}
         closingAttachments={closingAttachments}
+        developerCompensation={developerCompensation}
       />
     </>
   );

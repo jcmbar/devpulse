@@ -5,14 +5,27 @@ import {
   finalizeMonthlyClosingAction,
   getMonthlyClosingAttachmentUrlAction,
   rejectMonthlyClosingAction,
+  revertMonthlyClosingStatusAction,
 } from "@/app/app/monthly-closing-actions";
 import { cn } from "@/lib/utils";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
 } from "@/types/monthly-closing";
-import { monthlyClosingAttachmentTypeLabel } from "@/types/monthly-closing";
-import { AlertTriangle, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import {
+  monthlyClosingAttachmentTypeLabel,
+  monthlyClosingRevertActionLabel,
+  monthlyClosingRevertDescription,
+  monthlyClosingRevertTarget,
+  monthlyClosingStatusLabel,
+} from "@/types/monthly-closing";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Undo2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 
@@ -30,12 +43,16 @@ export function GestorClosingDecisionPanel({
   const [rejectionNotes, setRejectionNotes] = useState("");
   const [mode, setMode] = useState<"approve" | "reject">("approve");
   const [error, setError] = useState<string | null>(null);
+  const [confirmRevert, setConfirmRevert] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const invoice =
     attachments.find((row) => row.type === "invoice_pdf") ?? null;
   const boleto = attachments.find((row) => row.type === "boleto_pdf") ?? null;
   const canFinalize = Boolean(invoice && boleto);
+  const revertTarget = monthlyClosingRevertTarget(closing.status);
+  const revertLabel = monthlyClosingRevertActionLabel(closing.status);
+  const revertDescription = monthlyClosingRevertDescription(closing.status);
 
   function approve() {
     setError(null);
@@ -81,6 +98,22 @@ export function GestorClosingDecisionPanel({
     });
   }
 
+  function revertStatus() {
+    setError(null);
+    startTransition(async () => {
+      const result = await revertMonthlyClosingStatusAction({
+        closingId: closing.id,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        setConfirmRevert(false);
+        return;
+      }
+      setConfirmRevert(false);
+      router.refresh();
+    });
+  }
+
   function openAttachment(storageKey: string) {
     startTransition(async () => {
       const result = await getMonthlyClosingAttachmentUrlAction({ storageKey });
@@ -110,6 +143,75 @@ export function GestorClosingDecisionPanel({
             ) : null}
           </p>
         </div>
+      ) : null}
+
+      {revertTarget && revertLabel && revertDescription ? (
+        <section className="space-y-3 rounded-[var(--radius)] border border-border p-4">
+          <div>
+            <h3 className="text-sm font-semibold tracking-tight">
+              Controle do gestor
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Disponível para admin e gestor. Volta um status por vez.
+            </p>
+          </div>
+
+          {confirmRevert ? (
+            <div className="space-y-3 rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 p-3">
+              <p className="text-sm text-pretty">
+                <span className="font-medium">{revertLabel}</span>
+                {" — "}
+                {monthlyClosingStatusLabel(closing.status)} →{" "}
+                {monthlyClosingStatusLabel(revertTarget)}.
+              </p>
+              <p className="text-xs text-muted-foreground text-pretty">
+                {revertDescription}
+              </p>
+              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={revertStatus}
+                  disabled={pending}
+                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-amber-500/50 bg-amber-500/20 px-3.5 text-sm font-semibold text-amber-950 disabled:opacity-50 dark:text-amber-100"
+                >
+                  {pending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Undo2 className="size-3.5" strokeWidth={2} />
+                  )}
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmRevert(false);
+                    setError(null);
+                  }}
+                  disabled={pending}
+                  className="ui-btn-secondary"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmRevert(true);
+                  setError(null);
+                }}
+                disabled={pending}
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-border bg-muted/30 px-3.5 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+              >
+                <Undo2 className="size-3.5" strokeWidth={2} />
+                {revertLabel}
+              </button>
+            </div>
+          )}
+        </section>
       ) : null}
 
       {closing.status === "rejected" ? (
@@ -341,7 +443,9 @@ export function GestorClosingDecisionPanel({
 
           {closing.status === "closed" ? (
             <div className="space-y-2 border-t border-border pt-3">
-              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              {error && !confirmRevert ? (
+                <p className="text-sm text-danger">{error}</p>
+              ) : null}
               <button
                 type="button"
                 onClick={finalize}

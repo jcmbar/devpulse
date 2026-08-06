@@ -352,6 +352,12 @@ body {
     background-color: color-mix(in oklab, var(--brand-soft) 40%, var(--card));
   }
 
+  /** Ranking-style grids: centered metric cells + vertical column rules. */
+  .ui-table--metric-grid th:not(:first-child),
+  .ui-table--metric-grid td:not(:first-child) {
+    @apply border-l border-border/55 text-center;
+  }
+
   .ui-badge {
     @apply inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/60 px-2 py-0.5 text-[11px] font-medium tracking-wide text-muted-foreground;
   }

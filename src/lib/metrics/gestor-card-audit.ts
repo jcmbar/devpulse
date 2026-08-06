@@ -54,7 +54,7 @@ function classificationLabelsFromFlags(
     labels.push("Retrabalho");
   }
   if (flags.isOnTime == null && flags.isDelayed == null) {
-    labels.push("Sem classificação de prazo");
+    labels.push("Atenção");
   }
 
   return labels;

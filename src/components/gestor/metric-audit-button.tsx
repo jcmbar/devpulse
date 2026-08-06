@@ -67,6 +67,7 @@ const METRIC_LABEL: Record<GestorCardMetricKind, string> = {
   onTime: "No prazo",
   delayed: "Atraso",
   rework: "Retrabalho",
+  incomplete: "Atenção",
 };
 
 const SUSPICION_KIND_LABEL: Record<string, string> = {
@@ -469,6 +470,24 @@ function GestorCardsAuditDrawer({
                   {pendingDecisionCount === 1 ? "" : "s"}
                 </span>
                 . Revise cada card e registre Aceitar ou Rejeitar.
+              </p>
+            </div>
+          ) : null}
+
+          {metric === "incomplete" ? (
+            <div className="mb-4 flex items-start gap-2 rounded-[var(--radius-sm)] border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm">
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0 text-warning"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <p className="text-pretty text-foreground">
+                <span className="font-medium">
+                  Cards sem classificação de prazo
+                </span>
+                . Falta data limite (`due_on`) ou outro dado necessário no Jira —
+                por isso não entram em No prazo nem em Atraso e o total de cards
+                fica maior que a soma dessas duas colunas.
               </p>
             </div>
           ) : null}

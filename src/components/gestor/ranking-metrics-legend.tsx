@@ -7,7 +7,7 @@ type MetricsLegendProps = {
 };
 
 const DEFAULT_HINT =
-  "Passe o mouse (ou toque) no valor de Aproveitamento ou Índice para ver a memória de cálculo.";
+  "Passe o mouse (ou toque) no valor de Aproveitamento ou Índice para ver a memória de cálculo. A coluna Atenção lista cards sem data limite no Jira.";
 
 /**
  * Compact legend for Aproveitamento + Índice (Gestor ranking / Home do developer).
