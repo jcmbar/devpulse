@@ -171,7 +171,7 @@ Casos extras:
 
 | Sintoma | Causa provável |
 |---------|----------------|
-| Link do e-mail vem com `localhost` em produção | `NEXT_PUBLIC_SITE_URL` errado no host, ou template ainda usando `{{ .SiteURL }}` |
+| Link do e-mail vem com `localhost` em produção | `NEXT_PUBLIC_SITE_URL` ausente/errado no host (Render). Defina a URL pública do app e redeploy. Confirme o template usando `{{ .RedirectTo }}`, não só `{{ .SiteURL }}`. Se o e-mail foi disparado pelo `next dev` local, o link será localhost por design. |
 | “redirect_uri mismatch” / link não abre o app | `/auth/confirm` do ambiente não está nas Redirect URLs |
 | “invalid_or_expired” | Link já usado, expirado, ou `type` errado no template |
 | E-mail em inglês / CTA genérico | Template Invite ainda padrão — atualize no dashboard |
