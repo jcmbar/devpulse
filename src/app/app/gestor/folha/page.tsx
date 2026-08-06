@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PayrollAttendancePanel } from "@/components/folha/payroll-attendance-panel";
 import { PayrollItemEditor } from "@/components/folha/payroll-item-editor";
 import { PayrollMonthStatusControl } from "@/components/folha/payroll-month-status";
+import { PayrollSinteticoExportButton } from "@/components/folha/payroll-sintetico-export-button";
 import { PayrollSyncFromCompensationButton } from "@/components/folha/payroll-sync-button";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
@@ -179,6 +180,22 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <PayrollSinteticoExportButton
+              yearMonth={month}
+              periodStart={closing.period_start}
+              periodEnd={closing.period_end}
+              rows={items
+                .filter((item) => item.is_reviewed)
+                .map((item) => ({
+                  developerName: item.developer_name,
+                  baseAmount: item.base_amount,
+                  differentialAmount: item.differential_amount,
+                  discountsAmount: item.discounts_amount,
+                  travelAmount: item.travel_amount,
+                  mealAmount: item.meal_amount,
+                  invoiceAmount: item.invoice_amount,
+                }))}
+            />
             <PayrollSyncFromCompensationButton
               yearMonth={month}
               teamId={selectedTeamId}
