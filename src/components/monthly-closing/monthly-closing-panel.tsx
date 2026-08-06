@@ -409,13 +409,15 @@ export function MonthlyClosingAuditSection({
       title="Auditoria do fechamento"
       description={
         status === "open" || status === "rejected"
-          ? "Revise os cards entregues no mês. Após ajustes (inclusive no Jira), reenvie ao gestor."
+          ? "Revise os cards entregues no mês (se houver). Sem cards, ainda é possível enviar o fechamento informando presença e valores."
           : "Base congelada no envio ao gestor (snapshot)."
       }
     >
       {auditRows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nenhum card com Entrega TU neste mês.
+          Nenhum card com Entrega TU neste mês. Você pode enviar o fechamento
+          mesmo assim — preencha deslocamento, refeição e valores na próxima
+          etapa.
         </p>
       ) : (
         <DataTable minWidthClassName="min-w-[1100px]" stickyFirstColumn>

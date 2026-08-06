@@ -550,7 +550,8 @@ export async function loadMonthlyClosingAuditForDeveloper(input: {
     cards,
     justifications,
     auditRows,
-    canSubmit: auditRows.length > 0 && blockingCount === 0,
+    /** Empty month (0 cards) is allowed — only pending justifications block. */
+    canSubmit: blockingCount === 0,
     blockingCount,
   };
 }
@@ -679,11 +680,6 @@ export async function submitMonthlyClosingForReview(input: {
     yearMonth: closing.year_month,
   });
 
-  if (audit.auditRows.length === 0) {
-    throw new Error(
-      "Não há cards entregues neste mês para incluir no fechamento.",
-    );
-  }
   if (!audit.canSubmit) {
     throw new Error(
       `Ainda há ${audit.blockingCount} card(s) com justificativa pendente ou ausente.`,
@@ -745,13 +741,15 @@ export async function submitMonthlyClosingForReview(input: {
     },
   }));
 
-  const { error: insertItemsError } = await supabase
-    .from("monthly_closing_items")
-    .insert(itemRows);
-  if (insertItemsError) {
-    throw new Error(
-      `Falha ao gerar snapshot do fechamento: ${insertItemsError.message}`,
-    );
+  if (itemRows.length > 0) {
+    const { error: insertItemsError } = await supabase
+      .from("monthly_closing_items")
+      .insert(itemRows);
+    if (insertItemsError) {
+      throw new Error(
+        `Falha ao gerar snapshot do fechamento: ${insertItemsError.message}`,
+      );
+    }
   }
 
   const presenceRows: Array<{
