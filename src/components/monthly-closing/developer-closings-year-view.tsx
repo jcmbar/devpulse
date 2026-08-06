@@ -53,6 +53,13 @@ function formatPercent(value: number | null): string {
   })}%`;
 }
 
+function formatHours(value: number): string {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} h`;
+}
+
 function buildFechamentosHref(input: {
   importId: string | null;
   closingYear: number;
@@ -104,6 +111,7 @@ function summarizeYear(rows: DeveloperClosingYearMonthRow[]) {
   let closed = 0;
   let finalized = 0;
   let totalCards = 0;
+  let totalTimeSpentHours = 0;
   let utilSum = 0;
   let utilCount = 0;
 
@@ -122,6 +130,7 @@ function summarizeYear(rows: DeveloperClosingYearMonthRow[]) {
     }
 
     totalCards += row.metrics.totalCards;
+    totalTimeSpentHours += row.metrics.totalTimeSpentHours;
     if (row.metrics.totalCards > 0) {
       utilSum += row.metrics.utilizationRate;
       utilCount += 1;
@@ -135,6 +144,7 @@ function summarizeYear(rows: DeveloperClosingYearMonthRow[]) {
     closed,
     finalized,
     totalCards,
+    totalTimeSpentHours,
     avgUtilization:
       utilCount > 0 ? utilSum / utilCount : null,
   };
@@ -206,6 +216,10 @@ function MonthDetailPanel({
             {detailRow.metrics.totalCards} card(s) · mesma base da aba Cards por
             período
           </p>
+          <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
+            Total de horas realizadas:{" "}
+            {formatHours(detailRow.metrics.totalTimeSpentHours)}
+          </p>
         </div>
         <MonthlyClosingControls
           yearMonth={detailRow.yearMonth}
@@ -271,6 +285,10 @@ function MonthListItem({
             Aprov. {formatPercent(row.metrics.utilizationRate)}
             {" · "}
             Índ. {formatDeliveryIndex(row.metrics.deliveryIndex)}
+          </p>
+          <p className="mt-1 text-xs font-medium tabular-nums text-foreground">
+            Total de horas realizadas:{" "}
+            {formatHours(row.metrics.totalTimeSpentHours)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -360,6 +378,13 @@ export function DeveloperClosingsYearView({
             value={String(summary.totalCards)}
             tone="info"
             hint="Soma dos meses com Entrega TU"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Horas realizadas"
+            value={formatHours(summary.totalTimeSpentHours)}
+            tone="brand"
+            hint="Soma do time spent no ano"
           />
           <KpiMetricCard
             variant="hero"
