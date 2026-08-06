@@ -208,6 +208,13 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <Link href="/app/gestor/folha/empresas" className="ui-btn-secondary">
               Empresas emissoras
             </Link>
+            <Link
+              href="/app/gestor/config#feriados"
+              className="ui-btn-secondary"
+              title="Cadastro global de feriados aplicados na Folha e no Fechamento"
+            >
+              Feriados
+            </Link>
             <Link href="/app/gestor" className="ui-btn-secondary">
               Voltar ao dashboard
             </Link>

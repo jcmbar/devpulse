@@ -151,15 +151,17 @@ export default async function GestorConfigPage({
         </p>
       </Surface>
 
-      <Surface>
-        <HolidaysAdminPanel
-          holidays={holidays}
-          year={year}
-          month={month}
-          scopeFilter={scopeFilter}
-          teams={teams}
-        />
-      </Surface>
+      <div id="feriados">
+        <Surface>
+          <HolidaysAdminPanel
+            holidays={holidays}
+            year={year}
+            month={month}
+            scopeFilter={scopeFilter}
+            teams={teams}
+          />
+        </Surface>
+      </div>
 
       <Surface>
         <DeveloperCapacityPanel

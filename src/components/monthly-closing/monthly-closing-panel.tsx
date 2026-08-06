@@ -138,6 +138,7 @@ type MonthlyClosingControlsProps = {
   blockingCount: number;
   compensation: DeveloperCompensation | null;
   workedHours: number;
+  holidays?: ReadonlyArray<{ date: string; name: string }>;
 };
 
 export function MonthlyClosingControls({
@@ -149,6 +150,7 @@ export function MonthlyClosingControls({
   blockingCount,
   compensation,
   workedHours,
+  holidays = [],
 }: MonthlyClosingControlsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -360,6 +362,7 @@ export function MonthlyClosingControls({
           yearMonth={yearMonth}
           compensation={compensation}
           workedHours={workedHours}
+          holidays={holidays}
           requireResubmissionNotes={valuesModalMode === "resubmit"}
           resubmissionNotes={resubmissionNotes}
           onResubmissionNotesChange={setResubmissionNotes}

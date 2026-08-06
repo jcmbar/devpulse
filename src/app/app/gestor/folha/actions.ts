@@ -22,6 +22,7 @@ import {
   resolveZeroWeekendPatches,
   type BatchApplyMode,
 } from "@/lib/metrics/payroll-attendance-batch";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   PAYROLL_ATTENDANCE_KINDS,
   PAYROLL_CLOSING_STATUSES,
@@ -212,12 +213,20 @@ export async function batchApplyAttendanceAction(input: {
 
     let patches;
     switch (input.shortcut) {
-      case "fill_month_default":
+      case "fill_month_default": {
+        const yearMonth = existing[0]!.day_on.slice(0, 7);
+        const { dates: holidayDates } =
+          await listApplicableHolidayDatesForDeveloperMonth({
+            developerId: payrollItem.developer_id,
+            yearMonth,
+          });
         patches = resolveFillMonthDefaultPatches({
           days: snapshots,
           contractedHoursPerDay: contracted,
+          holidayDates,
         });
         break;
+      }
       case "workweek_home":
         patches = resolveWorkweekKindPatches({
           days: snapshots,

@@ -101,6 +101,21 @@ describe("payroll-attendance-batch", () => {
     ]);
   });
 
+  it("fill month default marks weekday holidays", () => {
+    const patches = resolveFillMonthDefaultPatches({
+      days: [
+        { day_on: "2026-09-07", day_kind: "home", hours: 8 }, // Mon holiday
+        { day_on: "2026-09-08", day_kind: "home", hours: 8 }, // Tue
+      ],
+      contractedHoursPerDay: 8,
+      holidayDates: new Set(["2026-09-07"]),
+    });
+    assert.deepEqual(patches, [
+      { dayOn: "2026-09-07", dayKind: "holiday", hours: 0 },
+      { dayOn: "2026-09-08", dayKind: "home", hours: 8 },
+    ]);
+  });
+
   it("zeros weekends", () => {
     const patches = resolveZeroWeekendPatches({ days });
     assert.deepEqual(

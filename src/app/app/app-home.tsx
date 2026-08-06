@@ -79,6 +79,7 @@ type AppHomeProps = {
   closingAttachments: MonthlyClosingAttachment[];
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
+  closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
 };
 
 function formatHours(value: number): string {
@@ -158,6 +159,7 @@ export function AppHome({
   closingAttachments,
   developerCompensation,
   closingInvoiceIssuer = null,
+  closingHolidays = [],
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
   const delayCounts = countJustificationStatuses(delayJustificationsByKey);
@@ -625,6 +627,7 @@ export function AppHome({
           detailAttachments={closingAttachments}
           developerCompensation={developerCompensation}
           closingInvoiceIssuer={closingInvoiceIssuer}
+          closingHolidays={closingHolidays}
         />
       )}
     </PageShell>

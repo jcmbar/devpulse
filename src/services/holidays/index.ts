@@ -1,6 +1,13 @@
 import "server-only";
 
 import { endOfMonth, listYearMonthsBetween, startOfMonth } from "@/lib/metrics/date-range";
+import {
+  applicableHolidayDateSet,
+  filterHolidaysForDeveloper,
+  toDeveloperHolidayContext,
+  type ApplicableHoliday,
+} from "@/lib/metrics/holiday-eligibility";
+import { yearMonthPeriod } from "@/lib/metrics/payroll-calc";
 import { createClient } from "@/lib/supabase/server";
 import type { Holiday, HolidayScope } from "@/types/holiday";
 
@@ -148,6 +155,82 @@ export async function listHolidaysInRange(input: {
   }
 
   return (data ?? []).map(mapRow);
+}
+
+/**
+ * Holidays applicable to one developer in a date range (national/state/city/team).
+ * Team match uses teams.code via developers.team_id.
+ */
+export async function listApplicableHolidaysForDeveloperInRange(input: {
+  developerId: string;
+  rangeStart: string;
+  rangeEnd: string;
+}): Promise<ApplicableHoliday[]> {
+  const holidays = await listHolidaysInRange({
+    rangeStart: input.rangeStart,
+    rangeEnd: input.rangeEnd,
+  });
+  if (holidays.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data: developer, error } = await supabase
+    .from("developers")
+    .select("state_code, city_code, team_id")
+    .eq("id", input.developerId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Falha ao carregar contexto de feriados: ${error.message}`,
+    );
+  }
+
+  let teamCode = "";
+  const teamId = (developer?.team_id as string | null) ?? null;
+  if (teamId) {
+    const { data: team } = await supabase
+      .from("teams")
+      .select("code")
+      .eq("id", teamId)
+      .maybeSingle();
+    teamCode = String(team?.code ?? "");
+  }
+
+  const context = toDeveloperHolidayContext({
+    state_code: developer?.state_code ?? "",
+    city_code: developer?.city_code ?? "",
+    team_id: teamId,
+    team_code: teamCode,
+  });
+
+  return filterHolidaysForDeveloper(holidays, context);
+}
+
+export async function listApplicableHolidayDatesForDeveloperMonth(input: {
+  developerId: string;
+  yearMonth: string;
+}): Promise<{ dates: Set<string>; byDate: Map<string, string> }> {
+  const period = yearMonthPeriod(input.yearMonth);
+  if (!period) {
+    return { dates: new Set(), byDate: new Map() };
+  }
+
+  const applicable = await listApplicableHolidaysForDeveloperInRange({
+    developerId: input.developerId,
+    rangeStart: period.start,
+    rangeEnd: period.end,
+  });
+
+  const dates = applicableHolidayDateSet(applicable);
+  const byDate = new Map<string, string>();
+  for (const holiday of applicable) {
+    if (!byDate.has(holiday.holiday_on)) {
+      byDate.set(holiday.holiday_on, holiday.name);
+    }
+  }
+  return { dates, byDate };
 }
 
 /**

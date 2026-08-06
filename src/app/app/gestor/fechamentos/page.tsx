@@ -22,6 +22,7 @@ import {
   listMonthlyClosingsInReview,
 } from "@/services/monthly-closings";
 import { listTeamsAdmin } from "@/services/teams";
+import { listPayrollReviewedDeveloperMonthsForYear } from "@/services/payroll";
 
 type PageProps = {
   searchParams: Promise<{
@@ -71,6 +72,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
     yearClosings,
     closingsInReview,
     driftClosings,
+    folhaReviewed,
   ] = await Promise.all([
     listTeamsAdmin(),
     listDevelopersAdmin({
@@ -89,14 +91,22 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       teamId: selectedTeamId,
       yearMonth: null,
     }),
+    listPayrollReviewedDeveloperMonthsForYear({
+      year: closingSelectedYear,
+      teamId: selectedTeamId,
+    }),
   ]);
 
   const yearPrefix = `${closingSelectedYear}-`;
-  const filteredClosings = closingsInReview.filter((row) =>
-    row.year_month.startsWith(yearPrefix),
+  const filteredClosings = closingsInReview.filter(
+    (row) =>
+      row.year_month.startsWith(yearPrefix) &&
+      folhaReviewed.keys.has(`${row.developer_id}:${row.year_month}`),
   );
-  const filteredDrift = driftClosings.filter((row) =>
-    row.year_month.startsWith(yearPrefix),
+  const filteredDrift = driftClosings.filter(
+    (row) =>
+      row.year_month.startsWith(yearPrefix) &&
+      folhaReviewed.keys.has(`${row.developer_id}:${row.year_month}`),
   );
 
   const developerIds = new Set(developers.map((row) => row.id));
@@ -126,10 +136,16 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       fullName: row.full_name,
       isActive: row.is_active,
     })),
-  ].sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
+  ]
+    .filter((row) => folhaReviewed.developerIds.has(row.id))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
+
+  const yearClosingsReviewed = yearClosings.filter((row) =>
+    folhaReviewed.keys.has(`${row.developer_id}:${row.year_month}`),
+  );
 
   const attachmentPresence = await listMonthlyClosingAttachmentPresence(
-    yearClosings
+    yearClosingsReviewed
       .filter(
         (row) => row.status === "closed" || row.status === "finalized",
       )
@@ -242,7 +258,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       <GestorClosingsYearMatrix
         year={closingSelectedYear}
         developers={matrixDevelopers}
-        closings={yearClosings}
+        closings={yearClosingsReviewed}
         attachmentPresence={attachmentPresence}
       />
 

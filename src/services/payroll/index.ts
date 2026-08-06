@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { listCurrentCompensationsByDeveloperIds } from "@/services/developers/compensation";
 import { listDevelopersAdmin } from "@/services/developers/admin";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   assertMonthlyClosingNotFinalizedForPayroll,
   mapFinalizedMonthlyClosingIdsByDeveloper,
@@ -195,11 +196,43 @@ export async function listAttendanceForItem(
 
 async function ensureAttendanceDefaults(input: {
   itemId: string;
+  developerId: string;
   yearMonth: string;
   contractedHoursPerDay: number;
 }): Promise<void> {
+  const { dates: holidayDates } =
+    await listApplicableHolidayDatesForDeveloperMonth({
+      developerId: input.developerId,
+      yearMonth: input.yearMonth,
+    });
+
   const existing = await listAttendanceForItem(input.itemId);
   if (existing.length > 0) {
+    // Soft sync: only upgrade default "home" weekdays that are now holidays.
+    const softPatches = existing.filter(
+      (day) =>
+        day.day_kind === "home" &&
+        holidayDates.has(day.day_on) &&
+        defaultDayKindForDate(day.day_on, holidayDates) === "holiday",
+    );
+    if (softPatches.length === 0) {
+      return;
+    }
+
+    const supabase = await createClient();
+    for (const day of softPatches) {
+      const { error } = await supabase
+        .from("payroll_attendance_days")
+        .update({ day_kind: "holiday", hours: 0 })
+        .eq("id", day.id)
+        .eq("day_kind", "home");
+      if (error) {
+        throw new Error(
+          `Falha ao aplicar feriado em ${day.day_on}: ${error.message}`,
+        );
+      }
+    }
+    await recalculatePayrollItem(input.itemId);
     return;
   }
 
@@ -209,7 +242,7 @@ async function ensureAttendanceDefaults(input: {
   }
 
   const rows = days.map((dayOn) => {
-    const kind = defaultDayKindForDate(dayOn);
+    const kind = defaultDayKindForDate(dayOn, holidayDates);
     const isWorkday = kind === "home" || kind === "presencial";
     return {
       payroll_item_id: input.itemId,
@@ -435,6 +468,7 @@ export async function ensurePayrollMonthWithItems(input: {
     const item = mapItem(created as Record<string, unknown>);
     await ensureAttendanceDefaults({
       itemId: item.id,
+      developerId: item.developer_id,
       yearMonth: closing.year_month,
       contractedHoursPerDay: hoursDay,
     });
@@ -450,6 +484,7 @@ export async function ensurePayrollMonthWithItems(input: {
   for (const item of scoped) {
     await ensureAttendanceDefaults({
       itemId: item.id,
+      developerId: item.developer_id,
       yearMonth: closing.year_month,
       contractedHoursPerDay: item.contracted_hours_per_day,
     });
@@ -497,6 +532,72 @@ export async function getPayrollInvoiceIssuerIdForDeveloperMonth(input: {
 }): Promise<string | null> {
   const item = await getPayrollItemForDeveloperMonth(input);
   return item?.invoice_issuer_id ?? null;
+}
+
+/**
+ * Folha lines marked "conferido" in a calendar year.
+ * Used to filter the gestor Fechamentos matrix / queue.
+ */
+export async function listPayrollReviewedDeveloperMonthsForYear(input: {
+  year: number;
+  teamId?: string | null;
+}): Promise<{
+  developerIds: Set<string>;
+  keys: Set<string>;
+}> {
+  const yearPrefix = `${input.year}-`;
+  const supabase = await createClient();
+
+  const { data: closings, error: closingsError } = await supabase
+    .from("payroll_month_closings")
+    .select("id, year_month")
+    .like("year_month", `${yearPrefix}%`);
+
+  if (closingsError) {
+    throw new Error(
+      `Falha ao listar meses da Folha: ${closingsError.message}`,
+    );
+  }
+
+  const developerIds = new Set<string>();
+  const keys = new Set<string>();
+  if (!closings || closings.length === 0) {
+    return { developerIds, keys };
+  }
+
+  const closingIdToMonth = new Map(
+    closings.map((row) => [String(row.id), String(row.year_month)]),
+  );
+  const closingIds = [...closingIdToMonth.keys()];
+
+  let query = supabase
+    .from("payroll_closing_items")
+    .select("developer_id, payroll_closing_id")
+    .eq("is_reviewed", true)
+    .in("payroll_closing_id", closingIds);
+
+  if (input.teamId) {
+    query = query.eq("team_id", input.teamId);
+  }
+
+  const { data: items, error: itemsError } = await query;
+  if (itemsError) {
+    throw new Error(
+      `Falha ao listar conferidos da Folha: ${itemsError.message}`,
+    );
+  }
+
+  for (const item of items ?? []) {
+    const developerId = String(item.developer_id);
+    const yearMonth = closingIdToMonth.get(String(item.payroll_closing_id));
+    if (!yearMonth) {
+      continue;
+    }
+    developerIds.add(developerId);
+    keys.add(`${developerId}:${yearMonth}`);
+  }
+
+  return { developerIds, keys };
 }
 
 /** Folha line + presencial days for Gestor×Usuário conferência on closing review. */

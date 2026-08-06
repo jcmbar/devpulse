@@ -21,6 +21,7 @@ import { listDelayJustificationsForDeveloperImport } from "@/services/delay-just
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import { getInvoiceIssuer } from "@/services/invoice-issuers";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   getMonthlyClosingForDeveloperMonth,
   listMonthlyClosingAttachments,
@@ -374,6 +375,18 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       ? await getInvoiceIssuer(monthlyClosing.invoice_issuer_id)
       : null;
 
+  const closingHolidayEntries =
+    closingYearMonth != null
+      ? Array.from(
+          (
+            await listApplicableHolidayDatesForDeveloperMonth({
+              developerId: developer.id,
+              yearMonth: closingYearMonth,
+            })
+          ).byDate.entries(),
+        ).map(([date, name]) => ({ date, name }))
+      : [];
+
   const cardsTabHref = buildAppHref({
     tab: "cards",
     importId: selectedImportId,
@@ -426,6 +439,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         closingAttachments={closingAttachments}
         developerCompensation={developerCompensation}
         closingInvoiceIssuer={closingInvoiceIssuer}
+        closingHolidays={closingHolidayEntries}
       />
     </>
   );

@@ -25,6 +25,8 @@ type ClosingSubmitValuesModalProps = {
   yearMonth: string;
   compensation: DeveloperCompensation;
   workedHours: number;
+  /** Applicable holidays for this developer/month (date → name). */
+  holidays?: ReadonlyArray<{ date: string; name: string }>;
   /** When resubmitting after rejection. */
   requireResubmissionNotes?: boolean;
   resubmissionNotes?: string;
@@ -54,12 +56,14 @@ function MonthDayPicker({
   onChange,
   label,
   accentClass,
+  holidayNameByDate,
 }: {
   yearMonth: string;
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
   label: string;
   accentClass: string;
+  holidayNameByDate: Map<string, string>;
 }) {
   const days = useMemo(() => listDaysInYearMonth(yearMonth), [yearMonth]);
   const firstWeekday = days[0]
@@ -69,6 +73,9 @@ function MonthDayPicker({
   const leadingEmpty = firstWeekday;
 
   function toggle(day: string) {
+    if (holidayNameByDate.has(day)) {
+      return;
+    }
     const next = new Set(selected);
     if (next.has(day)) {
       next.delete(day);
@@ -98,19 +105,28 @@ function MonthDayPicker({
         {days.map((day) => {
           const active = selected.has(day);
           const weekend = isWeekend(day);
+          const holidayName = holidayNameByDate.get(day) ?? null;
+          const blocked = holidayName != null;
           return (
             <button
               key={day}
               type="button"
               onClick={() => toggle(day)}
-              title={`${weekdayShort(day)} ${day}`}
+              disabled={blocked}
+              title={
+                holidayName
+                  ? `Feriado: ${holidayName}`
+                  : `${weekdayShort(day)} ${day}`
+              }
               className={cn(
                 "flex h-8 flex-col items-center justify-center rounded-md border text-xs tabular-nums transition",
-                active
-                  ? accentClass
-                  : weekend
-                    ? "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted/40"
-                    : "border-border bg-card hover:bg-muted/50",
+                blocked
+                  ? "cursor-not-allowed border-rose-500/40 bg-rose-500/15 text-rose-900/80 dark:text-rose-100/80"
+                  : active
+                    ? accentClass
+                    : weekend
+                      ? "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                      : "border-border bg-card hover:bg-muted/50",
               )}
             >
               {dayNumber(day)}
@@ -130,6 +146,7 @@ export function ClosingSubmitValuesModal({
   yearMonth,
   compensation,
   workedHours,
+  holidays = [],
   requireResubmissionNotes = false,
   resubmissionNotes = "",
   onResubmissionNotesChange,
@@ -147,6 +164,14 @@ export function ClosingSubmitValuesModal({
   );
   const [valuesNotes, setValuesNotes] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const holidayNameByDate = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of holidays) {
+      map.set(row.date, row.name);
+    }
+    return map;
+  }, [holidays]);
 
   useEffect(() => {
     if (!open) {
@@ -188,9 +213,11 @@ export function ClosingSubmitValuesModal({
       return;
     }
     setLocalError(null);
+    const allowed = (days: Set<string>) =>
+      [...days].filter((day) => !holidayNameByDate.has(day)).sort();
     onConfirm({
-      travelDays: [...travelSelected].sort(),
-      mealDays: [...mealSelected].sort(),
+      travelDays: allowed(travelSelected),
+      mealDays: allowed(mealSelected),
       valuesNotes: isVariable ? valuesNotes.trim() || null : null,
     });
   }
@@ -234,6 +261,12 @@ export function ClosingSubmitValuesModal({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
+          {holidayNameByDate.size > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Feriados cadastrados aparecem em destaque e não podem ser
+              selecionados como presenciais.
+            </p>
+          ) : null}
           <div className="grid gap-5 sm:grid-cols-2">
             <MonthDayPicker
               yearMonth={yearMonth}
@@ -241,6 +274,7 @@ export function ClosingSubmitValuesModal({
               onChange={setTravelSelected}
               label="Dias presenciais — Deslocamento"
               accentClass="border-emerald-500/50 bg-emerald-500/20 font-semibold text-emerald-950 dark:text-emerald-100"
+              holidayNameByDate={holidayNameByDate}
             />
             <MonthDayPicker
               yearMonth={yearMonth}
@@ -248,6 +282,7 @@ export function ClosingSubmitValuesModal({
               onChange={setMealSelected}
               label="Dias presenciais — Refeição"
               accentClass="border-sky-500/50 bg-sky-500/20 font-semibold text-sky-950 dark:text-sky-100"
+              holidayNameByDate={holidayNameByDate}
             />
           </div>
 

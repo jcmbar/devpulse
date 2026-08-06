@@ -138,14 +138,15 @@ export function GestorClosingsYearMatrix({
           Matriz do ano{" "}
           <span className="font-medium text-foreground">{year}</span>
           {" · "}
-          cada célula mostra o status do fechamento mensal. Em fechado/finalizado,
+          apenas pessoas conferidas na Folha neste ano. Em fechado/finalizado,
           ícones de NF e boleto (verde = enviado).
         </>
       }
     >
       {developers.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nenhum developer para exibir neste filtro de time.
+          Nenhuma pessoa conferida na Folha neste ano para o filtro atual.
+          Marque como conferido em Folha para aparecer aqui.
         </p>
       ) : (
         <DataTable minWidthClassName="min-w-[980px]" stickyFirstColumn>

@@ -46,6 +46,7 @@ type DeveloperClosingsYearViewProps = {
   detailAttachments: MonthlyClosingAttachment[];
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
+  closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
 };
 
 function formatPercent(value: number | null): string {
@@ -185,6 +186,7 @@ function MonthDetailPanel({
   detailAttachments,
   developerCompensation,
   closingInvoiceIssuer = null,
+  closingHolidays = [],
   empty,
 }: {
   detailRow: DeveloperClosingYearMonthRow | null;
@@ -197,6 +199,7 @@ function MonthDetailPanel({
   detailAttachments: MonthlyClosingAttachment[];
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
+  closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
   empty?: boolean;
 }) {
   if (empty || detailRow == null) {
@@ -238,6 +241,7 @@ function MonthDetailPanel({
           blockingCount={detailBlockingCount}
           compensation={developerCompensation}
           workedHours={detailRow.metrics.totalTimeSpentHours}
+          holidays={closingHolidays}
         />
       </div>
 
@@ -331,6 +335,7 @@ export function DeveloperClosingsYearView({
   detailAttachments,
   developerCompensation,
   closingInvoiceIssuer = null,
+  closingHolidays = [],
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
   const detailRow =
@@ -354,6 +359,7 @@ export function DeveloperClosingsYearView({
     detailAttachments,
     developerCompensation,
     closingInvoiceIssuer,
+    closingHolidays,
   };
 
   return (
