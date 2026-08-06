@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
   DelayJustificationDecisionInput,
@@ -361,4 +362,222 @@ export async function decideDelayJustification(
   }
 
   return mapRow(data as Record<string, unknown>);
+}
+
+function developerKeyKind(
+  developerId: string,
+  jiraKey: string,
+  kind: DelayJustificationKind,
+): string {
+  return `${developerId}::${normalizeJiraKey(jiraKey)}::${kind}`;
+}
+
+function pickLatestPerDeveloperKeyKind(
+  rows: DelayJustificationRequest[],
+): DelayJustificationRequest[] {
+  const rank: Record<DelayJustificationStatus, number> = {
+    accepted: 3,
+    pending: 2,
+    rejected: 1,
+  };
+  const best = new Map<string, DelayJustificationRequest>();
+  for (const row of rows) {
+    const key = developerKeyKind(row.developer_id, row.jira_key, row.kind);
+    const current = best.get(key);
+    if (!current) {
+      best.set(key, row);
+      continue;
+    }
+    const byStatus = rank[row.status] - rank[current.status];
+    if (byStatus > 0) {
+      best.set(key, row);
+      continue;
+    }
+    if (byStatus === 0 && row.requested_at > current.requested_at) {
+      best.set(key, row);
+    }
+  }
+  return [...best.values()];
+}
+
+export type CopyJustificationsBetweenImportsResult = {
+  considered: number;
+  copied: number;
+  skippedNoCard: number;
+  skippedAlreadyPresent: number;
+};
+
+/**
+ * Copy pending/accepted/rejected justifications from one Compilado batch to
+ * another (e.g. after Jira rematerialize). Matches on
+ * `(developer_id, jira_key, kind)` when the card still exists on the destination
+ * batch. Uses the service role to bypass insert RLS (developers-only).
+ */
+export async function copyJustificationsBetweenImports(input: {
+  fromImportId: string;
+  toImportId: string;
+}): Promise<CopyJustificationsBetweenImportsResult> {
+  if (input.fromImportId === input.toImportId) {
+    return {
+      considered: 0,
+      copied: 0,
+      skippedNoCard: 0,
+      skippedAlreadyPresent: 0,
+    };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: sourceData, error: sourceError } = await admin
+    .from("delay_justification_requests")
+    .select("*")
+    .eq("import_id", input.fromImportId)
+    .in("status", ["pending", "accepted", "rejected"]);
+
+  if (sourceError) {
+    throw new Error(
+      `Falha ao ler justificativas do lote anterior: ${sourceError.message}`,
+    );
+  }
+
+  const sourceRows = pickLatestPerDeveloperKeyKind(
+    (sourceData ?? []).map((row) => mapRow(row as Record<string, unknown>)),
+  );
+
+  if (sourceRows.length === 0) {
+    return {
+      considered: 0,
+      copied: 0,
+      skippedNoCard: 0,
+      skippedAlreadyPresent: 0,
+    };
+  }
+
+  const { data: destCards, error: cardsError } = await admin
+    .from("jira_cards")
+    .select("id, jira_key, developer_id, due_on, unit_test_delivery_on, delay_days")
+    .eq("import_id", input.toImportId)
+    .not("developer_id", "is", null);
+
+  if (cardsError) {
+    throw new Error(
+      `Falha ao ler cards do lote novo para copiar justificativas: ${cardsError.message}`,
+    );
+  }
+
+  const cardByDeveloperKey = new Map<
+    string,
+    {
+      id: string;
+      due_on: string | null;
+      unit_test_delivery_on: string | null;
+      delay_days: number | null;
+    }
+  >();
+  for (const card of destCards ?? []) {
+    if (!card.developer_id) {
+      continue;
+    }
+    const key = `${String(card.developer_id)}::${normalizeJiraKey(String(card.jira_key))}`;
+    cardByDeveloperKey.set(key, {
+      id: String(card.id),
+      due_on: (card.due_on as string | null) ?? null,
+      unit_test_delivery_on: (card.unit_test_delivery_on as string | null) ?? null,
+      delay_days: card.delay_days == null ? null : Number(card.delay_days),
+    });
+  }
+
+  const { data: existingDest, error: existingError } = await admin
+    .from("delay_justification_requests")
+    .select("developer_id, jira_key, kind, status")
+    .eq("import_id", input.toImportId)
+    .in("status", ["pending", "accepted"]);
+
+  if (existingError) {
+    throw new Error(
+      `Falha ao validar justificativas já existentes no lote novo: ${existingError.message}`,
+    );
+  }
+
+  const blockedKeys = new Set<string>();
+  for (const row of existingDest ?? []) {
+    blockedKeys.add(
+      developerKeyKind(
+        String(row.developer_id),
+        String(row.jira_key),
+        row.kind === "rework" ? "rework" : "delay",
+      ),
+    );
+  }
+
+  const inserts: Record<string, unknown>[] = [];
+  let skippedNoCard = 0;
+  let skippedAlreadyPresent = 0;
+
+  for (const row of sourceRows) {
+    const identity = developerKeyKind(row.developer_id, row.jira_key, row.kind);
+    const cardKey = `${row.developer_id}::${normalizeJiraKey(row.jira_key)}`;
+    const card = cardByDeveloperKey.get(cardKey);
+    if (!card) {
+      skippedNoCard += 1;
+      continue;
+    }
+
+    if (
+      (row.status === "pending" || row.status === "accepted") &&
+      blockedKeys.has(identity)
+    ) {
+      skippedAlreadyPresent += 1;
+      continue;
+    }
+
+    inserts.push({
+      import_id: input.toImportId,
+      jira_card_id: card.id,
+      jira_key: normalizeJiraKey(row.jira_key),
+      developer_id: row.developer_id,
+      kind: row.kind,
+      due_on: card.due_on ?? row.due_on,
+      unit_test_delivery_on:
+        card.unit_test_delivery_on ?? row.unit_test_delivery_on,
+      delay_days: card.delay_days ?? row.delay_days,
+      requester_profile_id: row.requester_profile_id,
+      developer_note: row.developer_note,
+      requested_at: row.requested_at,
+      status: row.status,
+      reviewer_profile_id: row.reviewer_profile_id,
+      reviewer_note: row.reviewer_note,
+      reviewed_at: row.reviewed_at,
+    });
+
+    if (row.status === "pending" || row.status === "accepted") {
+      blockedKeys.add(identity);
+    }
+  }
+
+  if (inserts.length === 0) {
+    return {
+      considered: sourceRows.length,
+      copied: 0,
+      skippedNoCard,
+      skippedAlreadyPresent,
+    };
+  }
+
+  const { error: insertError } = await admin
+    .from("delay_justification_requests")
+    .insert(inserts);
+
+  if (insertError) {
+    throw new Error(
+      `Falha ao copiar justificativas para o lote novo: ${insertError.message}`,
+    );
+  }
+
+  return {
+    considered: sourceRows.length,
+    copied: inserts.length,
+    skippedNoCard,
+    skippedAlreadyPresent,
+  };
 }

@@ -87,8 +87,8 @@ Há no máximo **um snapshot por desenvolvedor + período** (`period_start` / `p
 
 Tabela `delay_justification_requests`: o developer pede justificativa de atraso no Início; o gestor aceita/rejeita no drill-down de Atraso.
 
-- Identidade estável por lote Compilado: `(import_id, jira_key, developer_id)`.
-- Rematerializar cria novo `import_id` — aceites do lote antigo não carregam.
+- Identidade estável por lote Compilado: `(import_id, jira_key, developer_id, kind)`.
+- Rematerializar cria novo `import_id`; decisões do lote Jira anterior são copiadas para o novo quando o card ainda existe.
 - Não altera `jira_cards.delay_days` / atraso bruto; o ranking mostra **líquido** (bruto − acatados).
 - Status: `pending` | `accepted` | `rejected`. Um `pending` e um `accepted` por chave/lote; após rejeição, novo pedido é permitido.
 

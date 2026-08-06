@@ -19,6 +19,7 @@ import {
   type JiraBridgeFlowRow,
   type JiraBridgeIssueRow,
 } from "@/services/compilado/project-jira-card";
+import { copyJustificationsBetweenImports } from "@/services/delay-justifications";
 import { JIRA_FLOW_COMPUTATION_VERSION } from "@/types/jira-flow-analytics";
 import type { ImportRecord } from "@/types/import";
 import type { JiraCardInsert } from "@/types/jira-card";
@@ -45,9 +46,33 @@ export type MaterializeJiraCompiladoSnapshotResult = {
   cardsSkippedNoDelivery: number;
   cardsUnmappedAssignee: number;
   archivedOlderCount: number;
+  justificationsCopied: number;
   deliveryMin: string | null;
   deliveryMax: string | null;
 };
+
+async function findLatestCompletedJiraImportId(
+  teamId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("imports")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("source", JIRA_COMPILADO_SOURCE)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Failed to locate previous Jira Compilado batch: ${error.message}`,
+    );
+  }
+
+  return data?.id ? String(data.id) : null;
+}
 
 function chunks<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -247,6 +272,10 @@ export async function materializeJiraCompiladoSnapshot(
     ),
   ]);
 
+  const previousJiraImportId = await findLatestCompletedJiraImportId(
+    integration.team_id,
+  );
+
   const stamp = new Date().toISOString();
   const label = `Jira Cloud · ${integration.name} · ${stamp.slice(0, 16).replace("T", " ")}`;
 
@@ -341,6 +370,16 @@ export async function materializeJiraCompiladoSnapshot(
     }
 
     const inserted = await insertJiraCards(cardRows);
+
+    let justificationsCopied = 0;
+    if (previousJiraImportId) {
+      const copied = await copyJustificationsBetweenImports({
+        fromImportId: previousJiraImportId,
+        toImportId: importRecord.id,
+      });
+      justificationsCopied = copied.copied;
+    }
+
     if (deliveryMin && deliveryMax) {
       await buildSnapshotsForImport({
         importId: importRecord.id,
@@ -391,6 +430,7 @@ export async function materializeJiraCompiladoSnapshot(
       cardsSkippedNoDelivery,
       cardsUnmappedAssignee,
       archivedOlderCount,
+      justificationsCopied,
       deliveryMin,
       deliveryMax,
     };

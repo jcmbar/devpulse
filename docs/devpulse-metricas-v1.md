@@ -35,7 +35,7 @@ a coluna “Atraso (d)” usam sempre o mesmo número.
 1. O atraso **bruto** não é alterado no Compilado (`jira_cards` / flags).
 2. O developer pode **justificar** um atraso bruto no Início (texto obrigatório → `pending`).
 3. O gestor **aceita** ou **rejeita** no drill-down de Atraso (nota obrigatória).
-4. Aceites amarram ao lote (`import_id` + `jira_key` + `developer_id`). Rematerializar = lote novo, sem carregar aceites antigos.
+4. Aceites amarram ao lote (`import_id` + `jira_key` + `developer_id`). Na rematerialização Jira, decisões (pending/accepted/rejected) são **copiadas** para o lote novo quando o mesmo card ainda existe no snapshot.
 5. **Ranking / KPI “Atrasados”** usam **A_l** (líquido).
 6. **Auditoria** lista atrasos **brutos**, com badges Pendente / Acatado / Rejeitado.
 

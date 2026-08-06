@@ -54,7 +54,9 @@ Overlay em `delay_justification_requests` (não muda flags brutas do card):
 2. Gestor decide no drawer de auditoria de **Atraso** (nota obrigatória).
 3. Ranking / KPI “Atrasados” usam contagem **líquida** (bruto − acatados).
 4. Drill-down continua listando atrasos **brutos**, com badge de status.
-5. Aceite amarra ao `import_id`; rematerialização = lote limpo.
+5. Aceite amarra ao `import_id`; na rematerialização Jira as decisões
+   (pending/accepted/rejected) são **copiadas** para o lote novo quando o card
+   (`jira_key` + `developer_id`) ainda existe.
 
 Especificação funcional completa de Cards / No prazo / Atraso / Aproveitamento /
 Índice de Entrega: [`docs/devpulse-metricas-v1.md`](./devpulse-metricas-v1.md).

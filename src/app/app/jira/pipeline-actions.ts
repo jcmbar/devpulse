@@ -165,7 +165,7 @@ export async function runJiraPipelineStepAction(input: {
         return {
           ok: true,
           step: "compilado",
-          message: `Compilado · ${materialized.cardsInserted} cards · ${materialized.developersLinked} devs · ${materialized.deliveryMin ?? "—"} → ${materialized.deliveryMax ?? "—"}`,
+          message: `Compilado · ${materialized.cardsInserted} cards · ${materialized.developersLinked} devs · ${materialized.justificationsCopied} justificativa(s) preservada(s) · ${materialized.deliveryMin ?? "—"} → ${materialized.deliveryMax ?? "—"}`,
           syncRunId: input.syncRunId ?? null,
         };
       }

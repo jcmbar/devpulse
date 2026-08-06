@@ -123,7 +123,7 @@ export async function runJiraPipelineForIntegration(
       ok: true,
       syncRunId,
       step: "compilado",
-      message: `Pipeline OK · sync ${syncResult.run.mode} · ${syncResult.run.issues_upserted} issues · Compilado ${materialized.cardsInserted} cards`,
+      message: `Pipeline OK · sync ${syncResult.run.mode} · ${syncResult.run.issues_upserted} issues · Compilado ${materialized.cardsInserted} cards · ${materialized.justificationsCopied} justificativa(s) preservada(s)`,
     };
   } catch (error) {
     return {
