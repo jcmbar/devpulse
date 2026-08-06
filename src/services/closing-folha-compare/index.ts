@@ -44,7 +44,13 @@ function folhaToSide(
   item: PayrollClosingItem,
   presencialDays: string[],
 ): ClosingValuesSide {
-  // Folha calcula deslocamento e refeição sobre os mesmos dias presenciais.
+  // Folha só tem "dias presenciais" (não separa travel vs meal).
+  // Na conferência: dias de deslocamento/refeição acompanham o valor cobrado
+  // na linha — assim "só refeição, sem deslocamento" (travel_amount = 0) não
+  // exige que o usuário marque deslocamento no mesmo dia.
+  const chargesTravel = (item.travel_amount ?? 0) > 0.005;
+  const chargesMeal = (item.meal_amount ?? 0) > 0.005;
+
   return {
     travelAmount: item.travel_amount,
     mealAmount: item.meal_amount,
@@ -52,8 +58,8 @@ function folhaToSide(
     invoiceAmount: item.invoice_amount,
     dailyTravelAmount: item.daily_travel_amount,
     dailyMealAmount: item.daily_meal_amount,
-    travelDays: presencialDays,
-    mealDays: presencialDays,
+    travelDays: chargesTravel ? presencialDays : [],
+    mealDays: chargesMeal ? presencialDays : [],
   };
 }
 

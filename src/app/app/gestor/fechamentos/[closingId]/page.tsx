@@ -20,7 +20,12 @@ import {
   listMonthlyClosingPresenceDays,
 } from "@/services/monthly-closings";
 import { loadClosingFolhaCompare } from "@/services/closing-folha-compare";
+import {
+  getEmailSendTypeByCode,
+  getEmailDispatchForClosingType,
+} from "@/services/operational-emails";
 import { getPayrollInvoiceIssuerIdForDeveloperMonth } from "@/services/payroll";
+import type { EmailDispatchStatus } from "@/types/operational-email";
 
 type PageProps = {
   params: Promise<{ closingId: string }>;
@@ -113,7 +118,8 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
       getCurrentDeveloperCompensation(closing.developer_id),
     ]);
 
-  const [folhaIssuerId, selectedIssuer, folhaComparePayload] = await Promise.all([
+  const [folhaIssuerId, selectedIssuer, folhaComparePayload, financeiroType] =
+    await Promise.all([
     closing.status === "in_review"
       ? getPayrollInvoiceIssuerIdForDeveloperMonth({
           developerId: closing.developer_id,
@@ -124,7 +130,17 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
       ? getInvoiceIssuer(closing.invoice_issuer_id)
       : Promise.resolve(null),
     loadClosingFolhaCompare(closing),
+    getEmailSendTypeByCode("financeiro"),
   ]);
+
+  let financeiroDispatchStatus: EmailDispatchStatus | null = null;
+  if (financeiroType && closing.status === "finalized") {
+    const dispatch = await getEmailDispatchForClosingType({
+      closingId: closing.id,
+      sendTypeId: financeiroType.id,
+    });
+    financeiroDispatchStatus = dispatch?.status ?? null;
+  }
 
   return (
     <PageShell size="xl">
@@ -163,6 +179,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
         requireMealPixReceipt={
           compensation?.require_meal_pix_receipt ?? false
         }
+        financeiroDispatchStatus={financeiroDispatchStatus}
       />
 
       <SectionShell

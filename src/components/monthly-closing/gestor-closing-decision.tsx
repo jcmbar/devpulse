@@ -8,6 +8,7 @@ import {
   reviewMealPixReceiptAction,
   revertMonthlyClosingStatusAction,
 } from "@/app/app/monthly-closing-actions";
+import { FinanceiroEmailSendButton } from "@/components/monthly-closing/financeiro-email-send-button";
 import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
 import { cn } from "@/lib/utils";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
@@ -15,6 +16,7 @@ import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
 } from "@/types/monthly-closing";
+import type { EmailDispatchStatus } from "@/types/operational-email";
 import {
   monthlyClosingAttachmentTypeLabel,
   monthlyClosingRevertActionLabel,
@@ -41,6 +43,9 @@ export function GestorClosingDecisionPanel({
   valuesMismatch = false,
   valuesMismatchSummary = null,
   requireMealPixReceipt = false,
+  financeiroDispatchStatus = null,
+  hasInvoicePdf = false,
+  hasBoletoPdf = false,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
@@ -54,6 +59,9 @@ export function GestorClosingDecisionPanel({
   valuesMismatchSummary?: string | null;
   /** Cadastro Valores: cobrar comprovante PIX após finalize. */
   requireMealPixReceipt?: boolean;
+  financeiroDispatchStatus?: EmailDispatchStatus | null;
+  hasInvoicePdf?: boolean;
+  hasBoletoPdf?: boolean;
 }) {
   const router = useRouter();
   const notesId = useId();
@@ -682,6 +690,28 @@ export function GestorClosingDecisionPanel({
                 {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 Finalizar
               </button>
+            </div>
+          ) : null}
+
+          {closing.status === "finalized" ? (
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
+                Envio manual ao Financeiro com NF e boleto anexados.
+              </p>
+              <FinanceiroEmailSendButton
+                closingId={closing.id}
+                enabled={
+                  (hasInvoicePdf || Boolean(invoice)) &&
+                  (hasBoletoPdf || Boolean(boleto))
+                }
+                status={
+                  financeiroDispatchStatus ??
+                  ((hasInvoicePdf || Boolean(invoice)) &&
+                  (hasBoletoPdf || Boolean(boleto))
+                    ? "ready"
+                    : "unavailable")
+                }
+              />
             </div>
           ) : null}
         </section>

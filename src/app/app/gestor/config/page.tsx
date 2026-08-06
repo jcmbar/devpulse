@@ -97,9 +97,17 @@ export default async function GestorConfigPage({
         title="Capacidade e faixas"
         description="Configure a régua de leitura do aproveitamento, a meta de horas e os feriados do calendário. O cálculo do Compilado permanece o mesmo."
         breadcrumb={
-          <Link href="/app/gestor" className="underline-offset-4 hover:underline">
-            ← Dashboard do gestor
-          </Link>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link href="/app/gestor" className="underline-offset-4 hover:underline">
+              ← Dashboard do gestor
+            </Link>
+            <Link
+              href="/app/gestor/config/emails"
+              className="underline-offset-4 hover:underline"
+            >
+              E-mails operacionais
+            </Link>
+          </div>
         }
       />
 

@@ -21,8 +21,13 @@ import {
   listMonthlyClosingsForGestorYear,
   listMonthlyClosingsInReview,
 } from "@/services/monthly-closings";
+import {
+  getEmailSendTypeByCode,
+  listEmailDispatchesForClosings,
+} from "@/services/operational-emails";
 import { listTeamsAdmin } from "@/services/teams";
 import { listPayrollReviewedDeveloperMonthsForYear } from "@/services/payroll";
+import type { EmailDispatchStatus } from "@/types/operational-email";
 
 type PageProps = {
   searchParams: Promise<{
@@ -152,6 +157,20 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       .map((row) => row.id),
   );
 
+  const financeiroType = await getEmailSendTypeByCode("financeiro");
+  const financeiroDispatchByClosingId = new Map<string, EmailDispatchStatus>();
+  if (financeiroType) {
+    const finalizedIds = yearClosingsReviewed
+      .filter((row) => row.status === "finalized")
+      .map((row) => row.id);
+    const dispatches = await listEmailDispatchesForClosings(finalizedIds);
+    for (const row of dispatches) {
+      if (row.send_type_id === financeiroType.id) {
+        financeiroDispatchByClosingId.set(row.monthly_closing_id, row.status);
+      }
+    }
+  }
+
   const years = [
     ...new Set([
       currentYear,
@@ -260,6 +279,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
         developers={matrixDevelopers}
         closings={yearClosingsReviewed}
         attachmentPresence={attachmentPresence}
+        financeiroDispatchByClosingId={financeiroDispatchByClosingId}
       />
 
       <GestorClosingsInReviewSection

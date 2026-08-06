@@ -34,6 +34,7 @@ type GestorClosingReviewTabsProps = {
   userSide: ClosingValuesSide | null;
   folhaSide: ClosingValuesSide | null;
   requireMealPixReceipt?: boolean;
+  financeiroDispatchStatus?: import("@/types/operational-email").EmailDispatchStatus | null;
 };
 
 function formatHours(value: number | null): string {
@@ -94,6 +95,7 @@ export function GestorClosingReviewTabs({
   userSide,
   folhaSide,
   requireMealPixReceipt = false,
+  financeiroDispatchStatus = null,
 }: GestorClosingReviewTabsProps) {
   const [tab, setTab] = useState<"decisao" | "valores">("decisao");
 
@@ -189,6 +191,13 @@ export function GestorClosingReviewTabs({
                   .join(", ")}.`
           }
           requireMealPixReceipt={requireMealPixReceipt}
+          financeiroDispatchStatus={financeiroDispatchStatus}
+          hasInvoicePdf={Boolean(
+            attachments.find((row) => row.type === "invoice_pdf"),
+          )}
+          hasBoletoPdf={Boolean(
+            attachments.find((row) => row.type === "boleto_pdf"),
+          )}
         />
       ) : (
         <section className="space-y-4 rounded-[var(--radius)] border border-border p-4">

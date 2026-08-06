@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FinanceiroEmailSendButton } from "@/components/monthly-closing/financeiro-email-send-button";
 import { MonthlyClosingStatusBadge } from "@/components/monthly-closing/monthly-closing-panel";
 import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
@@ -8,6 +9,7 @@ import type {
   MonthlyClosingAttachmentPresence,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
+import type { EmailDispatchStatus } from "@/types/operational-email";
 import { Banknote, FileText } from "lucide-react";
 
 export type GestorClosingMatrixDeveloper = {
@@ -28,6 +30,8 @@ type GestorClosingsYearMatrixProps = {
   developers: GestorClosingMatrixDeveloper[];
   closings: MonthlyClosing[];
   attachmentPresence?: Map<string, MonthlyClosingAttachmentPresence>;
+  /** closingId → status do envio Financeiro */
+  financeiroDispatchByClosingId?: Map<string, EmailDispatchStatus>;
 };
 
 function monthKeys(year: number): string[] {
@@ -116,6 +120,7 @@ export function GestorClosingsYearMatrix({
   developers,
   closings,
   attachmentPresence,
+  financeiroDispatchByClosingId,
 }: GestorClosingsYearMatrixProps) {
   const months = monthKeys(year);
   const byDeveloperMonth = new Map<string, Cell>();
@@ -139,7 +144,8 @@ export function GestorClosingsYearMatrix({
           <span className="font-medium text-foreground">{year}</span>
           {" · "}
           apenas pessoas conferidas na Folha neste ano. Em fechado/finalizado,
-          ícones de NF e boleto (verde = enviado).
+          ícones de NF e boleto (verde = enviado). Botão Financeiro após
+          finalize com os dois PDFs.
         </>
       }
     >
@@ -190,6 +196,16 @@ export function GestorClosingsYearMatrix({
                       hasBoletoPdf={cell.hasBoletoPdf}
                     />
                   ) : null;
+                  const canSendFinanceiro =
+                    cell.closingId != null &&
+                    cell.status === "finalized" &&
+                    cell.hasInvoicePdf &&
+                    cell.hasBoletoPdf;
+                  const financeiroStatus =
+                    cell.closingId != null
+                      ? (financeiroDispatchByClosingId?.get(cell.closingId) ??
+                        (canSendFinanceiro ? "ready" : "unavailable"))
+                      : null;
 
                   return (
                     <td key={month} className="text-center align-middle">
@@ -200,25 +216,37 @@ export function GestorClosingsYearMatrix({
                         >
                           —
                         </span>
-                      ) : href ? (
-                        <Link
-                          href={href}
-                          className="inline-flex flex-col items-center"
-                          title="Abrir fechamento"
-                        >
-                          <MonthlyClosingStatusBadge
-                            status={cell.status}
-                            className="px-1.5 py-0.5 text-[10px]"
-                          />
-                          {docs}
-                        </Link>
                       ) : (
-                        <div className="inline-flex flex-col items-center">
-                          <MonthlyClosingStatusBadge
-                            status={cell.status}
-                            className="px-1.5 py-0.5 text-[10px]"
-                          />
-                          {docs}
+                        <div className="inline-flex flex-col items-center gap-0.5">
+                          {href ? (
+                            <Link
+                              href={href}
+                              className="inline-flex flex-col items-center"
+                              title="Abrir fechamento"
+                            >
+                              <MonthlyClosingStatusBadge
+                                status={cell.status}
+                                className="px-1.5 py-0.5 text-[10px]"
+                              />
+                              {docs}
+                            </Link>
+                          ) : (
+                            <>
+                              <MonthlyClosingStatusBadge
+                                status={cell.status}
+                                className="px-1.5 py-0.5 text-[10px]"
+                              />
+                              {docs}
+                            </>
+                          )}
+                          {cell.status === "finalized" && cell.closingId ? (
+                            <FinanceiroEmailSendButton
+                              closingId={cell.closingId}
+                              enabled={canSendFinanceiro}
+                              status={financeiroStatus}
+                              compact
+                            />
+                          ) : null}
                         </div>
                       )}
                     </td>

@@ -1366,6 +1366,16 @@ export async function uploadMonthlyClosingAttachment(input: {
     },
   });
 
+  if (isMealPix) {
+    const { trySendRhEmailOnMealPixUpload } = await import(
+      "@/services/operational-emails"
+    );
+    await trySendRhEmailOnMealPixUpload({
+      closingId: closing.id,
+      actorUserId: input.actorUserId,
+    });
+  }
+
   return saved;
 }
 
@@ -1516,6 +1526,14 @@ export async function finalizeMonthlyClosing(input: {
       invoiceValidated: true,
       boletoValidated: true,
     },
+  });
+
+  const { trySendColaboradorEmailOnFinalize } = await import(
+    "@/services/operational-emails"
+  );
+  await trySendColaboradorEmailOnFinalize({
+    closingId: closing.id,
+    actorUserId: input.actorUserId,
   });
 
   return updated;
