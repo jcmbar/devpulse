@@ -113,10 +113,16 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   });
   const activeTab = parseTab(params.tab);
 
+  // Scope Compilado to the developer's team. Without this, auto picks the
+  // newest Jira batch of *any* team (e.g. Projetos Especiais) and everyone
+  // else sees 0 cards for months that exist only in their own team snapshot.
+  const developerTeamId = developer.team_id;
+
   const seed = await resolveCompiladoSnapshot({
     mode: "auto",
     importId: null,
     dateRange: null,
+    teamId: developerTeamId,
   });
 
   const dateRange = resolveCompiladoDateRange({
@@ -133,6 +139,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
     mode: "auto",
     importId: null,
     dateRange,
+    teamId: developerTeamId,
   });
 
   const selectedBatch = resolved.selectedBatch;
