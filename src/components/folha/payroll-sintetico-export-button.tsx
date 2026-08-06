@@ -169,22 +169,22 @@ export function PayrollSinteticoExportButton({
                         <tr>
                           <th
                             colSpan={7}
-                            className="border-b border-border bg-muted/40 px-3 py-2.5 text-center text-sm font-semibold capitalize"
+                            className="border-b border-border bg-brand-soft px-3 py-3 text-center text-sm font-semibold tracking-tight text-brand-foreground capitalize"
                           >
                             {model.monthTitle}
                           </th>
                         </tr>
-                        <tr className="bg-muted/20 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                          <th className="border-b border-border px-3 py-2">
+                        <tr className="bg-muted/25 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                          <th className="border-b border-border px-3 py-2 text-center">
                             Nome
                           </th>
-                          <th className="border-b border-border px-3 py-2">
+                          <th className="border-b border-border px-3 py-2 text-center">
                             Valor Base
                           </th>
-                          <th className="border-b border-border px-3 py-2">
+                          <th className="border-b border-border px-3 py-2 text-center">
                             Diferencial (+)
                           </th>
-                          <th className="border-b border-border px-3 py-2">
+                          <th className="border-b border-border px-3 py-2 text-center">
                             Descontos (−)
                           </th>
                           <th
@@ -193,19 +193,19 @@ export function PayrollSinteticoExportButton({
                           >
                             Reembolso
                           </th>
-                          <th className="border-b border-border px-3 py-2">
+                          <th className="border-b border-border px-3 py-2 text-center">
                             Valor da Nota Fiscal
                           </th>
                         </tr>
-                        <tr className="bg-muted/10 text-left text-[11px] font-medium text-muted-foreground">
+                        <tr className="bg-muted/10 text-center text-[11px] font-medium text-muted-foreground">
                           <th className="border-b border-border px-3 py-2" />
                           <th className="border-b border-border px-3 py-2" />
                           <th className="border-b border-border px-3 py-2" />
                           <th className="border-b border-border px-3 py-2" />
-                          <th className="border-b border-border px-3 py-2 font-normal normal-case">
+                          <th className="border-b border-border px-3 py-2 text-center font-normal normal-case">
                             {model.travelHeader}
                           </th>
-                          <th className="border-b border-border px-3 py-2 font-normal normal-case">
+                          <th className="border-b border-border px-3 py-2 text-center font-normal normal-case">
                             {model.mealHeader}
                           </th>
                           <th className="border-b border-border px-3 py-2" />
@@ -242,7 +242,7 @@ export function PayrollSinteticoExportButton({
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-muted/30 font-semibold">
+                        <tr className="bg-brand-soft font-semibold text-brand-foreground">
                           <td className="px-3 py-2.5">Total</td>
                           <td className="px-3 py-2.5 tabular-nums">
                             {formatSinteticoMoneyTotal(model.totals.base)}
