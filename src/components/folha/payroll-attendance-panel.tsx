@@ -17,6 +17,7 @@ import {
   type PayrollAttendanceKind,
   type PayrollClosingItem,
 } from "@/types/payroll-closing";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
@@ -24,6 +25,8 @@ type PayrollAttendancePanelProps = {
   item: PayrollClosingItem;
   days: PayrollAttendanceDay[];
   closeHref: string;
+  readOnly?: boolean;
+  finalizedClosingId?: string | null;
 };
 
 const KIND_CARD_CLASS: Record<PayrollAttendanceKind, string> = {
@@ -71,6 +74,8 @@ export function PayrollAttendancePanel({
   item,
   days,
   closeHref,
+  readOnly = false,
+  finalizedClosingId = null,
 }: PayrollAttendancePanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -131,6 +136,9 @@ export function PayrollAttendancePanel({
     dayKind: PayrollAttendanceKind;
     hours: number;
   }) {
+    if (readOnly) {
+      return;
+    }
     setError(null);
     setInfo(null);
     startTransition(async () => {
@@ -164,6 +172,9 @@ export function PayrollAttendancePanel({
   >;
 
   function runBatch(input: BatchInput) {
+    if (readOnly) {
+      return;
+    }
     setError(null);
     setInfo(null);
     startTransition(async () => {
@@ -210,6 +221,18 @@ export function PayrollAttendancePanel({
             Presencial e home office somam horas para o diferencial; só os dias
             presenciais geram deslocamento e refeição.
           </p>
+          {finalizedClosingId ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              Fechamento mensal finalizado — presença somente leitura.{" "}
+              <Link
+                href={`/app/gestor/fechamentos/${finalizedClosingId}`}
+                className="font-medium underline-offset-2 hover:underline"
+              >
+                Reabra o fechamento
+              </Link>{" "}
+              para editar.
+            </p>
+          ) : null}
           <ul className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             {LEGEND.map((row) => (
               <li key={row.kind} className="inline-flex items-center gap-1.5">
@@ -232,7 +255,7 @@ export function PayrollAttendancePanel({
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending}
+            disabled={pending || readOnly}
             onClick={() => runBatch({ shortcut: "fill_month_default" })}
           >
             Preencher mês padrão
@@ -240,7 +263,7 @@ export function PayrollAttendancePanel({
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending}
+            disabled={pending || readOnly}
             onClick={() =>
               runBatch({
                 shortcut: "workweek_home",
@@ -254,7 +277,7 @@ export function PayrollAttendancePanel({
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending}
+            disabled={pending || readOnly}
             onClick={() =>
               runBatch({
                 shortcut: "workweek_presencial",
@@ -268,7 +291,7 @@ export function PayrollAttendancePanel({
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending}
+            disabled={pending || readOnly}
             onClick={() =>
               runBatch({
                 shortcut: "zero_weekends",
@@ -289,7 +312,7 @@ export function PayrollAttendancePanel({
               <select
                 className="ui-select text-xs"
                 value={batchKind}
-                disabled={pending}
+                disabled={pending || readOnly}
                 onChange={(event) =>
                   setBatchKind(event.target.value as PayrollAttendanceKind)
                 }
@@ -308,7 +331,7 @@ export function PayrollAttendancePanel({
                 inputMode="decimal"
                 className="ui-input text-xs"
                 value={batchHours}
-                disabled={pending || !needsHours}
+                disabled={pending || readOnly || !needsHours}
                 onChange={(event) => setBatchHours(event.target.value)}
                 placeholder={needsHours ? defaultHours : "0"}
               />
@@ -319,7 +342,7 @@ export function PayrollAttendancePanel({
                 type="date"
                 className="ui-input text-xs"
                 value={rangeStart}
-                disabled={pending}
+                disabled={pending || readOnly}
                 min={bounds?.start}
                 max={bounds?.end}
                 onChange={(event) => setRangeStart(event.target.value)}
@@ -331,7 +354,7 @@ export function PayrollAttendancePanel({
                 type="date"
                 className="ui-input text-xs"
                 value={rangeEnd}
-                disabled={pending}
+                disabled={pending || readOnly}
                 min={bounds?.start}
                 max={bounds?.end}
                 onChange={(event) => setRangeEnd(event.target.value)}
@@ -342,7 +365,7 @@ export function PayrollAttendancePanel({
               <select
                 className="ui-select text-xs"
                 value={batchMode}
-                disabled={pending}
+                disabled={pending || readOnly}
                 onChange={(event) =>
                   setBatchMode(event.target.value as BatchApplyMode)
                 }
@@ -363,7 +386,7 @@ export function PayrollAttendancePanel({
                 <button
                   key={weekday.value}
                   type="button"
-                  disabled={pending}
+                  disabled={pending || readOnly}
                   className={cn(
                     "rounded-[calc(var(--radius-sm)-2px)] border px-2 py-1 text-xs font-medium transition-colors",
                     active
@@ -379,7 +402,7 @@ export function PayrollAttendancePanel({
             <button
               type="button"
               className="ui-btn-primary ml-auto text-xs"
-              disabled={pending || batchWeekdays.length === 0}
+              disabled={pending || readOnly || batchWeekdays.length === 0}
               onClick={() => {
                 const hoursRaw = batchHours.trim().replace(",", ".");
                 const hours = needsHours
@@ -455,7 +478,7 @@ export function PayrollAttendancePanel({
               <select
                 className="ui-select text-xs"
                 value={day.day_kind}
-                disabled={pending}
+                disabled={pending || readOnly}
                 onChange={(event) => {
                   const nextKind = event.target
                     .value as PayrollAttendanceKind;
@@ -485,7 +508,7 @@ export function PayrollAttendancePanel({
                   className="ui-input text-xs"
                   key={`${day.id}-${day.hours}`}
                   defaultValue={String(day.hours)}
-                  disabled={pending}
+                  disabled={pending || readOnly}
                   aria-label={`Horas em ${day.day_on}`}
                   onBlur={(event) => {
                     const raw = event.target.value.trim().replace(",", ".");

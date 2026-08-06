@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/auth/app-context";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
+import { assertClosingValuesMatchFolha } from "@/services/closing-folha-compare";
 import {
   approveMonthlyClosing,
   createMonthlyClosingAttachmentSignedUrl,
@@ -132,6 +133,7 @@ export async function approveMonthlyClosingAction(input: {
 }): Promise<MonthlyClosingActionResult> {
   try {
     const { profile } = await requireTeamAccess();
+    await assertClosingValuesMatchFolha(input.closingId);
     const closing = await approveMonthlyClosing({
       closingId: input.closingId,
       invoiceIssuerId: input.invoiceIssuerId,
@@ -184,6 +186,7 @@ export async function finalizeMonthlyClosingAction(input: {
 }): Promise<MonthlyClosingActionResult> {
   try {
     const { profile } = await requireTeamAccess();
+    await assertClosingValuesMatchFolha(input.closingId);
     const closing = await finalizeMonthlyClosing({
       closingId: input.closingId,
       actorUserId: profile.id,

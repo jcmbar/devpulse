@@ -14,6 +14,7 @@ import type { JiraCard } from "@/types/jira-card";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
+  MonthlyClosingAttachmentPresence,
   MonthlyClosingAttachmentType,
   MonthlyClosingCardAuditRow,
   MonthlyClosingEvent,
@@ -959,6 +960,83 @@ export async function listMonthlyClosingAttachments(
     throw new Error(`Falha ao listar anexos: ${error.message}`);
   }
   return (data ?? []).map((row) => mapAttachment(row as Record<string, unknown>));
+}
+
+export type { MonthlyClosingAttachmentPresence };
+
+/** Batch presence of NF/boleto PDFs for the gestor year matrix. */
+export async function listMonthlyClosingAttachmentPresence(
+  closingIds: string[],
+): Promise<Map<string, MonthlyClosingAttachmentPresence>> {
+  const result = new Map<string, MonthlyClosingAttachmentPresence>();
+  for (const id of closingIds) {
+    result.set(id, { hasInvoicePdf: false, hasBoletoPdf: false });
+  }
+  if (closingIds.length === 0) {
+    return result;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closing_attachments")
+    .select("monthly_closing_id, type")
+    .in("monthly_closing_id", closingIds);
+
+  if (error) {
+    throw new Error(`Falha ao listar presença de anexos: ${error.message}`);
+  }
+
+  for (const row of data ?? []) {
+    const closingId = String(row.monthly_closing_id);
+    const entry = result.get(closingId) ?? {
+      hasInvoicePdf: false,
+      hasBoletoPdf: false,
+    };
+    if (row.type === "invoice_pdf") {
+      entry.hasInvoicePdf = true;
+    } else if (row.type === "boleto_pdf") {
+      entry.hasBoletoPdf = true;
+    }
+    result.set(closingId, entry);
+  }
+
+  return result;
+}
+
+/** developerId → closingId for finalized monthly closings in a Folha month. */
+export async function mapFinalizedMonthlyClosingIdsByDeveloper(
+  yearMonth: string,
+): Promise<Map<string, string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .select("id, developer_id")
+    .eq("year_month", yearMonth)
+    .eq("status", "finalized");
+
+  if (error) {
+    throw new Error(
+      `Falha ao listar fechamentos finalizados: ${error.message}`,
+    );
+  }
+
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    map.set(String(row.developer_id), String(row.id));
+  }
+  return map;
+}
+
+export async function assertMonthlyClosingNotFinalizedForPayroll(input: {
+  developerId: string;
+  yearMonth: string;
+}): Promise<void> {
+  const closing = await getMonthlyClosingForDeveloperMonth(input);
+  if (closing?.status === "finalized") {
+    throw new Error(
+      "Este fechamento mensal já foi finalizado. Reabra o fechamento (volte o status) para editar a Folha.",
+    );
+  }
 }
 
 export async function approveMonthlyClosing(input: {

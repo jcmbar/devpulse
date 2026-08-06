@@ -23,6 +23,7 @@ import {
   teamListFilterParam,
 } from "@/lib/teams/team-filter";
 import { listInvoiceIssuers } from "@/services/invoice-issuers";
+import { mapFinalizedMonthlyClosingIdsByDeveloper } from "@/services/monthly-closings";
 import {
   ensurePayrollMonthWithItems,
   getPayrollItem,
@@ -83,7 +84,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const teamParam = teamListFilterParam(teamFilter) || undefined;
   const month = parseYearMonth(params.month);
 
-  const [teams, issuers, payroll] = await Promise.all([
+  const [teams, issuers, payroll, finalizedByDeveloper] = await Promise.all([
     listTeamsAdmin(),
     listInvoiceIssuers({ activeOnly: true }),
     ensurePayrollMonthWithItems({
@@ -91,6 +92,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       createdBy: profile.id,
       teamId: selectedTeamId,
     }),
+    mapFinalizedMonthlyClosingIdsByDeveloper(month),
   ]);
 
   const { closing, items } = payroll;
@@ -145,6 +147,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   );
 
   const readOnly = closing.status === "closed";
+  const finalizedCount = items.filter((item) =>
+    finalizedByDeveloper.has(item.developer_id),
+  ).length;
 
   return (
     <PageShell size="full">
@@ -260,6 +265,12 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
           item={selectedItem}
           days={attendanceDays}
           closeHref={buildFolhaHref({ teamId: teamParam, month })}
+          readOnly={
+            readOnly || finalizedByDeveloper.has(selectedItem.developer_id)
+          }
+          finalizedClosingId={
+            finalizedByDeveloper.get(selectedItem.developer_id) ?? null
+          }
         />
       ) : null}
 
@@ -275,6 +286,12 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
               do cadastro (negativo = abaixo do mínimo; base para futuro banco
               de horas).
             </p>
+            {finalizedCount > 0 ? (
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                {finalizedCount} linha(s) com fechamento mensal finalizado —
+                edição bloqueada. Reabra o fechamento para alterar.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1 text-right">
             <p className="text-sm font-medium tabular-nums">
@@ -312,12 +329,15 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
               {items.map((item) => {
                 const jiraHours =
                   jiraHoursByDeveloper.get(item.developer_id) ?? 0;
+                const finalizedClosingId =
+                  finalizedByDeveloper.get(item.developer_id) ?? null;
                 return (
                   <PayrollItemEditor
                     key={item.id}
                     item={item}
                     issuers={issuers}
                     readOnly={readOnly}
+                    finalizedClosingId={finalizedClosingId}
                     jiraHours={jiraHours}
                     contractedHoursDelta={computeContractedHoursDelta({
                       jiraHours,

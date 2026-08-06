@@ -5,6 +5,7 @@ import { requireTeamAccess } from "@/lib/auth/permissions";
 import { upsertInvoiceIssuer } from "@/services/invoice-issuers";
 import {
   batchUpsertPayrollAttendanceDays,
+  assertPayrollItemEditable,
   getPayrollItem,
   listAttendanceForItem,
   restorePayrollItemCalculatedAmounts,
@@ -107,6 +108,7 @@ export async function updatePayrollItemAction(
   const invoiceIssuerId = issuerRaw.length > 0 ? issuerRaw : null;
 
   try {
+    await assertPayrollItemEditable(itemId);
     await updatePayrollItemAmounts({
       itemId,
       discountsAmount: discounts.value,
@@ -148,6 +150,7 @@ export async function upsertAttendanceDayAction(input: {
   }
 
   try {
+    await assertPayrollItemEditable(input.itemId);
     await upsertPayrollAttendanceDay({
       itemId: input.itemId,
       dayOn: input.dayOn,
@@ -189,6 +192,7 @@ export async function batchApplyAttendanceAction(input: {
   await requireTeamAccess();
 
   try {
+    await assertPayrollItemEditable(input.itemId);
     const existing = await listAttendanceForItem(input.itemId);
     if (existing.length === 0) {
       return { ok: false, error: "Calendário de presença ainda não gerado." };
@@ -320,6 +324,7 @@ export async function setPayrollItemReviewedAction(input: {
   }
 
   try {
+    await assertPayrollItemEditable(itemId);
     await setPayrollItemReviewed({
       itemId,
       reviewed: input.reviewed,
@@ -361,6 +366,7 @@ export async function restorePayrollItemCalculatedAction(input: {
   }
 
   try {
+    await assertPayrollItemEditable(itemId);
     await restorePayrollItemCalculatedAmounts({ itemId, fields });
   } catch (error) {
     return {

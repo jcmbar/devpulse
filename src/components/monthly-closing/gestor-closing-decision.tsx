@@ -37,6 +37,8 @@ export function GestorClosingDecisionPanel({
   issuers,
   defaultIssuerId = null,
   selectedIssuer = null,
+  valuesMismatch = false,
+  valuesMismatchSummary = null,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
@@ -45,6 +47,9 @@ export function GestorClosingDecisionPanel({
   defaultIssuerId?: string | null;
   /** Resolved issuer for closed/finalized display. */
   selectedIssuer?: InvoiceIssuer | null;
+  /** Blocks approve/finalize when Folha × user values diverge. */
+  valuesMismatch?: boolean;
+  valuesMismatchSummary?: string | null;
 }) {
   const router = useRouter();
   const notesId = useId();
@@ -77,6 +82,13 @@ export function GestorClosingDecisionPanel({
 
   function approve() {
     setError(null);
+    if (valuesMismatch) {
+      setError(
+        valuesMismatchSummary ??
+          "Há divergências com a Folha. Corrija antes de aprovar.",
+      );
+      return;
+    }
     if (!issuerId.trim()) {
       setError("Selecione a empresa para emissão da NF.");
       return;
@@ -112,6 +124,13 @@ export function GestorClosingDecisionPanel({
 
   function finalize() {
     setError(null);
+    if (valuesMismatch) {
+      setError(
+        valuesMismatchSummary ??
+          "Há divergências com a Folha. Corrija antes de finalizar.",
+      );
+      return;
+    }
     startTransition(async () => {
       const result = await finalizeMonthlyClosingAction({
         closingId: closing.id,
@@ -325,6 +344,19 @@ export function GestorClosingDecisionPanel({
                   Escolha a empresa para a qual o developer deve emitir a NF.
                 </p>
               </div>
+              {valuesMismatch ? (
+                <div className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+                  <AlertTriangle
+                    className="mt-0.5 size-4 shrink-0"
+                    strokeWidth={2}
+                  />
+                  <p className="text-pretty text-xs">
+                    {valuesMismatchSummary ??
+                      "Há divergências entre Folha e o envio do usuário."}{" "}
+                    Ajuste na aba Valores / Folha antes de aprovar.
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-1.5">
                 <label htmlFor={issuerIdField} className="text-sm font-medium">
                   Empresa para emissão da NF
@@ -371,7 +403,7 @@ export function GestorClosingDecisionPanel({
               <button
                 type="button"
                 onClick={approve}
-                disabled={pending || !issuerId.trim()}
+                disabled={pending || !issuerId.trim() || valuesMismatch}
                 className="ui-btn-primary"
               >
                 {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -493,18 +525,33 @@ export function GestorClosingDecisionPanel({
 
           {closing.status === "closed" ? (
             <div className="space-y-2 border-t border-border pt-3">
+              {valuesMismatch ? (
+                <div className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+                  <AlertTriangle
+                    className="mt-0.5 size-4 shrink-0"
+                    strokeWidth={2}
+                  />
+                  <p className="text-pretty text-xs">
+                    {valuesMismatchSummary ??
+                      "Há divergências entre Folha e o envio do usuário."}{" "}
+                    Não é possível finalizar até corrigir.
+                  </p>
+                </div>
+              ) : null}
               {error && !confirmRevert ? (
                 <p className="text-sm text-danger">{error}</p>
               ) : null}
               <button
                 type="button"
                 onClick={finalize}
-                disabled={pending || !canFinalize}
+                disabled={pending || !canFinalize || valuesMismatch}
                 className="ui-btn-primary"
                 title={
-                  !canFinalize
-                    ? "Aguarde NF e boleto enviados pelo developer"
-                    : undefined
+                  valuesMismatch
+                    ? "Corrija as divergências com a Folha antes de finalizar."
+                    : !canFinalize
+                      ? "Aguarde NF e boleto enviados pelo developer"
+                      : undefined
                 }
               >
                 {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}

@@ -37,6 +37,8 @@ type PayrollItemEditorProps = {
   jiraHours: number;
   contractedHoursDelta: number;
   readOnly?: boolean;
+  /** When set, monthly closing is finalized — line is locked. */
+  finalizedClosingId?: string | null;
 };
 
 function formatHours(value: number): string {
@@ -74,6 +76,7 @@ export function PayrollItemEditor({
   jiraHours,
   contractedHoursDelta,
   readOnly = false,
+  finalizedClosingId = null,
 }: PayrollItemEditorProps) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
@@ -85,6 +88,8 @@ export function PayrollItemEditor({
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
+  const lockedByFinalized = finalizedClosingId != null;
+  const inputsDisabled = readOnly || lockedByFinalized;
   const busy = isPending || restorePending || reviewPending;
   const hasManualAutoField =
     item.differential_manual || item.travel_manual || item.meal_manual;
@@ -200,7 +205,7 @@ export function PayrollItemEditor({
                   Diferencial
                   {item.differential_manual ? " · manual" : ""}
                 </span>
-                {!readOnly && item.differential_manual ? (
+                {!inputsDisabled && item.differential_manual ? (
                   <RestoreCalculatedButton
                     label="Restaurar"
                     disabled={busy}
@@ -213,7 +218,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.differential_amount)}
-                disabled={readOnly}
+                disabled={inputsDisabled}
                 className="ui-input text-sm"
               />
             </div>
@@ -224,7 +229,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.discounts_amount)}
-                disabled={readOnly}
+                disabled={inputsDisabled}
                 className="ui-input text-sm"
               />
             </label>
@@ -234,7 +239,7 @@ export function PayrollItemEditor({
                   Deslocamento
                   {item.travel_manual ? " · manual" : ""}
                 </span>
-                {!readOnly && item.travel_manual ? (
+                {!inputsDisabled && item.travel_manual ? (
                   <RestoreCalculatedButton
                     label="Restaurar"
                     disabled={busy}
@@ -247,7 +252,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.travel_amount)}
-                disabled={readOnly}
+                disabled={inputsDisabled}
                 className="ui-input text-sm"
               />
             </div>
@@ -257,7 +262,7 @@ export function PayrollItemEditor({
                   Refeição
                   {item.meal_manual ? " · manual" : ""}
                 </span>
-                {!readOnly && item.meal_manual ? (
+                {!inputsDisabled && item.meal_manual ? (
                   <RestoreCalculatedButton
                     label="Restaurar"
                     disabled={busy}
@@ -270,7 +275,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.meal_amount)}
-                disabled={readOnly}
+                disabled={inputsDisabled}
                 className="ui-input text-sm"
               />
             </div>
@@ -279,7 +284,7 @@ export function PayrollItemEditor({
               <select
                 value={issuerId}
                 onChange={(event) => setIssuerId(event.target.value)}
-                disabled={readOnly}
+                disabled={inputsDisabled}
                 className="ui-select text-sm"
               >
                 <option value="">—</option>
@@ -299,7 +304,17 @@ export function PayrollItemEditor({
                 currency: "BRL",
               })}
             </p>
-            {!readOnly ? (
+            {lockedByFinalized ? (
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                Fechamento finalizado — reabra o fechamento para editar.{" "}
+                <Link
+                  href={`/app/gestor/fechamentos/${finalizedClosingId}`}
+                  className="font-medium underline-offset-2 hover:underline"
+                >
+                  Abrir fechamento
+                </Link>
+              </p>
+            ) : !readOnly ? (
               <>
                 <button
                   type="submit"

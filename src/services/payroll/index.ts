@@ -13,6 +13,10 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { listCurrentCompensationsByDeveloperIds } from "@/services/developers/compensation";
 import { listDevelopersAdmin } from "@/services/developers/admin";
+import {
+  assertMonthlyClosingNotFinalizedForPayroll,
+  mapFinalizedMonthlyClosingIdsByDeveloper,
+} from "@/services/monthly-closings";
 import type { CompensationBaseType } from "@/types/developer-compensation";
 import type {
   PayrollAttendanceDay,
@@ -491,6 +495,15 @@ export async function getPayrollInvoiceIssuerIdForDeveloperMonth(input: {
   developerId: string;
   yearMonth: string;
 }): Promise<string | null> {
+  const item = await getPayrollItemForDeveloperMonth(input);
+  return item?.invoice_issuer_id ?? null;
+}
+
+/** Folha line + presencial days for Gestor×Usuário conferência on closing review. */
+export async function getPayrollItemForDeveloperMonth(input: {
+  developerId: string;
+  yearMonth: string;
+}): Promise<PayrollClosingItem | null> {
   const supabase = await createClient();
   const { data: closing, error: closingError } = await supabase
     .from("payroll_month_closings")
@@ -506,16 +519,28 @@ export async function getPayrollInvoiceIssuerIdForDeveloperMonth(input: {
 
   const { data: item, error: itemError } = await supabase
     .from("payroll_closing_items")
-    .select("invoice_issuer_id")
+    .select("*")
     .eq("payroll_closing_id", closing.id)
     .eq("developer_id", input.developerId)
     .maybeSingle();
   if (itemError) {
     throw new Error(`Falha ao carregar item da folha: ${itemError.message}`);
   }
+  if (!item) {
+    return null;
+  }
 
-  const issuerId = item?.invoice_issuer_id;
-  return typeof issuerId === "string" && issuerId.length > 0 ? issuerId : null;
+  return mapItem(item as Record<string, unknown>);
+}
+
+export async function listPayrollPresencialDaysForItem(
+  itemId: string,
+): Promise<string[]> {
+  const days = await listAttendanceForItem(itemId);
+  return days
+    .filter((day) => day.day_kind === "presencial")
+    .map((day) => day.day_on)
+    .sort();
 }
 
 /**
@@ -544,9 +569,14 @@ export async function syncPayrollItemsFromCompensation(input: {
 
   const closing = mapClosing(closingRow as Record<string, unknown>);
   const items = await listItemsForClosing(closing.id);
-  const scoped = input.teamId
-    ? items.filter((item) => item.team_id === input.teamId)
-    : items;
+  const finalizedByDeveloper = await mapFinalizedMonthlyClosingIdsByDeveloper(
+    closing.year_month,
+  );
+  const scoped = (
+    input.teamId
+      ? items.filter((item) => item.team_id === input.teamId)
+      : items
+  ).filter((item) => !finalizedByDeveloper.has(item.developer_id));
 
   if (scoped.length === 0) {
     return { syncedCount: 0 };
@@ -848,6 +878,42 @@ export async function getPayrollItem(
     throw new Error(`Falha ao carregar item: ${error.message}`);
   }
   return data ? mapItem(data as Record<string, unknown>) : null;
+}
+
+/** Blocks Folha mutations when payroll month is closed or monthly closing is finalized. */
+export async function assertPayrollItemEditable(
+  itemId: string,
+): Promise<PayrollClosingItem> {
+  const item = await getPayrollItem(itemId);
+  if (!item) {
+    throw new Error("Item da folha não encontrado.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("payroll_month_closings")
+    .select("year_month, status")
+    .eq("id", item.payroll_closing_id)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new Error(
+      `Falha ao validar mês da folha: ${error?.message ?? "não encontrado"}`,
+    );
+  }
+
+  if (String(data.status) === "closed") {
+    throw new Error(
+      "A folha deste mês está fechada e não pode ser editada.",
+    );
+  }
+
+  await assertMonthlyClosingNotFinalizedForPayroll({
+    developerId: item.developer_id,
+    yearMonth: String(data.year_month),
+  });
+
+  return item;
 }
 
 export async function updatePayrollClosingStatus(input: {

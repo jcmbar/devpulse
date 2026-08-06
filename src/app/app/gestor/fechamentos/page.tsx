@@ -17,6 +17,7 @@ import {
 import { listDevelopersAdmin } from "@/services/developers/admin";
 import {
   listFinalizedClosingsWithJiraDrift,
+  listMonthlyClosingAttachmentPresence,
   listMonthlyClosingsForGestorYear,
   listMonthlyClosingsInReview,
 } from "@/services/monthly-closings";
@@ -127,6 +128,14 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
     })),
   ].sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
 
+  const attachmentPresence = await listMonthlyClosingAttachmentPresence(
+    yearClosings
+      .filter(
+        (row) => row.status === "closed" || row.status === "finalized",
+      )
+      .map((row) => row.id),
+  );
+
   const years = [
     ...new Set([
       currentYear,
@@ -234,6 +243,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
         year={closingSelectedYear}
         developers={matrixDevelopers}
         closings={yearClosings}
+        attachmentPresence={attachmentPresence}
       />
 
       <GestorClosingsInReviewSection

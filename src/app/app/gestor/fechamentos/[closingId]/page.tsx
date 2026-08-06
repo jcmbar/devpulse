@@ -18,6 +18,7 @@ import {
   listMonthlyClosingItems,
   listMonthlyClosingPresenceDays,
 } from "@/services/monthly-closings";
+import { loadClosingFolhaCompare } from "@/services/closing-folha-compare";
 import { getPayrollInvoiceIssuerIdForDeveloperMonth } from "@/services/payroll";
 
 type PageProps = {
@@ -110,7 +111,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
       listInvoiceIssuers({ activeOnly: true }),
     ]);
 
-  const [folhaIssuerId, selectedIssuer] = await Promise.all([
+  const [folhaIssuerId, selectedIssuer, folhaComparePayload] = await Promise.all([
     closing.status === "in_review"
       ? getPayrollInvoiceIssuerIdForDeveloperMonth({
           developerId: closing.developer_id,
@@ -120,6 +121,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
     closing.invoice_issuer_id
       ? getInvoiceIssuer(closing.invoice_issuer_id)
       : Promise.resolve(null),
+    loadClosingFolhaCompare(closing),
   ]);
 
   return (
@@ -153,6 +155,9 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
         issuers={issuers}
         defaultIssuerId={folhaIssuerId}
         selectedIssuer={selectedIssuer}
+        folhaCompare={folhaComparePayload.compare}
+        userSide={folhaComparePayload.userSide}
+        folhaSide={folhaComparePayload.folhaSide}
       />
 
       <SectionShell
