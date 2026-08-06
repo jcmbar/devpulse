@@ -8,6 +8,7 @@ import {
   getPayrollItem,
   listAttendanceForItem,
   restorePayrollItemCalculatedAmounts,
+  setPayrollItemReviewed,
   syncPayrollItemsFromCompensation,
   updatePayrollClosingStatus,
   updatePayrollItemAmounts,
@@ -305,6 +306,37 @@ export async function listAttendanceAction(
           : "Falha ao carregar presença.",
     };
   }
+}
+
+export async function setPayrollItemReviewedAction(input: {
+  itemId: string;
+  reviewed: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { profile } = await requireTeamAccess();
+
+  const itemId = input.itemId.trim();
+  if (!itemId) {
+    return { ok: false, error: "Item inválido." };
+  }
+
+  try {
+    await setPayrollItemReviewed({
+      itemId,
+      reviewed: input.reviewed,
+      reviewedBy: profile.id,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar a conferência.",
+    };
+  }
+
+  revalidateFolha();
+  return { ok: true };
 }
 
 export async function restorePayrollItemCalculatedAction(input: {

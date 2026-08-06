@@ -90,6 +90,9 @@ export type PayrollClosingItem = {
   invoice_status: PayrollInvoiceDocStatus;
   finance_status: PayrollFinanceStatus;
   notes: string | null;
+  is_reviewed: boolean;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -2,10 +2,12 @@
 
 import {
   restorePayrollItemCalculatedAction,
+  setPayrollItemReviewedAction,
   updatePayrollItemAction,
   type PayrollFormState,
 } from "@/app/app/gestor/folha/actions";
 import { FormFeedback } from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 import {
   COMPENSATION_BASE_TYPE_LABELS,
 } from "@/types/developer-compensation";
@@ -14,6 +16,7 @@ import type {
   PayrollAutoAmountField,
   PayrollClosingItemWithIssuer,
 } from "@/types/payroll-closing";
+import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
@@ -67,9 +70,11 @@ export function PayrollItemEditor({
     initialState,
   );
   const [restorePending, startRestore] = useTransition();
+  const [reviewPending, startReview] = useTransition();
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
-  const busy = isPending || restorePending;
+  const busy = isPending || restorePending || reviewPending;
   const hasManualAutoField =
     item.differential_manual || item.travel_manual || item.meal_manual;
 
@@ -88,11 +93,34 @@ export function PayrollItemEditor({
     });
   }
 
+  function toggleReviewed() {
+    setReviewError(null);
+    startReview(async () => {
+      const result = await setPayrollItemReviewedAction({
+        itemId: item.id,
+        reviewed: !item.is_reviewed,
+      });
+      if (!result.ok) {
+        setReviewError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
-    <tr>
+    <tr className={cn(item.is_reviewed && "bg-emerald-500/[0.04]")}>
       <td className="align-top">
         <div className="space-y-1">
-          <p className="font-medium text-foreground">{item.developer_name}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-foreground">{item.developer_name}</p>
+            {item.is_reviewed ? (
+              <span className="inline-flex items-center gap-1 rounded-[calc(var(--radius-sm)-2px)] border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="size-3" aria-hidden />
+                Conferido
+              </span>
+            ) : null}
+          </div>
           <p className="text-xs text-muted-foreground">
             {COMPENSATION_BASE_TYPE_LABELS[item.base_type]}
             {item.base_type === "variable" && item.hourly_rate != null
@@ -248,12 +276,45 @@ export function PayrollItemEditor({
                       ? "Restaurar calculados"
                       : "Recalcular linha"}
                 </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-xs font-medium",
+                    item.is_reviewed ? "ui-btn-secondary" : "ui-btn-primary",
+                  )}
+                  disabled={busy}
+                  title={
+                    item.is_reviewed
+                      ? "Remove a marcação de conferido"
+                      : "Marca que você já conferiu os ajustes desta pessoa no mês"
+                  }
+                  onClick={toggleReviewed}
+                >
+                  <CheckCircle2 className="size-3.5" aria-hidden />
+                  {reviewPending
+                    ? "Atualizando..."
+                    : item.is_reviewed
+                      ? "Desfazer conferido"
+                      : "Marcar como conferido"}
+                </button>
               </>
+            ) : item.is_reviewed ? (
+              <span className="text-xs text-emerald-700 dark:text-emerald-300">
+                Conferido
+                {item.reviewed_at
+                  ? ` · ${new Date(item.reviewed_at).toLocaleString("pt-BR")}`
+                  : ""}
+              </span>
             ) : null}
             <FormFeedback error={state.error} success={state.success} />
             {restoreError ? (
               <p className="text-xs text-destructive" role="alert">
                 {restoreError}
+              </p>
+            ) : null}
+            {reviewError ? (
+              <p className="text-xs text-destructive" role="alert">
+                {reviewError}
               </p>
             ) : null}
           </div>

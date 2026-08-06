@@ -80,6 +80,9 @@ function mapItem(row: Record<string, unknown>): PayrollClosingItem {
     invoice_status: (row.invoice_status as PayrollInvoiceDocStatus) ?? "pending",
     finance_status: (row.finance_status as PayrollFinanceStatus) ?? "pending",
     notes: (row.notes as string | null) ?? null,
+    is_reviewed: Boolean(row.is_reviewed),
+    reviewed_at: (row.reviewed_at as string | null) ?? null,
+    reviewed_by: (row.reviewed_by as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -223,6 +226,38 @@ function sameMoney(a: number, b: number): boolean {
   return Math.abs(a - b) < 0.005;
 }
 
+export async function setPayrollItemReviewed(input: {
+  itemId: string;
+  reviewed: boolean;
+  reviewedBy: string | null;
+}): Promise<PayrollClosingItem> {
+  const supabase = await createClient();
+  const patch = input.reviewed
+    ? {
+        is_reviewed: true,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: input.reviewedBy,
+      }
+    : {
+        is_reviewed: false,
+        reviewed_at: null,
+        reviewed_by: null,
+      };
+
+  const { data, error } = await supabase
+    .from("payroll_closing_items")
+    .update(patch)
+    .eq("id", input.itemId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao atualizar conferência: ${error.message}`);
+  }
+
+  return mapItem(data as Record<string, unknown>);
+}
+
 /** Auto-calculated amounts for an item, before manual overrides. */
 async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   presencialDays: number;
@@ -289,15 +324,30 @@ export async function recalculatePayrollItem(
     mealAmount: meal,
   });
 
+  const amountsChanged =
+    item.presencial_days_count !== presencialDays ||
+    !sameMoney(item.differential_amount, differential) ||
+    !sameMoney(item.travel_amount, travel) ||
+    !sameMoney(item.meal_amount, meal) ||
+    !sameMoney(item.invoice_amount, invoice);
+
+  const patch: Record<string, unknown> = {
+    presencial_days_count: presencialDays,
+    differential_amount: differential,
+    travel_amount: travel,
+    meal_amount: meal,
+    invoice_amount: invoice,
+  };
+
+  if (amountsChanged && item.is_reviewed) {
+    patch.is_reviewed = false;
+    patch.reviewed_at = null;
+    patch.reviewed_by = null;
+  }
+
   const { data: updated, error: updateError } = await supabase
     .from("payroll_closing_items")
-    .update({
-      presencial_days_count: presencialDays,
-      differential_amount: differential,
-      travel_amount: travel,
-      meal_amount: meal,
-      invoice_amount: invoice,
-    })
+    .update(patch)
     .eq("id", itemId)
     .select("*")
     .single();
@@ -643,6 +693,12 @@ export async function updatePayrollItemAmounts(input: {
     travelAmount: travel,
     mealAmount: meal,
   });
+
+  if (item.is_reviewed) {
+    patch.is_reviewed = false;
+    patch.reviewed_at = null;
+    patch.reviewed_by = null;
+  }
 
   if (Object.keys(patch).length === 0) {
     return item;

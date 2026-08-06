@@ -113,6 +113,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       acc.travel += item.travel_amount;
       acc.meal += item.meal_amount;
       acc.invoice += item.invoice_amount;
+      if (item.is_reviewed) {
+        acc.reviewed += 1;
+      }
       return acc;
     },
     {
@@ -122,6 +125,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       travel: 0,
       meal: 0,
       invoice: 0,
+      reviewed: 0,
     },
   );
 
@@ -240,13 +244,20 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
               diário do cadastro.
             </p>
           </div>
-          <p className="text-sm font-medium tabular-nums">
-            Total NF:{" "}
-            {totals.invoice.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
-          </p>
+          <div className="space-y-1 text-right">
+            <p className="text-sm font-medium tabular-nums">
+              Total NF:{" "}
+              {totals.invoice.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+            </p>
+            {items.length > 0 ? (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                Conferidos: {totals.reviewed}/{items.length}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         {items.length === 0 ? (
