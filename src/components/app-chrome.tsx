@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Upload,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -54,6 +55,12 @@ export function AppChrome({ profile, children }: AppChromeProps) {
       label: "Início",
       icon: Home,
       match: (path) => path === "/app",
+    },
+    {
+      href: "/app/conta",
+      label: "Conta",
+      icon: UserRound,
+      match: (path) => path.startsWith("/app/conta"),
     },
     ...(team
       ? [
@@ -130,12 +137,16 @@ export function AppChrome({ profile, children }: AppChromeProps) {
           </nav>
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 xl:flex">
+            <Link
+              href="/app/conta"
+              className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 transition-colors hover:bg-muted/60 xl:flex"
+              title="Abrir minha conta"
+            >
               <span className="max-w-[160px] truncate text-xs font-medium text-foreground">
                 {profile.full_name ?? profile.email}
               </span>
               <span className="ui-badge">{getRoleLabel(profile.role)}</span>
-            </div>
+            </Link>
             <ThemeToggle />
             <form action={signOut} className="hidden sm:block">
               <button type="submit" className="ui-btn-secondary">
