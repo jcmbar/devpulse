@@ -99,6 +99,16 @@ function formatDays(value: number | null): string {
   })} d`;
 }
 
+function formatHours(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "—";
+  }
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} h`;
+}
+
 function formatIsoOrNull(value: string | null): string {
   return value ?? "null";
 }
@@ -802,10 +812,18 @@ function GestorCardsAuditDrawer({
                   <h3 className="text-sm font-semibold tracking-tight">
                     Cards para análise
                   </h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground tabular-nums">
                     {visibleCards.length}
                     {filterMarkedOnly ? ` de ${cards.length}` : ""} card
                     {visibleCards.length === 1 ? "" : "s"}
+                    {" · "}
+                    {formatHours(
+                      visibleCards.reduce(
+                        (sum, card) => sum + (card.timeSpentHours ?? 0),
+                        0,
+                      ),
+                    )}{" "}
+                    realizadas
                   </p>
                 </div>
                 <div className="space-y-3">
@@ -994,7 +1012,7 @@ function AuditDecisionCard({
         ) : null}
       </div>
 
-      <div className="grid gap-3 border-b border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 border-b border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-5">
         <ObjectiveField
           label="Prazo"
           value={formatIsoOrNull(card.dueOn)}
@@ -1007,6 +1025,11 @@ function AuditDecisionCard({
           emphasize={
             !card.unitTestDeliveryOn || !card.inPeriodByUnitTestDelivery
           }
+        />
+        <ObjectiveField
+          label="Horas realizadas"
+          value={formatHours(card.timeSpentHours)}
+          mono
         />
         <ObjectiveField
           label="Atraso"

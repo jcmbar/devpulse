@@ -46,6 +46,9 @@ export type GestorCardAuditItem = {
   dueOn: string | null;
   completedOn: string | null;
   delayDays: number | null;
+  /** Compilado time spent (same source as Gestor ranking hours). */
+  timeSpentHours: number | null;
+  estimateHours: number | null;
   isOnTime: boolean | null;
   isDelayed: boolean | null;
   isRework: boolean;
@@ -178,6 +181,12 @@ export async function getGestorDeveloperCardsAudit(input: {
       dueOn: card.due_on,
       completedOn: card.completed_on,
       delayDays: card.delay_days,
+      timeSpentHours:
+        card.time_spent_hours == null
+          ? null
+          : Number(card.time_spent_hours),
+      estimateHours:
+        card.estimate_hours == null ? null : Number(card.estimate_hours),
       isOnTime: flags.isOnTime,
       isDelayed: flags.isDelayed,
       isRework: flags.isRework,
