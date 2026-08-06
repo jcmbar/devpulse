@@ -780,18 +780,32 @@ function GestorCardsAuditDrawer({
             <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" strokeWidth={1.9} />
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <p className="font-medium">
                     {suspiciousCount} card
                     {suspiciousCount === 1 ? "" : "s"} com sinal de atenção
                   </p>
-                  <ul className="list-inside list-disc text-xs opacity-90">
+                  <ul className="space-y-2 text-xs opacity-90">
                     {Object.entries(audit.suspicionSummary.byKind).map(
-                      ([kind, count]) => (
-                        <li key={kind}>
-                          {SUSPICION_KIND_LABEL[kind] ?? kind}: {count}
-                        </li>
-                      ),
+                      ([kind, count]) => {
+                        const keys = audit.cards
+                          .filter((card) =>
+                            card.suspicions.some(
+                              (suspicion) => suspicion.kind === kind,
+                            ),
+                          )
+                          .map((card) => card.jiraKey);
+                        return (
+                          <li key={kind} className="space-y-0.5">
+                            <p>
+                              {SUSPICION_KIND_LABEL[kind] ?? kind}: {count}
+                            </p>
+                            <p className="break-all font-mono text-[11px] leading-relaxed opacity-90">
+                              {keys.join(" · ")}
+                            </p>
+                          </li>
+                        );
+                      },
                     )}
                   </ul>
                 </div>
