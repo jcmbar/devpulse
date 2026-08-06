@@ -127,12 +127,14 @@ export async function submitMonthlyClosingAction(input: {
 
 export async function approveMonthlyClosingAction(input: {
   closingId: string;
-  managerInvoiceNotes: string;
+  invoiceIssuerId: string;
+  managerInvoiceNotes?: string | null;
 }): Promise<MonthlyClosingActionResult> {
   try {
     const { profile } = await requireTeamAccess();
     const closing = await approveMonthlyClosing({
       closingId: input.closingId,
+      invoiceIssuerId: input.invoiceIssuerId,
       managerInvoiceNotes: input.managerInvoiceNotes,
       actorUserId: profile.id,
     });

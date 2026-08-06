@@ -88,6 +88,17 @@ export function PayrollItemEditor({
   const busy = isPending || restorePending || reviewPending;
   const hasManualAutoField =
     item.differential_manual || item.travel_manual || item.meal_manual;
+  const [issuerId, setIssuerId] = useState(item.invoice_issuer_id ?? "");
+  const [issuerSyncedFrom, setIssuerSyncedFrom] = useState(
+    item.invoice_issuer_id ?? "",
+  );
+
+  // Keep select in sync after server refresh (defaultValue alone would stick).
+  const issuerFromServer = item.invoice_issuer_id ?? "";
+  if (issuerFromServer !== issuerSyncedFrom) {
+    setIssuerSyncedFrom(issuerFromServer);
+    setIssuerId(issuerFromServer);
+  }
 
   function restore(fields: PayrollAutoAmountField) {
     setRestoreError(null);
@@ -174,8 +185,14 @@ export function PayrollItemEditor({
         </p>
       </td>
       <td className="align-top" colSpan={5}>
-        <form action={formAction} className="space-y-2">
+        <form
+          action={formAction}
+          className="space-y-2"
+          key={`${item.id}-${item.updated_at}`}
+        >
           <input type="hidden" name="itemId" value={item.id} />
+          {/* Always submitted — native <select disabled> is omitted from FormData. */}
+          <input type="hidden" name="invoiceIssuerId" value={issuerId} />
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
             <div className="space-y-1 text-xs">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -196,7 +213,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.differential_amount)}
-                disabled={readOnly || busy}
+                disabled={readOnly}
                 className="ui-input text-sm"
               />
             </div>
@@ -207,7 +224,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.discounts_amount)}
-                disabled={readOnly || busy}
+                disabled={readOnly}
                 className="ui-input text-sm"
               />
             </label>
@@ -230,7 +247,7 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.travel_amount)}
-                disabled={readOnly || busy}
+                disabled={readOnly}
                 className="ui-input text-sm"
               />
             </div>
@@ -253,16 +270,16 @@ export function PayrollItemEditor({
                 type="text"
                 inputMode="decimal"
                 defaultValue={moneyInputValue(item.meal_amount)}
-                disabled={readOnly || busy}
+                disabled={readOnly}
                 className="ui-input text-sm"
               />
             </div>
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Empresa NF</span>
               <select
-                name="invoiceIssuerId"
-                defaultValue={item.invoice_issuer_id ?? ""}
-                disabled={readOnly || busy}
+                value={issuerId}
+                onChange={(event) => setIssuerId(event.target.value)}
+                disabled={readOnly}
                 className="ui-select text-sm"
               >
                 <option value="">—</option>

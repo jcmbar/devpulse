@@ -4,7 +4,9 @@ import {
   getMonthlyClosingAttachmentUrlAction,
   uploadMonthlyClosingAttachmentAction,
 } from "@/app/app/monthly-closing-actions";
+import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
 import { cn } from "@/lib/utils";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
@@ -154,9 +156,11 @@ function AttachmentSlot({
 export function MonthlyClosingAttachmentsPanel({
   closing,
   attachments,
+  invoiceIssuer = null,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
+  invoiceIssuer?: InvoiceIssuer | null;
 }) {
   if (closing.status !== "closed" && closing.status !== "finalized") {
     return null;
@@ -179,10 +183,16 @@ export function MonthlyClosingAttachmentsPanel({
             : "Envie a nota fiscal e o boleto em PDF para o gestor finalizar."}
         </p>
       </div>
-      {closing.manager_invoice_notes ? (
+      {invoiceIssuer ? (
+        <InvoiceIssuerDetailsCard
+          issuer={invoiceIssuer}
+          observation={closing.manager_invoice_notes}
+          title="Orientações do gestor para NF"
+        />
+      ) : closing.manager_invoice_notes ? (
         <div className="rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-2.5">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            Orientações do gestor para NF
+            Observação para a NF
           </p>
           <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">
             {closing.manager_invoice_notes}

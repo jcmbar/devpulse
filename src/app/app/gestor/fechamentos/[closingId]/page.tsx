@@ -10,6 +10,7 @@ import { requireTeamAccess } from "@/lib/auth/permissions";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
 import { getDeveloperAdmin } from "@/services/developers/admin";
+import { listInvoiceIssuers, getInvoiceIssuer } from "@/services/invoice-issuers";
 import {
   getMonthlyClosingById,
   listMonthlyClosingAttachments,
@@ -17,6 +18,7 @@ import {
   listMonthlyClosingItems,
   listMonthlyClosingPresenceDays,
 } from "@/services/monthly-closings";
+import { getPayrollInvoiceIssuerIdForDeveloperMonth } from "@/services/payroll";
 
 type PageProps = {
   params: Promise<{ closingId: string }>;
@@ -98,14 +100,27 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [developer, items, events, attachments, presenceDays] =
+  const [developer, items, events, attachments, presenceDays, issuers] =
     await Promise.all([
       getDeveloperAdmin(closing.developer_id),
       listMonthlyClosingItems(closing.id),
       listMonthlyClosingEvents(closing.id),
       listMonthlyClosingAttachments(closing.id),
       listMonthlyClosingPresenceDays(closing.id),
+      listInvoiceIssuers({ activeOnly: true }),
     ]);
+
+  const [folhaIssuerId, selectedIssuer] = await Promise.all([
+    closing.status === "in_review"
+      ? getPayrollInvoiceIssuerIdForDeveloperMonth({
+          developerId: closing.developer_id,
+          yearMonth: closing.year_month,
+        })
+      : Promise.resolve(null),
+    closing.invoice_issuer_id
+      ? getInvoiceIssuer(closing.invoice_issuer_id)
+      : Promise.resolve(null),
+  ]);
 
   return (
     <PageShell size="xl">
@@ -135,6 +150,9 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
         closing={closing}
         attachments={attachments}
         presenceDays={presenceDays}
+        issuers={issuers}
+        defaultIssuerId={folhaIssuerId}
+        selectedIssuer={selectedIssuer}
       />
 
       <SectionShell

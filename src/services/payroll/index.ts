@@ -486,6 +486,38 @@ export async function ensurePayrollMonthWithItems(input: {
   };
 }
 
+/** Issuer chosen on Folha for this person/month — used as default on closing approve. */
+export async function getPayrollInvoiceIssuerIdForDeveloperMonth(input: {
+  developerId: string;
+  yearMonth: string;
+}): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: closing, error: closingError } = await supabase
+    .from("payroll_month_closings")
+    .select("id")
+    .eq("year_month", input.yearMonth)
+    .maybeSingle();
+  if (closingError) {
+    throw new Error(`Falha ao carregar folha: ${closingError.message}`);
+  }
+  if (!closing) {
+    return null;
+  }
+
+  const { data: item, error: itemError } = await supabase
+    .from("payroll_closing_items")
+    .select("invoice_issuer_id")
+    .eq("payroll_closing_id", closing.id)
+    .eq("developer_id", input.developerId)
+    .maybeSingle();
+  if (itemError) {
+    throw new Error(`Falha ao carregar item da folha: ${itemError.message}`);
+  }
+
+  const issuerId = item?.invoice_issuer_id;
+  return typeof issuerId === "string" && issuerId.length > 0 ? issuerId : null;
+}
+
 /**
  * Re-snapshot compensation (base, hourly rate, travel/meal) onto existing
  * items and recalculate. Used when cadastro changes after the month opened.

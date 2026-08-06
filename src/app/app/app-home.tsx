@@ -42,6 +42,7 @@ import type { CompiladoSnapshotProvenance } from "@/services/compilado/resolve-s
 import type { Developer } from "@/types/developer";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type { JiraCard } from "@/types/jira-card";
 import type {
   MonthlyClosing,
@@ -77,6 +78,7 @@ type AppHomeProps = {
   closingBlockingCount: number;
   closingAttachments: MonthlyClosingAttachment[];
   developerCompensation: DeveloperCompensation | null;
+  closingInvoiceIssuer?: InvoiceIssuer | null;
 };
 
 function formatHours(value: number): string {
@@ -155,6 +157,7 @@ export function AppHome({
   closingBlockingCount,
   closingAttachments,
   developerCompensation,
+  closingInvoiceIssuer = null,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
   const delayCounts = countJustificationStatuses(delayJustificationsByKey);
@@ -621,6 +624,7 @@ export function AppHome({
           detailBlockingCount={closingBlockingCount}
           detailAttachments={closingAttachments}
           developerCompensation={developerCompensation}
+          closingInvoiceIssuer={closingInvoiceIssuer}
         />
       )}
     </PageShell>

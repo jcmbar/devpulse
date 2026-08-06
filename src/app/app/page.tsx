@@ -20,6 +20,7 @@ import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot"
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
+import { getInvoiceIssuer } from "@/services/invoice-issuers";
 import {
   getMonthlyClosingForDeveloperMonth,
   listMonthlyClosingAttachments,
@@ -28,6 +29,7 @@ import {
   loadMonthlyClosingAuditForDeveloper,
 } from "@/services/monthly-closings";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
   MonthlyClosingAttachment,
   MonthlyClosingCardAuditRow,
@@ -367,6 +369,11 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   const developerCompensation: DeveloperCompensation | null =
     await getCurrentDeveloperCompensation(developer.id);
 
+  const closingInvoiceIssuer: InvoiceIssuer | null =
+    monthlyClosing?.invoice_issuer_id
+      ? await getInvoiceIssuer(monthlyClosing.invoice_issuer_id)
+      : null;
+
   const cardsTabHref = buildAppHref({
     tab: "cards",
     importId: selectedImportId,
@@ -418,6 +425,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         closingBlockingCount={closingBlockingCount}
         closingAttachments={closingAttachments}
         developerCompensation={developerCompensation}
+        closingInvoiceIssuer={closingInvoiceIssuer}
       />
     </>
   );

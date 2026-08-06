@@ -5,6 +5,7 @@ import { formatClosingMoney } from "@/lib/metrics/closing-submit-values";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
 import { COMPENSATION_BASE_TYPE_LABELS } from "@/types/developer-compensation";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
@@ -16,6 +17,9 @@ type GestorClosingReviewTabsProps = {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
   presenceDays: MonthlyClosingPresenceDay[];
+  issuers: InvoiceIssuer[];
+  defaultIssuerId?: string | null;
+  selectedIssuer?: InvoiceIssuer | null;
 };
 
 function formatHours(value: number | null): string {
@@ -55,6 +59,9 @@ export function GestorClosingReviewTabs({
   closing,
   attachments,
   presenceDays,
+  issuers,
+  defaultIssuerId = null,
+  selectedIssuer = null,
 }: GestorClosingReviewTabsProps) {
   const [tab, setTab] = useState<"decisao" | "valores">("decisao");
 
@@ -106,6 +113,9 @@ export function GestorClosingReviewTabs({
         <GestorClosingDecisionPanel
           closing={closing}
           attachments={attachments}
+          issuers={issuers}
+          defaultIssuerId={defaultIssuerId}
+          selectedIssuer={selectedIssuer}
         />
       ) : (
         <section className="space-y-4 rounded-[var(--radius)] border border-border p-4">

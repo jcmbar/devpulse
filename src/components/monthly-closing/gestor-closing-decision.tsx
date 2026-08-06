@@ -7,7 +7,9 @@ import {
   rejectMonthlyClosingAction,
   revertMonthlyClosingStatusAction,
 } from "@/app/app/monthly-closing-actions";
+import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
 import { cn } from "@/lib/utils";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
@@ -27,18 +29,32 @@ import {
   Undo2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 
 export function GestorClosingDecisionPanel({
   closing,
   attachments,
+  issuers,
+  defaultIssuerId = null,
+  selectedIssuer = null,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
+  issuers: InvoiceIssuer[];
+  /** Prefill from Folha when approving. */
+  defaultIssuerId?: string | null;
+  /** Resolved issuer for closed/finalized display. */
+  selectedIssuer?: InvoiceIssuer | null;
 }) {
   const router = useRouter();
   const notesId = useId();
+  const issuerIdField = useId();
   const rejectId = useId();
+  const initialIssuer =
+    closing.invoice_issuer_id ??
+    defaultIssuerId ??
+    (issuers.length === 1 ? issuers[0]!.id : "");
+  const [issuerId, setIssuerId] = useState(initialIssuer);
   const [notes, setNotes] = useState(closing.manager_invoice_notes ?? "");
   const [rejectionNotes, setRejectionNotes] = useState("");
   const [mode, setMode] = useState<"approve" | "reject">("approve");
@@ -54,11 +70,21 @@ export function GestorClosingDecisionPanel({
   const revertLabel = monthlyClosingRevertActionLabel(closing.status);
   const revertDescription = monthlyClosingRevertDescription(closing.status);
 
+  const previewIssuer = useMemo(
+    () => issuers.find((row) => row.id === issuerId) ?? null,
+    [issuers, issuerId],
+  );
+
   function approve() {
     setError(null);
+    if (!issuerId.trim()) {
+      setError("Selecione a empresa para emissão da NF.");
+      return;
+    }
     startTransition(async () => {
       const result = await approveMonthlyClosingAction({
         closingId: closing.id,
+        invoiceIssuerId: issuerId,
         managerInvoiceNotes: notes,
       });
       if (!result.ok) {
@@ -231,8 +257,7 @@ export function GestorClosingDecisionPanel({
         </section>
       ) : null}
 
-      {closing.status === "in_review" &&
-      closing.manager_rejection_notes ? (
+      {closing.status === "in_review" && closing.manager_rejection_notes ? (
         <section className="space-y-1.5 rounded-[var(--radius-sm)] border border-rose-500/30 bg-rose-500/5 px-3 py-3 text-sm">
           <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             Última devolução do gestor
@@ -240,11 +265,6 @@ export function GestorClosingDecisionPanel({
           <p className="text-pretty whitespace-pre-wrap">
             {closing.manager_rejection_notes}
           </p>
-          {closing.manager_rejected_at ? (
-            <p className="text-xs text-muted-foreground">
-              {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
-            </p>
-          ) : null}
         </section>
       ) : null}
 
@@ -257,12 +277,6 @@ export function GestorClosingDecisionPanel({
           <p className="text-pretty whitespace-pre-wrap">
             {closing.developer_resubmission_notes}
           </p>
-          {closing.resubmitted_at ? (
-            <p className="text-xs text-muted-foreground">
-              Reenviado em{" "}
-              {new Date(closing.resubmitted_at).toLocaleString("pt-BR")}
-            </p>
-          ) : null}
         </section>
       ) : null}
 
@@ -308,27 +322,56 @@ export function GestorClosingDecisionPanel({
                   Aprovar fechamento
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Informe os dados para emissão da nota fiscal.
+                  Escolha a empresa para a qual o developer deve emitir a NF.
                 </p>
               </div>
               <div className="space-y-1.5">
+                <label htmlFor={issuerIdField} className="text-sm font-medium">
+                  Empresa para emissão da NF
+                </label>
+                <select
+                  id={issuerIdField}
+                  value={issuerId}
+                  onChange={(event) => setIssuerId(event.target.value)}
+                  className="ui-select"
+                >
+                  <option value="">Selecione…</option>
+                  {issuers.map((issuer) => (
+                    <option key={issuer.id} value={issuer.id}>
+                      {issuer.legal_name}
+                    </option>
+                  ))}
+                </select>
+                {issuers.length === 0 ? (
+                  <p className="text-xs text-warning">
+                    Nenhuma empresa ativa. Cadastre em Folha → Empresas.
+                  </p>
+                ) : null}
+              </div>
+              {previewIssuer ? (
+                <InvoiceIssuerDetailsCard issuer={previewIssuer} />
+              ) : null}
+              <div className="space-y-1.5">
                 <label htmlFor={notesId} className="text-sm font-medium">
-                  Informações para emissão de NF
+                  Observação para a NF{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (opcional)
+                  </span>
                 </label>
                 <textarea
                   id={notesId}
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
-                  rows={4}
-                  placeholder="Dados para emissão da nota (razão social, CNPJ, descrição, valores, etc.)"
-                  className="ui-textarea min-h-[7rem]"
+                  rows={3}
+                  placeholder="Ex.: boleto com vencimento para 07/08/2026; descrição do serviço…"
+                  className="ui-textarea min-h-[4.5rem]"
                 />
               </div>
               {error ? <p className="text-sm text-danger">{error}</p> : null}
               <button
                 type="button"
                 onClick={approve}
-                disabled={pending || !notes.trim()}
+                disabled={pending || !issuerId.trim()}
                 className="ui-btn-primary"
               >
                 {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -375,15 +418,22 @@ export function GestorClosingDecisionPanel({
       ) : null}
 
       {(closing.status === "closed" || closing.status === "finalized") &&
-      closing.manager_invoice_notes ? (
-        <section className="space-y-1.5 rounded-[var(--radius-sm)] border border-border px-3 py-3">
-          <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            Notas para emissão de NF
-          </h3>
-          <p className="text-sm text-pretty whitespace-pre-wrap">
-            {closing.manager_invoice_notes}
-          </p>
-        </section>
+      (selectedIssuer || closing.manager_invoice_notes) ? (
+        selectedIssuer ? (
+          <InvoiceIssuerDetailsCard
+            issuer={selectedIssuer}
+            observation={closing.manager_invoice_notes}
+          />
+        ) : (
+          <section className="space-y-1.5 rounded-[var(--radius-sm)] border border-border px-3 py-3">
+            <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Observação para a NF
+            </h3>
+            <p className="text-sm text-pretty whitespace-pre-wrap">
+              {closing.manager_invoice_notes}
+            </p>
+          </section>
+        )
       ) : null}
 
       {closing.status === "closed" || closing.status === "finalized" ? (
@@ -412,7 +462,7 @@ export function GestorClosingDecisionPanel({
                     : "border-border bg-muted/20",
                 )}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
                   {attachment ? (
                     <CheckCircle2 className="size-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
                   ) : (

@@ -74,6 +74,7 @@ function mapClosing(row: Record<string, unknown>): MonthlyClosing {
     manager_approved_by_user_id:
       (row.manager_approved_by_user_id as string | null) ?? null,
     finalized_by_user_id: (row.finalized_by_user_id as string | null) ?? null,
+    invoice_issuer_id: (row.invoice_issuer_id as string | null) ?? null,
     manager_invoice_notes: (row.manager_invoice_notes as string | null) ?? null,
     manager_rejection_notes:
       (row.manager_rejection_notes as string | null) ?? null,
@@ -962,15 +963,16 @@ export async function listMonthlyClosingAttachments(
 
 export async function approveMonthlyClosing(input: {
   closingId: string;
-  managerInvoiceNotes: string;
+  invoiceIssuerId: string;
+  managerInvoiceNotes?: string | null;
   actorUserId: string;
 }): Promise<MonthlyClosing> {
-  const notes = input.managerInvoiceNotes.trim();
-  if (!notes) {
-    throw new Error(
-      "Informações para emissão de nota fiscal são obrigatórias na aprovação.",
-    );
+  const issuerId = input.invoiceIssuerId.trim();
+  if (!issuerId) {
+    throw new Error("Selecione a empresa para emissão da nota fiscal.");
   }
+
+  const notes = (input.managerInvoiceNotes ?? "").trim() || null;
 
   const closing = await getMonthlyClosingById(input.closingId);
   if (!closing) {
@@ -982,11 +984,25 @@ export async function approveMonthlyClosing(input: {
   assertEditableClosing(closing);
 
   const supabase = await createClient();
+  const { data: issuerRow, error: issuerError } = await supabase
+    .from("invoice_issuers")
+    .select("id")
+    .eq("id", issuerId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (issuerError) {
+    throw new Error(`Falha ao validar empresa: ${issuerError.message}`);
+  }
+  if (!issuerRow) {
+    throw new Error("Empresa emissora inválida ou inativa.");
+  }
+
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("monthly_closings")
     .update({
       status: "closed",
+      invoice_issuer_id: issuerId,
       manager_invoice_notes: notes,
       manager_approved_at: now,
       manager_approved_by_user_id: input.actorUserId,
@@ -1008,16 +1024,21 @@ export async function approveMonthlyClosing(input: {
     fromStatus: "in_review",
     toStatus: "closed",
     actorUserId: input.actorUserId,
-    payload: { hasInvoiceNotes: true },
+    payload: {
+      invoiceIssuerId: issuerId,
+      hasInvoiceNotes: Boolean(notes),
+    },
   });
-  await appendEvent({
-    closingId: closing.id,
-    eventType: "invoice_note_updated",
-    fromStatus: "closed",
-    toStatus: "closed",
-    actorUserId: input.actorUserId,
-    payload: { noteLength: notes.length },
-  });
+  if (notes) {
+    await appendEvent({
+      closingId: closing.id,
+      eventType: "invoice_note_updated",
+      fromStatus: "closed",
+      toStatus: "closed",
+      actorUserId: input.actorUserId,
+      payload: { noteLength: notes.length },
+    });
+  }
 
   return updated;
 }

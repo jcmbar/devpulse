@@ -16,6 +16,7 @@ import { metricsToTrendPoint } from "@/lib/metrics/monthly-trend";
 import { cn } from "@/lib/utils";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
@@ -44,6 +45,7 @@ type DeveloperClosingsYearViewProps = {
   detailBlockingCount: number;
   detailAttachments: MonthlyClosingAttachment[];
   developerCompensation: DeveloperCompensation | null;
+  closingInvoiceIssuer?: InvoiceIssuer | null;
 };
 
 function formatPercent(value: number | null): string {
@@ -182,6 +184,7 @@ function MonthDetailPanel({
   detailBlockingCount,
   detailAttachments,
   developerCompensation,
+  closingInvoiceIssuer = null,
   empty,
 }: {
   detailRow: DeveloperClosingYearMonthRow | null;
@@ -193,6 +196,7 @@ function MonthDetailPanel({
   detailBlockingCount: number;
   detailAttachments: MonthlyClosingAttachment[];
   developerCompensation: DeveloperCompensation | null;
+  closingInvoiceIssuer?: InvoiceIssuer | null;
   empty?: boolean;
 }) {
   if (empty || detailRow == null) {
@@ -246,6 +250,7 @@ function MonthDetailPanel({
         <MonthlyClosingAttachmentsPanel
           closing={detailClosing}
           attachments={detailAttachments}
+          invoiceIssuer={closingInvoiceIssuer}
         />
       ) : null}
     </div>
@@ -325,6 +330,7 @@ export function DeveloperClosingsYearView({
   detailBlockingCount,
   detailAttachments,
   developerCompensation,
+  closingInvoiceIssuer = null,
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
   const detailRow =
@@ -347,6 +353,7 @@ export function DeveloperClosingsYearView({
     detailBlockingCount,
     detailAttachments,
     developerCompensation,
+    closingInvoiceIssuer,
   };
 
   return (

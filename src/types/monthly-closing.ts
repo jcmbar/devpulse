@@ -39,6 +39,9 @@ export type MonthlyClosing = {
   submitted_by_user_id: string | null;
   manager_approved_by_user_id: string | null;
   finalized_by_user_id: string | null;
+  /** Empresa para emissão da NF (cadastro invoice_issuers). */
+  invoice_issuer_id: string | null;
+  /** Observação opcional do gestor sobre a NF. */
   manager_invoice_notes: string | null;
   manager_rejection_notes: string | null;
   manager_rejected_at: string | null;
