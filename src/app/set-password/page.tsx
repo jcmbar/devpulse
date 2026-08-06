@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Suspense } from "react";
 import { SetPasswordForm } from "./set-password-form";
@@ -19,12 +20,7 @@ export default function SetPasswordPage() {
         <div className="login-panel">
           <div className="space-y-3 text-center sm:text-left">
             <div className="inline-flex items-center gap-2.5">
-              <span
-                className="inline-flex size-9 items-center justify-center rounded-xl bg-brand text-sm font-bold tracking-tight text-brand-on shadow-[var(--shadow-sm)]"
-                aria-hidden
-              >
-                DP
-              </span>
+              <BrandMark size={40} priority className="size-10" />
               <p className="text-[11px] font-semibold tracking-[0.16em] text-brand uppercase">
                 DevPulse
               </p>

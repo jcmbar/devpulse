@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth/actions";
 import { canManageTeam } from "@/lib/auth/roles";
@@ -7,7 +8,6 @@ import { getRoleLabel } from "@/lib/auth/role-labels";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/types/profile";
 import {
-  Activity,
   Cable,
   FolderKanban,
   Home,
@@ -106,9 +106,7 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             href="/app"
             className="group flex min-w-0 shrink-0 items-center gap-2 rounded-[var(--radius-sm)] pr-1 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
-            <span className="inline-flex size-8 items-center justify-center rounded-[0.6rem] bg-brand text-brand-on shadow-[var(--shadow-glow)]">
-              <Activity className="size-4" strokeWidth={2.25} />
-            </span>
+            <BrandMark size={32} className="size-8" />
             <span className="truncate text-sm font-semibold tracking-tight">
               DevPulse
             </span>
