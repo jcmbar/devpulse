@@ -34,6 +34,8 @@ type NavItem = {
   href: string;
   label: string;
   icon: NavIcon;
+  /** Cor do ícone (mantém contraste no item ativo e no hover). */
+  iconClass: string;
   match?: (pathname: string) => boolean;
 };
 
@@ -54,13 +56,8 @@ export function AppChrome({ profile, children }: AppChromeProps) {
       href: "/app",
       label: "Início",
       icon: Home,
+      iconClass: "text-sky-600 dark:text-sky-400",
       match: (path) => path === "/app",
-    },
-    {
-      href: "/app/conta",
-      label: "Conta",
-      icon: UserRound,
-      match: (path) => path.startsWith("/app/conta"),
     },
     ...(team
       ? [
@@ -68,34 +65,46 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             href: "/app/gestor",
             label: "Gestor",
             icon: LayoutDashboard,
+            iconClass: "text-teal-600 dark:text-teal-400",
             match: (path: string) => path.startsWith("/app/gestor"),
           },
           {
             href: "/app/developers",
             label: "Pessoas",
             icon: Users,
+            iconClass: "text-amber-600 dark:text-amber-400",
             match: (path: string) => path.startsWith("/app/developers"),
           },
           {
             href: "/app/imports",
             label: "Imports",
             icon: Upload,
+            iconClass: "text-cyan-600 dark:text-cyan-400",
             match: (path: string) => path.startsWith("/app/imports"),
           },
           {
             href: "/app/jira",
             label: "Jira",
             icon: Cable,
+            iconClass: "text-indigo-600 dark:text-indigo-400",
             match: (path: string) => path.startsWith("/app/jira"),
           },
           {
             href: "/app/teams",
             label: "Times",
             icon: FolderKanban,
+            iconClass: "text-emerald-600 dark:text-emerald-400",
             match: (path: string) => path.startsWith("/app/teams"),
           },
         ]
       : []),
+    {
+      href: "/app/conta",
+      label: "Conta",
+      icon: UserRound,
+      iconClass: "text-rose-600 dark:text-rose-400",
+      match: (path) => path.startsWith("/app/conta"),
+    },
   ];
 
   return (
@@ -127,7 +136,10 @@ export function AppChrome({ profile, children }: AppChromeProps) {
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                   )}
                 >
-                  <Icon className="size-3.5 opacity-80" strokeWidth={1.9} />
+                  <Icon
+                    className={cn("size-3.5 shrink-0", item.iconClass)}
+                    strokeWidth={1.9}
+                  />
                   <span className="truncate">{item.label}</span>
                 </Link>
               );
@@ -190,7 +202,10 @@ export function AppChrome({ profile, children }: AppChromeProps) {
                         : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                     )}
                   >
-                    <Icon className="size-4 opacity-80" strokeWidth={1.9} />
+                    <Icon
+                      className={cn("size-4 shrink-0", item.iconClass)}
+                      strokeWidth={1.9}
+                    />
                     {item.label}
                   </Link>
                 );
