@@ -95,7 +95,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const { closing, items } = payroll;
   const jiraHoursByDeveloper = await mapJiraDeliveryHoursByDeveloperForMonth({
     yearMonth: month,
-    developerIds: items.map((item) => item.developer_id),
+    developers: items.map((item) => ({
+      id: item.developer_id,
+      teamId: item.team_id,
+    })),
     teamId: selectedTeamId,
   });
   const selectedTeamName =
@@ -250,7 +253,8 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <p className="text-sm text-muted-foreground">
               Base + diferencial − descontos + deslocamento + refeição = valor
               NF. Total horas Jira = mesma fonte do Gestor (time spent dos cards
-              com entrega no mês). Diferença contratada = horas Jira − horas/mês
+              com entrega no mês), agregando o lote Compilado de cada time quando
+              o filtro é “todos”. Diferença contratada = horas Jira − horas/mês
               do cadastro (negativo = abaixo do mínimo; base para futuro banco
               de horas).
             </p>
