@@ -164,78 +164,68 @@ export function PayrollSinteticoExportButton({
 
                 <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-5">
                   <div className="overflow-x-auto rounded-md border border-border">
-                    <table className="w-full min-w-[920px] border-collapse text-sm">
+                    <table className="w-full min-w-[920px] border-collapse text-sm [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
                       <thead>
                         <tr>
                           <th
                             colSpan={7}
-                            className="border-b border-border bg-brand-soft px-3 py-3 text-center text-sm font-semibold tracking-tight text-brand-foreground capitalize"
+                            className="bg-brand-soft px-3 py-3 text-center text-sm font-semibold tracking-tight text-brand-foreground capitalize"
                           >
                             {model.monthTitle}
                           </th>
                         </tr>
                         <tr className="bg-muted/25 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                          <th className="border-b border-border px-3 py-2 text-center">
-                            Nome
-                          </th>
-                          <th className="border-b border-border px-3 py-2 text-center">
-                            Valor Base
-                          </th>
-                          <th className="border-b border-border px-3 py-2 text-center">
+                          <th className="px-3 py-2 text-center">Nome</th>
+                          <th className="px-3 py-2 text-center">Valor Base</th>
+                          <th className="px-3 py-2 text-center">
                             Diferencial (+)
                           </th>
-                          <th className="border-b border-border px-3 py-2 text-center">
+                          <th className="px-3 py-2 text-center">
                             Descontos (−)
                           </th>
-                          <th
-                            colSpan={2}
-                            className="border-b border-border px-3 py-2 text-center"
-                          >
+                          <th colSpan={2} className="px-3 py-2 text-center">
                             Reembolso
                           </th>
-                          <th className="border-b border-border px-3 py-2 text-center">
+                          <th className="px-3 py-2 text-center">
                             Valor da Nota Fiscal
                           </th>
                         </tr>
                         <tr className="bg-muted/10 text-center text-[11px] font-medium text-muted-foreground">
-                          <th className="border-b border-border px-3 py-2" />
-                          <th className="border-b border-border px-3 py-2" />
-                          <th className="border-b border-border px-3 py-2" />
-                          <th className="border-b border-border px-3 py-2" />
-                          <th className="border-b border-border px-3 py-2 text-center font-normal normal-case">
+                          <th className="px-3 py-2" />
+                          <th className="px-3 py-2" />
+                          <th className="px-3 py-2" />
+                          <th className="px-3 py-2" />
+                          <th className="px-3 py-2 text-center font-normal normal-case">
                             {model.travelHeader}
                           </th>
-                          <th className="border-b border-border px-3 py-2 text-center font-normal normal-case">
+                          <th className="px-3 py-2 text-center font-normal normal-case">
                             {model.mealHeader}
                           </th>
-                          <th className="border-b border-border px-3 py-2" />
+                          <th className="px-3 py-2" />
                         </tr>
                       </thead>
                       <tbody>
                         {model.rows.map((row, index) => (
-                          <tr
-                            key={`${row.developerName}-${index}`}
-                            className="border-b border-border/70"
-                          >
-                            <td className="px-3 py-2.5 font-medium">
+                          <tr key={`${row.developerName}-${index}`}>
+                            <td className="px-3 py-2.5 text-center font-medium">
                               {row.developerName}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums">
+                            <td className="px-3 py-2.5 text-center tabular-nums">
                               {formatSinteticoMoney(row.baseAmount)}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums">
+                            <td className="px-3 py-2.5 text-center tabular-nums">
                               {formatSinteticoMoney(row.differentialAmount)}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums">
+                            <td className="px-3 py-2.5 text-center tabular-nums">
                               {formatSinteticoMoney(row.discountsAmount)}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums">
+                            <td className="px-3 py-2.5 text-center tabular-nums">
                               {formatSinteticoMoney(row.travelAmount)}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums">
+                            <td className="px-3 py-2.5 text-center tabular-nums">
                               {formatSinteticoMoney(row.mealAmount)}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums font-medium">
+                            <td className="px-3 py-2.5 text-center tabular-nums font-medium">
                               {formatSinteticoMoney(row.invoiceAmount)}
                             </td>
                           </tr>
@@ -243,25 +233,25 @@ export function PayrollSinteticoExportButton({
                       </tbody>
                       <tfoot>
                         <tr className="bg-brand-soft font-semibold text-brand-foreground">
-                          <td className="px-3 py-2.5">Total</td>
-                          <td className="px-3 py-2.5 tabular-nums">
+                          <td className="px-3 py-2.5 text-center">Total</td>
+                          <td className="px-3 py-2.5 text-center tabular-nums">
                             {formatSinteticoMoneyTotal(model.totals.base)}
                           </td>
-                          <td className="px-3 py-2.5 tabular-nums">
+                          <td className="px-3 py-2.5 text-center tabular-nums">
                             {formatSinteticoMoneyTotal(
                               model.totals.differential,
                             )}
                           </td>
-                          <td className="px-3 py-2.5 tabular-nums">
+                          <td className="px-3 py-2.5 text-center tabular-nums">
                             {formatSinteticoMoneyTotal(model.totals.discounts)}
                           </td>
-                          <td className="px-3 py-2.5 tabular-nums">
+                          <td className="px-3 py-2.5 text-center tabular-nums">
                             {formatSinteticoMoneyTotal(model.totals.travel)}
                           </td>
-                          <td className="px-3 py-2.5 tabular-nums">
+                          <td className="px-3 py-2.5 text-center tabular-nums">
                             {formatSinteticoMoneyTotal(model.totals.meal)}
                           </td>
-                          <td className="px-3 py-2.5 tabular-nums">
+                          <td className="px-3 py-2.5 text-center tabular-nums">
                             {formatSinteticoMoneyTotal(model.totals.invoice)}
                           </td>
                         </tr>
