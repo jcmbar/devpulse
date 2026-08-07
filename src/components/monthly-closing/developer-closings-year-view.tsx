@@ -93,6 +93,30 @@ function formatHours(value: number): string {
   })} h`;
 }
 
+/** Distinct month accent bands (Jan → Dec) — seasonal blues → greens → warm. */
+const MONTH_BAND_COLORS = [
+  "#1d4ed8", // Jan
+  "#2563eb", // Fev
+  "#0284c7", // Mar
+  "#0891b2", // Abr
+  "#0d9488", // Mai
+  "#65a30d", // Jun
+  "#ca8a04", // Jul
+  "#d97706", // Ago
+  "#ea580c", // Set
+  "#dc2626", // Out
+  "#be123c", // Nov
+  "#334155", // Dez
+] as const;
+
+function monthBandColor(yearMonth: string): string {
+  const monthPart = Number(yearMonth.split("-")[1]);
+  if (!Number.isFinite(monthPart) || monthPart < 1 || monthPart > 12) {
+    return MONTH_BAND_COLORS[0];
+  }
+  return MONTH_BAND_COLORS[monthPart - 1];
+}
+
 function shortMonthLabel(yearMonth: string): string {
   const [year, monthPart] = yearMonth.split("-");
   const date = new Date(Number(year), Number(monthPart) - 1, 1);
@@ -447,74 +471,81 @@ function MonthGridCard({
 }) {
   const status = rowStatus(row);
   const openLabel = actionLabel(isOpen, status, row.closing?.started_at);
+  const bandColor = monthBandColor(row.yearMonth);
 
   return (
     <div
       aria-current={isOpen ? "true" : undefined}
       className={cn(
-        "group flex h-full flex-col gap-2 rounded-[var(--radius)] border border-border/80 bg-card p-3 transition",
-        isOpen && "border-brand/55 bg-brand-soft/35 ring-1 ring-brand/30",
+        "group flex h-full flex-col overflow-hidden rounded-[var(--radius)] border border-border/80 bg-card shadow-[var(--shadow-sm)] transition",
+        isOpen && "border-brand/55 ring-1 ring-brand/30",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold tracking-tight text-foreground">
-            {shortMonthLabel(row.yearMonth)}
-          </p>
-          <p className="truncate text-[10px] text-muted-foreground">
-            {formatYearMonthLabel(row.yearMonth)}
-          </p>
-        </div>
-        <MonthlyClosingStatusBadge
-          status={status}
-          className="shrink-0 px-1.5 py-0.5 text-[10px]"
-        />
+      <div
+        className="px-3 py-1.5"
+        style={{ backgroundColor: bandColor }}
+      >
+        <p className="ui-kpi-hero__band-label text-white">
+          {shortMonthLabel(row.yearMonth)}
+        </p>
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] tabular-nums">
-        <div>
-          <dt className="text-muted-foreground">Cards</dt>
-          <dd className="font-semibold text-foreground">
-            {row.metrics.totalCards}
-          </dd>
+      <div className="flex flex-1 flex-col gap-2 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 truncate text-[10px] text-muted-foreground">
+            {formatYearMonthLabel(row.yearMonth)}
+          </p>
+          <MonthlyClosingStatusBadge
+            status={status}
+            className="shrink-0 px-1.5 py-0.5 text-[10px]"
+          />
         </div>
-        <div>
-          <dt className="text-muted-foreground">Atraso</dt>
-          <dd className="font-semibold text-foreground">
-            {row.metrics.delayedCardsNet}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Aprov.</dt>
-          <dd className="font-semibold text-foreground">
-            {formatPercent(row.metrics.utilizationRate)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Índ.</dt>
-          <dd className="font-semibold text-foreground">
-            {formatDeliveryIndex(row.metrics.deliveryIndex)}
-          </dd>
-        </div>
-      </dl>
 
-      <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-2">
-        <p className="min-w-0 text-[11px] font-medium tabular-nums text-foreground">
-          {formatHours(row.metrics.totalTimeSpentHours)}
-          <span className="ml-1 font-normal text-muted-foreground">
-            realizadas
-          </span>
-        </p>
-        <button
-          type="button"
-          onClick={onToggle}
-          className={cn(
-            "ui-btn-secondary shrink-0 px-2 py-1 text-[11px]",
-            isOpen && "ui-btn-ghost",
-          )}
-        >
-          {openLabel}
-        </button>
+        <dl className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] tabular-nums">
+          <div>
+            <dt className="text-muted-foreground">Cards</dt>
+            <dd className="font-semibold text-foreground">
+              {row.metrics.totalCards}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Atraso</dt>
+            <dd className="font-semibold text-foreground">
+              {row.metrics.delayedCardsNet}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Aprov.</dt>
+            <dd className="font-semibold text-foreground">
+              {formatPercent(row.metrics.utilizationRate)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Índ.</dt>
+            <dd className="font-semibold text-foreground">
+              {formatDeliveryIndex(row.metrics.deliveryIndex)}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-2">
+          <p className="min-w-0 text-[11px] font-medium tabular-nums text-foreground">
+            {formatHours(row.metrics.totalTimeSpentHours)}
+            <span className="ml-1 font-normal text-muted-foreground">
+              realizadas
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onToggle}
+            className={cn(
+              "shrink-0 px-2.5 py-1 text-[11px] font-semibold",
+              isOpen ? "ui-btn-ghost" : "ui-btn-primary",
+            )}
+          >
+            {openLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

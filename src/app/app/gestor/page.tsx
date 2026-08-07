@@ -316,9 +316,6 @@ export default async function GestorDashboardPage({
             <Link href={configHref} className="ui-btn-secondary">
               Capacidade
             </Link>
-            <Link href="/app/gestor/config/emails" className="ui-btn-secondary">
-              E-mails
-            </Link>
             {syncTarget ? (
               <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:items-end">
                 {syncStatusSummaries.length > 0 ? (

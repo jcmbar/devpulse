@@ -8,11 +8,14 @@ import { getRoleLabel } from "@/lib/auth/role-labels";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/types/profile";
 import {
+  Building2,
   Cable,
+  CalendarDays,
   FolderKanban,
   Home,
   LayoutDashboard,
   LogOut,
+  Mail,
   Menu,
   Upload,
   UserRound,
@@ -66,7 +69,12 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             label: "Gestor",
             icon: LayoutDashboard,
             iconClass: "text-teal-600 dark:text-teal-400",
-            match: (path: string) => path.startsWith("/app/gestor"),
+            match: (path: string) =>
+              path.startsWith("/app/gestor") &&
+              !path.startsWith("/app/gestor/config/emails") &&
+              !path.startsWith("/app/gestor/folha/empresas") &&
+              path !== "/app/gestor/config" &&
+              !path.startsWith("/app/gestor/config?"),
           },
           {
             href: "/app/developers",
@@ -74,6 +82,31 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             icon: Users,
             iconClass: "text-amber-600 dark:text-amber-400",
             match: (path: string) => path.startsWith("/app/developers"),
+          },
+          {
+            href: "/app/gestor/config/emails",
+            label: "E-mails",
+            icon: Mail,
+            iconClass: "text-orange-600 dark:text-orange-400",
+            match: (path: string) =>
+              path.startsWith("/app/gestor/config/emails"),
+          },
+          {
+            href: "/app/gestor/folha/empresas",
+            label: "Empresas",
+            icon: Building2,
+            iconClass: "text-lime-600 dark:text-lime-400",
+            match: (path: string) =>
+              path.startsWith("/app/gestor/folha/empresas"),
+          },
+          {
+            href: "/app/gestor/config#feriados",
+            label: "Feriados",
+            icon: CalendarDays,
+            iconClass: "text-yellow-600 dark:text-yellow-400",
+            match: (path: string) =>
+              path === "/app/gestor/config" ||
+              path.startsWith("/app/gestor/config?"),
           },
           {
             href: "/app/imports",
