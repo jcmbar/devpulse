@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { User } from "@supabase/supabase-js";
+import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   classifyAccessInviteState,
@@ -336,13 +337,6 @@ export function formatAccessDate(value: string | null): string | null {
     return null;
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
+  const formatted = formatDateTimeShortBrazil(value, "");
+  return formatted || null;
 }

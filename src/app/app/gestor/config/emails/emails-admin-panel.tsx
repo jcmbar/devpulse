@@ -5,6 +5,8 @@ import {
   deleteEmailTypeRecipientAction,
   upsertEmailTemplateAction,
 } from "@/app/app/gestor/email-actions";
+import { EmailSmtpTestCard } from "@/app/app/gestor/config/emails/email-smtp-test-card";
+import type { ZeptoMailSmtpPublicStatus } from "@/lib/email/zeptomail-smtp-config";
 import { cn } from "@/lib/utils";
 import type {
   EmailSendType,
@@ -21,6 +23,9 @@ type Props = {
   templates: EmailTemplate[];
   recipientsByTypeId: Record<string, EmailTypeRecipient[]>;
   previewByTemplateId: Record<string, { subject: string; html: string }>;
+  smtpStatus: ZeptoMailSmtpPublicStatus;
+  defaultTestTo: string;
+  canSendSmtpTest: boolean;
 };
 
 export function OperationalEmailsAdminPanel({
@@ -28,6 +33,9 @@ export function OperationalEmailsAdminPanel({
   templates,
   recipientsByTypeId,
   previewByTemplateId,
+  smtpStatus,
+  defaultTestTo,
+  canSendSmtpTest,
 }: Props) {
   const router = useRouter();
   const [selectedTypeId, setSelectedTypeId] = useState(
@@ -113,6 +121,12 @@ export function OperationalEmailsAdminPanel({
 
   return (
     <div className="space-y-6">
+      <EmailSmtpTestCard
+        defaultTo={defaultTestTo}
+        smtpStatus={smtpStatus}
+        canSend={canSendSmtpTest}
+      />
+
       <div className="flex flex-wrap gap-2">
         {sendTypes.map((type) => (
           <button

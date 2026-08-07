@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import {
   resolvedSourceLabel,
   type CompiladoResolvedSource,
@@ -14,14 +15,8 @@ type CompiladoProvenanceBadgeProps = {
 };
 
 function formatUpdatedAt(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return date.toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  const formatted = formatDateTimeShortBrazil(iso, "");
+  return formatted || iso;
 }
 
 export function CompiladoProvenanceBadge({

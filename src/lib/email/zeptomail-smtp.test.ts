@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach, afterEach } from "node:test";
-import { getZeptoMailSmtpConfig } from "./zeptomail-smtp-config.ts";
+import {
+  getZeptoMailSmtpConfig,
+  getZeptoMailSmtpPublicStatus,
+} from "./zeptomail-smtp-config.ts";
 
 const ENV_KEYS = [
   "ZEPTOMAIL_SMTP_HOST",
@@ -46,13 +49,38 @@ describe("getZeptoMailSmtpConfig", () => {
     assert.equal(config.secure, false);
   });
 
-  it("accepts SMTP_PASS alias", () => {
+  it("prefers ZEPTOMAIL_SMTP_PASSWORD over SMTP_PASS", () => {
+    process.env.ZEPTOMAIL_SMTP_PASSWORD = "primary-secret";
+    process.env.SMTP_PASS = "fallback-secret";
+    const config = getZeptoMailSmtpConfig();
+    assert.equal(config.password, "primary-secret");
+  });
+
+  it("accepts SMTP_PASS as temporary fallback", () => {
     process.env.SMTP_PASS = "alias-secret";
     const config = getZeptoMailSmtpConfig();
     assert.equal(config.password, "alias-secret");
   });
 
-  it("throws when password is missing", () => {
-    assert.throws(() => getZeptoMailSmtpConfig(), /ZEPTOMAIL_SMTP_PASSWORD/);
+  it("unwraps quoted password values", () => {
+    process.env.ZEPTOMAIL_SMTP_PASSWORD = '"quoted-secret"';
+    const config = getZeptoMailSmtpConfig();
+    assert.equal(config.password, "quoted-secret");
+  });
+
+  it("throws a clear hint when password is missing", () => {
+    assert.throws(
+      () => getZeptoMailSmtpConfig(),
+      /Configure ZEPTOMAIL_SMTP_PASSWORD/,
+    );
+  });
+
+  it("exposes public status without the password", () => {
+    process.env.ZEPTOMAIL_SMTP_PASSWORD = "secret-token";
+    const status = getZeptoMailSmtpPublicStatus();
+    assert.equal(status.passwordConfigured, true);
+    assert.equal(status.missingHint, null);
+    assert.equal(status.host, "smtp.zeptomail.com");
+    assert.ok(!("password" in status));
   });
 });

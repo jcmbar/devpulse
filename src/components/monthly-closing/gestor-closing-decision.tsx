@@ -11,6 +11,7 @@ import {
 } from "@/app/app/monthly-closing-actions";
 import { FinanceiroEmailSendButton } from "@/components/monthly-closing/financeiro-email-send-button";
 import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
@@ -236,9 +237,9 @@ export function GestorClosingDecisionPanel({
             {closing.jira_changed_after_finalized_at ? (
               <span className="mt-1 block text-xs opacity-80">
                 Detectado em{" "}
-                {new Date(
+                {formatDateTimeBrazil(
                   closing.jira_changed_after_finalized_at,
-                ).toLocaleString("pt-BR")}
+                )}
               </span>
             ) : null}
           </p>
@@ -326,7 +327,7 @@ export function GestorClosingDecisionPanel({
             {closing.manager_rejected_at ? (
               <p className="text-xs text-muted-foreground">
                 Reprovado em{" "}
-                {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
+                {formatDateTimeBrazil(closing.manager_rejected_at)}
               </p>
             ) : null}
           </div>

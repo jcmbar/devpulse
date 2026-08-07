@@ -7,6 +7,7 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
 import { getDeveloperAdmin } from "@/services/developers/admin";
@@ -201,7 +202,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
             </dt>
             <dd>
               {closing.submitted_at
-                ? new Date(closing.submitted_at).toLocaleString("pt-BR")
+                ? formatDateTimeBrazil(closing.submitted_at)
                 : "—"}
             </dd>
           </div>
@@ -211,7 +212,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
             </dt>
             <dd>
               {closing.snapshot_generated_at
-                ? new Date(closing.snapshot_generated_at).toLocaleString("pt-BR")
+                ? formatDateTimeBrazil(closing.snapshot_generated_at)
                 : "—"}
             </dd>
           </div>
@@ -303,7 +304,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">{event.event_type}</span>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(event.created_at).toLocaleString("pt-BR")}
+                    {formatDateTimeBrazil(event.created_at)}
                   </span>
                 </div>
                 {(event.from_status || event.to_status) && (

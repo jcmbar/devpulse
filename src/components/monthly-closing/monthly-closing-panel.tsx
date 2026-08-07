@@ -10,6 +10,7 @@ import {
 } from "@/components/monthly-closing/closing-submit-values-modal";
 import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
@@ -306,9 +307,7 @@ export function MonthlyClosingControls({
                 </p>
                 {closing.manager_rejected_at ? (
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {new Date(closing.manager_rejected_at).toLocaleString(
-                      "pt-BR",
-                    )}
+                    {formatDateTimeBrazil(closing.manager_rejected_at)}
                   </p>
                 ) : null}
               </div>

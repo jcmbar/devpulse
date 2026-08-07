@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MonthlyClosingStatusBadge } from "@/components/monthly-closing/monthly-closing-panel";
 import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import type { MonthlyClosing } from "@/types/monthly-closing";
 import { AlertTriangle } from "lucide-react";
@@ -97,7 +98,7 @@ export function GestorClosingsInReviewSection({
                   </td>
                   <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
                     {row.submitted_at
-                      ? new Date(row.submitted_at).toLocaleString("pt-BR")
+                      ? formatDateTimeBrazil(row.submitted_at)
                       : "—"}
                   </td>
                   <td className="text-right">

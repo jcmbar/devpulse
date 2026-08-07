@@ -18,6 +18,7 @@ import {
   resolveJiraFieldMappings,
   type JiraMappingReadiness,
 } from "@/lib/jira/field-mappings";
+import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import { useActionState, useCallback, useMemo, useState } from "react";
 import {
   saveJiraIntegrationAction,
@@ -216,12 +217,7 @@ export function JiraAdminPanel({
             label="Último sync OK"
             value={
               lastOkSync
-                ? new Date(lastOkSync).toLocaleString("pt-BR", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
+                ? formatDateTimeShortBrazil(lastOkSync)
                 : "—"
             }
             tone={lastOkSync ? "success" : "neutral"}

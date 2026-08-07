@@ -2,6 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
+import {
+  checkSmtpTestRateLimit,
+  markSmtpTestSent,
+} from "@/lib/email/smtp-test-rate-limit";
+import { sanitizeSmtpErrorMessage } from "@/lib/email/zeptomail-smtp";
+import { ZEPTOMAIL_SMTP_PASSWORD_HINT } from "@/lib/email/zeptomail-smtp-config";
 import {
   addEmailTypeRecipient,
   deleteEmailTypeRecipient,
@@ -10,6 +17,10 @@ import {
   sendOperationalClosingEmail,
   upsertEmailTemplate,
 } from "@/services/operational-emails";
+import {
+  isValidTestEmailAddress,
+  sendOperationalTestEmail,
+} from "@/services/operational-emails/send-test";
 import {
   getMonthlyClosingById,
   listMonthlyClosingAttachments,
@@ -25,6 +36,15 @@ import type {
 
 export type OperationalEmailActionResult =
   | { ok: true }
+  | { ok: false; error: string };
+
+export type SendOperationalEmailTestActionResult =
+  | {
+      ok: true;
+      to: string;
+      sentAt: string;
+      sentAtLabel: string;
+    }
   | { ok: false; error: string };
 
 function revalidateEmailPaths(closingId?: string) {
@@ -256,5 +276,57 @@ export async function listOperationalSendTypeIdsAction(): Promise<
       error:
         error instanceof Error ? error.message : "Falha ao carregar tipos.",
     };
+  }
+}
+
+/**
+ * One-off SMTP connectivity test for admins.
+ * Uses the same ZeptoMail transport as operational emails (single recipient only).
+ */
+export async function sendOperationalEmailTestAction(
+  formData: FormData,
+): Promise<SendOperationalEmailTestActionResult> {
+  try {
+    const context = await requireTeamAccess();
+    if (context.profile.role !== "admin") {
+      return {
+        ok: false,
+        error: "Apenas administradores podem enviar e-mail de teste.",
+      };
+    }
+
+    const to = String(formData.get("to") ?? "").trim().toLowerCase();
+    if (!isValidTestEmailAddress(to)) {
+      return {
+        ok: false,
+        error: "Informe um e-mail de destinatário válido.",
+      };
+    }
+
+    const rate = checkSmtpTestRateLimit(context.user.id);
+    if (!rate.allowed) {
+      return {
+        ok: false,
+        error: `Aguarde ${rate.retryAfterSeconds}s antes de enviar outro teste.`,
+      };
+    }
+
+    const result = await sendOperationalTestEmail({ to });
+    markSmtpTestSent(context.user.id);
+
+    return {
+      ok: true,
+      to: result.to,
+      sentAt: result.sentAt,
+      sentAtLabel: formatDateTimeBrazil(result.sentAt),
+    };
+  } catch (error) {
+    const raw =
+      error instanceof Error ? error.message : "Falha ao enviar e-mail de teste.";
+    const sanitized = sanitizeSmtpErrorMessage(raw);
+    if (/ZEPTOMAIL_SMTP_PASSWORD|Senha SMTP|password/i.test(raw)) {
+      return { ok: false, error: ZEPTOMAIL_SMTP_PASSWORD_HINT };
+    }
+    return { ok: false, error: sanitized };
   }
 }

@@ -22,6 +22,7 @@ import {
   type FechamentoOpsStatus,
 } from "@/lib/fechamentos/ops-status";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
+import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
 import type { Team } from "@/types/team";
 import { RefreshCw } from "lucide-react";
@@ -592,16 +593,7 @@ export function GestorFechamentosOpsBoard({
                         </td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground tabular-nums">
                           {cell.lastUpdatedAt
-                            ? new Date(cell.lastUpdatedAt).toLocaleString(
-                                "pt-BR",
-                                {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                },
-                              )
+                            ? formatDateTimeShortBrazil(cell.lastUpdatedAt)
                             : "—"}
                         </td>
                         <td

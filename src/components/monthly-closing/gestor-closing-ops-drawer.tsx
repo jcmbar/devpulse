@@ -14,6 +14,7 @@ import {
   opsStatusToneClass,
 } from "@/lib/fechamentos/ops-status";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
 import type {
   MonthlyClosing,
@@ -400,7 +401,7 @@ export function GestorClosingOpsDrawer({
                           {eventLabel(event.event_type)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(event.created_at).toLocaleString("pt-BR")}
+                          {formatDateTimeBrazil(event.created_at)}
                         </p>
                       </li>
                     ))}

@@ -7,6 +7,7 @@ import {
   type PayrollFormState,
 } from "@/app/app/gestor/folha/actions";
 import { FormFeedback } from "@/components/ui/form";
+import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
 import {
   COMPENSATION_BASE_TYPE_LABELS,
@@ -366,7 +367,7 @@ export function PayrollItemEditor({
               <span className="text-xs text-emerald-700 dark:text-emerald-300">
                 Conferido
                 {item.reviewed_at
-                  ? ` · ${new Date(item.reviewed_at).toLocaleString("pt-BR")}`
+                  ? ` · ${formatDateTimeBrazil(item.reviewed_at)}`
                   : ""}
               </span>
             ) : null}

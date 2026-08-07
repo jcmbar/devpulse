@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
+import { getZeptoMailSmtpPublicStatus } from "@/lib/email/zeptomail-smtp-config";
 import {
   listEmailSendTypes,
   listEmailTemplates,
@@ -12,10 +14,13 @@ import {
 } from "@/services/operational-emails";
 
 export default async function GestorEmailsConfigPage() {
-  await requireTeamAccess();
+  const context = await requireTeamAccess();
 
   const sendTypes = await listEmailSendTypes();
   const templates = await listEmailTemplates();
+  const smtpStatus = getZeptoMailSmtpPublicStatus();
+  const envelope = resolveOperationalEmailEnvelope();
+  const canSendSmtpTest = context.profile.role === "admin";
 
   const recipientsByTypeId: Record<
     string,
@@ -68,6 +73,9 @@ export default async function GestorEmailsConfigPage() {
           templates={templates}
           recipientsByTypeId={recipientsByTypeId}
           previewByTemplateId={previewByTemplateId}
+          smtpStatus={smtpStatus}
+          defaultTestTo={envelope.replyTo}
+          canSendSmtpTest={canSendSmtpTest}
         />
       </Surface>
     </PageShell>
