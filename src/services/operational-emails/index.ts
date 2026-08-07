@@ -380,18 +380,34 @@ function buildClosingVariables(input: {
   developerName: string;
   developerEmail: string;
   template: EmailTemplate;
+  /** Optional Folha amounts when closing snapshot values are null. */
+  folha?: {
+    invoice_amount: number | null;
+    base_amount: number | null;
+    differential_amount: number | null;
+    travel_amount: number | null;
+    meal_amount: number | null;
+  } | null;
 }): Record<string, string> {
-  const { closing, developerName, developerEmail, template } = input;
+  const { closing, developerName, developerEmail, template, folha } = input;
+  const money = (
+    closingValue: number | null | undefined,
+    folhaValue: number | null | undefined,
+  ) => formatClosingMoney(closingValue ?? folhaValue ?? null);
+
   return {
     developer_name: developerName,
     developer_email: developerEmail,
     year_month: closing.year_month,
     year_month_label: formatYearMonthLabel(closing.year_month),
-    base_amount: formatClosingMoney(closing.compensation_base_amount),
-    differential_amount: formatClosingMoney(closing.differential_amount),
-    travel_amount: formatClosingMoney(closing.travel_amount),
-    meal_amount: formatClosingMoney(closing.meal_amount),
-    invoice_amount: formatClosingMoney(closing.invoice_amount),
+    base_amount: money(closing.compensation_base_amount, folha?.base_amount),
+    differential_amount: money(
+      closing.differential_amount,
+      folha?.differential_amount,
+    ),
+    travel_amount: money(closing.travel_amount, folha?.travel_amount),
+    meal_amount: money(closing.meal_amount, folha?.meal_amount),
+    invoice_amount: money(closing.invoice_amount, folha?.invoice_amount),
     worked_hours:
       closing.worked_hours_snapshot == null
         ? "—"
@@ -403,6 +419,51 @@ function buildClosingVariables(input: {
     logo_url: template.logo_url ?? "",
     banner_url: template.banner_url ?? "",
     signature_html: template.signature_html ?? "",
+  };
+}
+
+/** Prefer closing snapshot; if empty, use Folha line for the same month. */
+async function loadFolhaAmountFallback(input: {
+  developerId: string;
+  yearMonth: string;
+}): Promise<{
+  invoice_amount: number | null;
+  base_amount: number | null;
+  differential_amount: number | null;
+  travel_amount: number | null;
+  meal_amount: number | null;
+} | null> {
+  const admin = createAdminClient();
+  const { data: monthClosing, error: monthError } = await admin
+    .from("payroll_month_closings")
+    .select("id")
+    .eq("year_month", input.yearMonth)
+    .maybeSingle();
+  if (monthError || !monthClosing) {
+    return null;
+  }
+  const { data: item, error: itemError } = await admin
+    .from("payroll_closing_items")
+    .select(
+      "invoice_amount, base_amount, differential_amount, travel_amount, meal_amount",
+    )
+    .eq("payroll_closing_id", monthClosing.id)
+    .eq("developer_id", input.developerId)
+    .maybeSingle();
+  if (itemError || !item) {
+    return null;
+  }
+  return {
+    invoice_amount:
+      item.invoice_amount == null ? null : Number(item.invoice_amount),
+    base_amount: item.base_amount == null ? null : Number(item.base_amount),
+    differential_amount:
+      item.differential_amount == null
+        ? null
+        : Number(item.differential_amount),
+    travel_amount:
+      item.travel_amount == null ? null : Number(item.travel_amount),
+    meal_amount: item.meal_amount == null ? null : Number(item.meal_amount),
   };
 }
 
@@ -658,11 +719,26 @@ export async function sendOperationalClosingEmail(input: {
     developerEmail,
   });
 
+  const needsFolhaFallback =
+    closing.invoice_amount == null ||
+    closing.compensation_base_amount == null ||
+    closing.travel_amount == null ||
+    closing.meal_amount == null ||
+    closing.differential_amount == null;
+
+  const folha = needsFolhaFallback
+    ? await loadFolhaAmountFallback({
+        developerId: closing.developer_id,
+        yearMonth: closing.year_month,
+      })
+    : null;
+
   const vars = buildClosingVariables({
     closing,
     developerName: developer.full_name,
     developerEmail: developerEmail ?? "",
     template,
+    folha,
   });
 
   const subject = renderEmailTemplate(template.subject_template, vars);
