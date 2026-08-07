@@ -17,8 +17,9 @@ import {
   listMonthlyClosingItems,
   loadMonthlyClosingAuditForDeveloper,
   rejectMonthlyClosing,
-  reviewMealPixReceipt,
+  restoreMonthlyClosingToInReview,
   revertMonthlyClosingStatus,
+  reviewMealPixReceipt,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
   uploadMonthlyClosingAttachment,
@@ -192,6 +193,34 @@ export async function rejectMonthlyClosingAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível reprovar o fechamento.",
+    };
+  }
+}
+
+export async function restoreMonthlyClosingToInReviewAction(input: {
+  closingId: string;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile } = await requireTeamAccess();
+    if (!input.closingId.trim()) {
+      return { ok: false, error: "Fechamento inválido." };
+    }
+    const closing = await restoreMonthlyClosingToInReview({
+      closingId: input.closingId.trim(),
+      actorUserId: profile.id,
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/gestor");
+    revalidatePath("/app/gestor/fechamentos");
+    revalidatePath(`/app/gestor/fechamentos/${closing.id}`);
+    return { ok: true, closingId: closing.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível recolocar o fechamento em análise.",
     };
   }
 }

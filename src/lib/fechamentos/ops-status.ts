@@ -96,7 +96,12 @@ export function deriveFechamentoOpsStatus(input: {
     return "pendente";
   }
 
-  if (closing.status === "in_review" || closing.status === "rejected") {
+  if (closing.status === "rejected") {
+    // Aguardando o developer ajustar e reenviar — não é fila de aprovação.
+    return "pendente";
+  }
+
+  if (closing.status === "in_review") {
     return "em_analise";
   }
 

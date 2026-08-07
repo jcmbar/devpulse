@@ -1041,6 +1041,57 @@ export async function rejectMonthlyClosing(input: {
   return updated;
 }
 
+/**
+ * Gestor shortcut: put a rejected closing back into the approval queue
+ * without waiting for the developer to resubmit (snapshot stays intact).
+ */
+export async function restoreMonthlyClosingToInReview(input: {
+  closingId: string;
+  actorUserId: string;
+}): Promise<MonthlyClosing> {
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.status !== "rejected") {
+    throw new Error(
+      "Só é possível recolocar em fechamento os que estão em ajuste necessário.",
+    );
+  }
+  assertEditableClosing(closing);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update({
+      status: "in_review",
+      manager_rejected_at: null,
+      manager_rejected_by_user_id: null,
+    })
+    .eq("id", closing.id)
+    .eq("status", "rejected")
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(
+      `Falha ao recolocar em fechamento: ${error.message}`,
+    );
+  }
+
+  const updated = mapClosing(data as Record<string, unknown>);
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "status_reverted",
+    fromStatus: "rejected",
+    toStatus: "in_review",
+    actorUserId: input.actorUserId,
+    payload: { action: "restore_to_in_review" },
+  });
+
+  return updated;
+}
+
 export async function listMonthlyClosingAttachments(
   closingId: string,
 ): Promise<MonthlyClosingAttachment[]> {

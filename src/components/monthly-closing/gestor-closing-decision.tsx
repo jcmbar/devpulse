@@ -5,6 +5,7 @@ import {
   finalizeMonthlyClosingAction,
   getMonthlyClosingAttachmentUrlAction,
   rejectMonthlyClosingAction,
+  restoreMonthlyClosingToInReviewAction,
   reviewMealPixReceiptAction,
   revertMonthlyClosingStatusAction,
 } from "@/app/app/monthly-closing-actions";
@@ -79,6 +80,7 @@ export function GestorClosingDecisionPanel({
   const [mode, setMode] = useState<"approve" | "reject">("approve");
   const [error, setError] = useState<string | null>(null);
   const [confirmRevert, setConfirmRevert] = useState(false);
+  const [confirmRestoreReview, setConfirmRestoreReview] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const invoice =
@@ -175,6 +177,22 @@ export function GestorClosingDecisionPanel({
         return;
       }
       setConfirmRevert(false);
+      router.refresh();
+    });
+  }
+
+  function restoreToInReview() {
+    setError(null);
+    startTransition(async () => {
+      const result = await restoreMonthlyClosingToInReviewAction({
+        closingId: closing.id,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        setConfirmRestoreReview(false);
+        return;
+      }
+      setConfirmRestoreReview(false);
       router.refresh();
     });
   }
@@ -297,19 +315,72 @@ export function GestorClosingDecisionPanel({
       ) : null}
 
       {closing.status === "rejected" ? (
-        <section className="space-y-2 rounded-[var(--radius)] border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm">
-          <h3 className="font-semibold tracking-tight">
-            Devolvido ao developer
-          </h3>
-          <p className="text-pretty whitespace-pre-wrap">
-            {closing.manager_rejection_notes}
-          </p>
-          {closing.manager_rejected_at ? (
-            <p className="text-xs text-muted-foreground">
-              Reprovado em{" "}
-              {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
+        <section className="space-y-3 rounded-[var(--radius)] border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm">
+          <div className="space-y-2">
+            <h3 className="font-semibold tracking-tight">
+              Devolvido ao developer
+            </h3>
+            <p className="text-pretty whitespace-pre-wrap">
+              {closing.manager_rejection_notes}
             </p>
-          ) : null}
+            {closing.manager_rejected_at ? (
+              <p className="text-xs text-muted-foreground">
+                Reprovado em{" "}
+                {new Date(closing.manager_rejected_at).toLocaleString("pt-BR")}
+              </p>
+            ) : null}
+          </div>
+
+          {confirmRestoreReview ? (
+            <div className="space-y-3 rounded-[var(--radius-sm)] border border-brand/40 bg-brand-soft/40 p-3">
+              <p className="text-sm text-pretty">
+                Recolocar em <span className="font-medium">Em fechamento</span>{" "}
+                sem aguardar o reenvio do developer. O snapshot atual permanece
+                e os botões de aprovar/devolver voltam a aparecer.
+              </p>
+              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={restoreToInReview}
+                  disabled={pending}
+                  className="ui-btn-primary disabled:opacity-50"
+                >
+                  {pending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-3.5" strokeWidth={2} />
+                  )}
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmRestoreReview(false);
+                    setError(null);
+                  }}
+                  disabled={pending}
+                  className="ui-btn-secondary"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmRestoreReview(true);
+                setConfirmRevert(false);
+                setError(null);
+              }}
+              disabled={pending}
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-brand/40 bg-brand-soft px-3.5 text-sm font-semibold hover:bg-brand-soft/80 disabled:opacity-50"
+            >
+              <CheckCircle2 className="size-3.5" strokeWidth={2} />
+              Recolocar em fechamento
+            </button>
+          )}
         </section>
       ) : null}
 
