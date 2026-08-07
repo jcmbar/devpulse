@@ -7,7 +7,7 @@ import {
 } from "@/app/app/gestor/email-actions";
 import { EmailSmtpTestCard } from "@/app/app/gestor/config/emails/email-smtp-test-card";
 import { EmailAttachmentBackupsPanel } from "@/app/app/gestor/config/emails/email-attachment-backups-panel";
-import type { EmailDispatchAttachmentBackup } from "@/lib/email/attachment-backup-path";
+import type { EmailDispatchAttachmentBackupListItem } from "@/lib/email/attachment-backup-path";
 import type { ZeptoMailSmtpPublicStatus } from "@/lib/email/zeptomail-smtp-config";
 import { cn } from "@/lib/utils";
 import type {
@@ -28,7 +28,7 @@ type Props = {
   smtpStatus: ZeptoMailSmtpPublicStatus;
   defaultTestTo: string;
   canSendSmtpTest: boolean;
-  attachmentBackups: EmailDispatchAttachmentBackup[];
+  attachmentBackups: EmailDispatchAttachmentBackupListItem[];
   attachmentBackupMonths: string[];
 };
 

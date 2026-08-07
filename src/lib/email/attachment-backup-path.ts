@@ -14,6 +14,10 @@ export function emailBackupAudienceFolder(
 /**
  * Cloud archive path (not a Mac folder):
  *   YYYY/YYYY-MM/Financeiro|RH/<friendly-filename>.pdf
+ *
+ * Access decision (documented, do not change without product alignment):
+ * Any admin/gestor may list and download all Financeiro/RH backups for the
+ * tenant. Backups are operational archives, not scoped per team in v1.
  */
 export function buildEmailAttachmentBackupStoragePath(input: {
   yearMonth: string;
@@ -35,6 +39,7 @@ export type EmailDispatchAttachmentBackup = {
   send_type_code: EmailBackupAudience;
   attachment_type: MonthlyClosingAttachmentType;
   year_month: string;
+  /** Server-only path. Never send to the browser. */
   storage_path: string;
   filename: string;
   mime_type: string;
@@ -43,3 +48,16 @@ export type EmailDispatchAttachmentBackup = {
   updated_at: string;
   developer_name?: string | null;
 };
+
+/** Client-safe backup row (no storage path). */
+export type EmailDispatchAttachmentBackupListItem = Omit<
+  EmailDispatchAttachmentBackup,
+  "storage_path"
+>;
+
+export function toEmailAttachmentBackupListItem(
+  row: EmailDispatchAttachmentBackup,
+): EmailDispatchAttachmentBackupListItem {
+  const { storage_path: _storagePath, ...rest } = row;
+  return rest;
+}

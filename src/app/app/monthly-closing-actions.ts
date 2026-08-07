@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/auth/app-context";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import { enforceSensitiveRateLimit } from "@/lib/security/enforce-sensitive-rate-limit";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { assertClosingValuesMatchFolha } from "@/services/closing-folha-compare";
 import { getInvoiceIssuer } from "@/services/invoice-issuers";
 import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
+import { recordSensitiveAccessAudit } from "@/services/security/sensitive-access-audit";
 import {
   approveMonthlyClosing,
   createMonthlyClosingAttachmentSignedUrl,
@@ -304,8 +306,23 @@ export async function uploadMonthlyClosingAttachmentAction(
       return { ok: false, error: "Selecione um arquivo PDF." };
     }
 
+    const rate = await enforceSensitiveRateLimit({
+      action: "attachment_upload",
+      userId: profile.id,
+      audit: {
+        action: "closing_attachment_upload",
+        resourceType: "monthly_closing",
+        resourceId: closingId,
+        origin: "uploadMonthlyClosingAttachmentAction",
+        metadata: { attachment_type: type },
+      },
+    });
+    if (!rate.allowed) {
+      return { ok: false, error: rate.message };
+    }
+
     const bytes = Buffer.from(await file.arrayBuffer());
-    await uploadMonthlyClosingAttachment({
+    const saved = await uploadMonthlyClosingAttachment({
       closingId,
       developerId: developer.id,
       type,
@@ -317,36 +334,106 @@ export async function uploadMonthlyClosingAttachmentAction(
       actorUserId: profile.id,
     });
 
+    await recordSensitiveAccessAudit({
+      actorUserId: profile.id,
+      action: "closing_attachment_upload",
+      resourceType: "monthly_closing_attachment",
+      resourceId: saved.id,
+      result: "success",
+      origin: "uploadMonthlyClosingAttachmentAction",
+      metadata: {
+        attachment_type: type,
+        monthly_closing_id: closingId,
+      },
+    });
+
     revalidatePath("/app");
     revalidatePath("/app/gestor");
     revalidatePath(`/app/gestor/fechamentos/${closingId}`);
     return { ok: true, closingId };
   } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível enviar o anexo.",
-    };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível enviar o anexo.";
+    const denied = /permissão|só pode anexar|próprio fechamento/i.test(message);
+    try {
+      const { profile } = await getAppContext();
+      await recordSensitiveAccessAudit({
+        actorUserId: profile.id,
+        action: denied ? "authorization_failure" : "closing_attachment_upload",
+        resourceType: "monthly_closing",
+        resourceId: String(formData.get("closingId") ?? "").trim() || null,
+        result: denied ? "denied" : "error",
+        errorCode: denied ? "forbidden" : "upload_failed",
+        origin: "uploadMonthlyClosingAttachmentAction",
+      });
+    } catch {
+      // ignore audit secondary failure
+    }
+    return { ok: false, error: message };
   }
 }
 
 export async function getMonthlyClosingAttachmentUrlAction(input: {
-  storageKey: string;
+  attachmentId: string;
 }): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  let actorUserId: string | null = null;
   try {
-    await getAppContext();
-    const url = await createMonthlyClosingAttachmentSignedUrl(input.storageKey);
-    return { ok: true, url };
+    const { profile, developer } = await getAppContext();
+    actorUserId = profile.id;
+
+    const rate = await enforceSensitiveRateLimit({
+      action: "signed_url",
+      userId: profile.id,
+      useIpDimension: true,
+      audit: {
+        action: "closing_attachment_signed_url",
+        resourceType: "monthly_closing_attachment",
+        resourceId: input.attachmentId,
+        origin: "getMonthlyClosingAttachmentUrlAction",
+      },
+    });
+    if (!rate.allowed) {
+      return { ok: false, error: rate.message };
+    }
+
+    const result = await createMonthlyClosingAttachmentSignedUrl({
+      attachmentId: input.attachmentId,
+      actor: {
+        role: profile.role,
+        developerId: developer?.id ?? null,
+      },
+    });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: profile.id,
+      action: "closing_attachment_signed_url",
+      resourceType: "monthly_closing_attachment",
+      resourceId: input.attachmentId,
+      result: "success",
+      origin: "getMonthlyClosingAttachmentUrlAction",
+    });
+
+    return { ok: true, url: result.url };
   } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível abrir o anexo.",
-    };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível abrir o anexo.";
+    const denied = /permissão|não encontrado|Anexo inválido/i.test(message);
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: denied
+        ? "authorization_failure"
+        : "closing_attachment_signed_url",
+      resourceType: "monthly_closing_attachment",
+      resourceId: input.attachmentId,
+      result: denied ? "denied" : "error",
+      errorCode: denied ? "forbidden" : "signed_url_failed",
+      origin: "getMonthlyClosingAttachmentUrlAction",
+    });
+    return { ok: false, error: message };
   }
 }
 

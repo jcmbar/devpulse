@@ -7,7 +7,7 @@ import {
 import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import type {
   EmailBackupAudience,
-  EmailDispatchAttachmentBackup,
+  EmailDispatchAttachmentBackupListItem,
 } from "@/lib/email/attachment-backup-path";
 import { emailBackupAudienceFolder } from "@/lib/email/attachment-backup-path";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
@@ -16,7 +16,7 @@ import { Archive, Download, FolderArchive, Loader2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
 type Props = {
-  initialRows: EmailDispatchAttachmentBackup[];
+  initialRows: EmailDispatchAttachmentBackupListItem[];
   months: string[];
 };
 
@@ -65,7 +65,7 @@ export function EmailAttachmentBackupsPanel({
   }, [audience, initialRows, yearMonth]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, EmailDispatchAttachmentBackup[]>();
+    const map = new Map<string, EmailDispatchAttachmentBackupListItem[]>();
     for (const row of filtered) {
       const key = `${row.year_month}:${row.send_type_code}`;
       const list = map.get(key) ?? [];

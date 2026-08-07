@@ -7,6 +7,10 @@ import {
 } from "@/lib/metrics/date-range";
 import { computeClosingSubmitValues } from "@/lib/metrics/closing-submit-values";
 import { getCardDeliveryFlags } from "@/lib/metrics/developer-period";
+import {
+  assertCanAccessMonthlyClosingAttachment,
+  SENSITIVE_SIGNED_URL_TTL_SECONDS,
+} from "@/lib/security/authorized-downloads";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
@@ -27,6 +31,7 @@ import type {
   MonthlyClosingPresenceKind,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
+import type { UserRole } from "@/types/profile";
 
 export const MONTHLY_CLOSING_STORAGE_BUCKET = "monthly-closing-attachments";
 
@@ -35,7 +40,6 @@ function mapAttachment(row: Record<string, unknown>): MonthlyClosingAttachment {
     id: String(row.id),
     monthly_closing_id: String(row.monthly_closing_id),
     type: row.type as MonthlyClosingAttachmentType,
-    file_storage_key: String(row.file_storage_key),
     original_filename: String(row.original_filename),
     mime_type: String(row.mime_type),
     uploaded_at: String(row.uploaded_at),
@@ -1107,6 +1111,38 @@ export async function listMonthlyClosingAttachments(
   return (data ?? []).map((row) => mapAttachment(row as Record<string, unknown>));
 }
 
+/**
+ * Server-only: storage keys for SMTP/admin download. Never send to the client.
+ */
+export async function listMonthlyClosingAttachmentStorageRefs(
+  closingId: string,
+): Promise<
+  Array<{
+    id: string;
+    type: MonthlyClosingAttachmentType;
+    file_storage_key: string;
+    original_filename: string;
+    mime_type: string;
+  }>
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closing_attachments")
+    .select("id, type, file_storage_key, original_filename, mime_type")
+    .eq("monthly_closing_id", closingId)
+    .order("type", { ascending: true });
+  if (error) {
+    throw new Error(`Falha ao listar chaves de anexo: ${error.message}`);
+  }
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    type: row.type as MonthlyClosingAttachmentType,
+    file_storage_key: String(row.file_storage_key),
+    original_filename: String(row.original_filename),
+    mime_type: String(row.mime_type ?? "application/pdf"),
+  }));
+}
+
 export type { MonthlyClosingAttachmentPresence };
 
 /** Batch presence of NF/boleto PDFs for the gestor year matrix. */
@@ -1505,20 +1541,63 @@ export async function reviewMealPixReceipt(input: {
   return saved;
 }
 
-export async function createMonthlyClosingAttachmentSignedUrl(
-  storageKey: string,
-  expiresInSeconds = 60 * 10,
-): Promise<string> {
+export async function createMonthlyClosingAttachmentSignedUrl(input: {
+  attachmentId: string;
+  actor: {
+    role: UserRole;
+    developerId: string | null;
+  };
+  expiresInSeconds?: number;
+}): Promise<{ url: string; filename: string }> {
+  const attachmentId = input.attachmentId.trim();
+  if (!attachmentId) {
+    throw new Error("Anexo inválido.");
+  }
+
   const supabase = await createClient();
+  const { data: attachmentRow, error: attachmentError } = await supabase
+    .from("monthly_closing_attachments")
+    .select("id, file_storage_key, original_filename, monthly_closing_id")
+    .eq("id", attachmentId)
+    .maybeSingle();
+
+  if (attachmentError || !attachmentRow) {
+    throw new Error(
+      `Anexo não encontrado: ${attachmentError?.message ?? "registro ausente"}`,
+    );
+  }
+
+  const closingId = String(attachmentRow.monthly_closing_id);
+  const closing = await getMonthlyClosingById(closingId);
+  if (!closing) {
+    throw new Error("Fechamento do anexo não encontrado.");
+  }
+
+  assertCanAccessMonthlyClosingAttachment({
+    role: input.actor.role,
+    actorDeveloperId: input.actor.developerId,
+    closingDeveloperId: closing.developer_id,
+  });
+
+  const storageKey = String(attachmentRow.file_storage_key);
+  const filename =
+    String(attachmentRow.original_filename || "").trim() ||
+    storageKey.split("/").pop() ||
+    "anexo.pdf";
+  const expiresInSeconds =
+    input.expiresInSeconds ?? SENSITIVE_SIGNED_URL_TTL_SECONDS;
+
   const { data, error } = await supabase.storage
     .from(MONTHLY_CLOSING_STORAGE_BUCKET)
-    .createSignedUrl(storageKey, expiresInSeconds);
+    .createSignedUrl(storageKey, expiresInSeconds, {
+      download: filename,
+    });
   if (error || !data?.signedUrl) {
     throw new Error(
       `Falha ao gerar link do anexo: ${error?.message ?? "URL indisponível"}`,
     );
   }
-  return data.signedUrl;
+  return { url: data.signedUrl, filename };
 }
 
 export async function finalizeMonthlyClosing(input: {

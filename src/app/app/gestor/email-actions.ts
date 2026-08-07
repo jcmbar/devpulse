@@ -3,12 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
-import {
-  checkSmtpTestRateLimit,
-  markSmtpTestSent,
-} from "@/lib/email/smtp-test-rate-limit";
 import { sanitizeSmtpErrorMessage } from "@/lib/email/zeptomail-smtp";
 import { ZEPTOMAIL_SMTP_PASSWORD_HINT } from "@/lib/email/zeptomail-smtp-config";
+import { enforceSensitiveRateLimit } from "@/lib/security/enforce-sensitive-rate-limit";
 import {
   addEmailTypeRecipient,
   deleteEmailTypeRecipient,
@@ -25,12 +22,13 @@ import {
 } from "@/services/operational-emails/attachment-backups";
 import type {
   EmailBackupAudience,
-  EmailDispatchAttachmentBackup,
+  EmailDispatchAttachmentBackupListItem,
 } from "@/lib/email/attachment-backup-path";
 import {
   isValidTestEmailAddress,
   sendOperationalTestEmail,
 } from "@/services/operational-emails/send-test";
+import { recordSensitiveAccessAudit } from "@/services/security/sensitive-access-audit";
 import {
   getMonthlyClosingById,
   listMonthlyClosingAttachments,
@@ -165,10 +163,27 @@ export async function sendFinanceiroClosingEmailAction(input: {
   closingId: string;
 }): Promise<OperationalEmailActionResult> {
   const closingId = input.closingId.trim();
+  let actorUserId: string | null = null;
   try {
     const { profile } = await requireTeamAccess();
+    actorUserId = profile.id;
     if (!closingId) {
       return { ok: false, error: "Fechamento inválido." };
+    }
+
+    const rate = await enforceSensitiveRateLimit({
+      action: "email_send",
+      userId: profile.id,
+      audit: {
+        action: "email_send",
+        resourceType: "monthly_closing",
+        resourceId: closingId,
+        origin: "sendFinanceiroClosingEmailAction",
+        metadata: { send_type_code: "financeiro" },
+      },
+    });
+    if (!rate.allowed) {
+      return { ok: false, error: rate.message };
     }
 
     await sendOperationalClosingEmail({
@@ -178,19 +193,37 @@ export async function sendFinanceiroClosingEmailAction(input: {
       triggeredBy: "manual",
     });
 
+    await recordSensitiveAccessAudit({
+      actorUserId: profile.id,
+      action: "email_send",
+      resourceType: "monthly_closing",
+      resourceId: closingId,
+      result: "success",
+      origin: "sendFinanceiroClosingEmailAction",
+      metadata: { send_type_code: "financeiro" },
+    });
+
     revalidateEmailPaths(closingId);
     return { ok: true };
   } catch (error) {
     if (closingId) {
       revalidateEmailPaths(closingId);
     }
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível enviar o e-mail ao Financeiro.",
-    };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível enviar o e-mail ao Financeiro.";
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: "email_send",
+      resourceType: "monthly_closing",
+      resourceId: closingId || null,
+      result: /permissão/i.test(message) ? "denied" : "error",
+      errorCode: "email_send_failed",
+      origin: "sendFinanceiroClosingEmailAction",
+      metadata: { send_type_code: "financeiro" },
+    });
+    return { ok: false, error: message };
   }
 }
 
@@ -199,28 +232,65 @@ export async function sendOperationalEmailByTypeAction(input: {
   typeCode: string;
 }): Promise<OperationalEmailActionResult> {
   const closingId = input.closingId.trim();
+  let actorUserId: string | null = null;
   try {
     const { profile } = await requireTeamAccess();
+    actorUserId = profile.id;
     if (!isEmailSendTypeCode(input.typeCode)) {
       return { ok: false, error: "Tipo de envio inválido." };
     }
+
+    const rate = await enforceSensitiveRateLimit({
+      action: "email_send",
+      userId: profile.id,
+      audit: {
+        action: "email_send",
+        resourceType: "monthly_closing",
+        resourceId: closingId,
+        origin: "sendOperationalEmailByTypeAction",
+        metadata: { send_type_code: input.typeCode },
+      },
+    });
+    if (!rate.allowed) {
+      return { ok: false, error: rate.message };
+    }
+
     await sendOperationalClosingEmail({
       closingId,
       typeCode: input.typeCode,
       actorUserId: profile.id,
       triggeredBy: "manual",
     });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: profile.id,
+      action: "email_send",
+      resourceType: "monthly_closing",
+      resourceId: closingId,
+      result: "success",
+      origin: "sendOperationalEmailByTypeAction",
+      metadata: { send_type_code: input.typeCode },
+    });
+
     revalidateEmailPaths(closingId);
     return { ok: true };
   } catch (error) {
     if (closingId) {
       revalidateEmailPaths(closingId);
     }
-    return {
-      ok: false,
-      error:
-        error instanceof Error ? error.message : "Não foi possível enviar.",
-    };
+    const message =
+      error instanceof Error ? error.message : "Não foi possível enviar.";
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: "email_send",
+      resourceType: "monthly_closing",
+      resourceId: closingId || null,
+      result: /permissão/i.test(message) ? "denied" : "error",
+      errorCode: "email_send_failed",
+      origin: "sendOperationalEmailByTypeAction",
+      metadata: { send_type_code: input.typeCode },
+    });
+    return { ok: false, error: message };
   }
 }
 
@@ -303,9 +373,19 @@ export async function listOperationalSendTypeIdsAction(): Promise<
 export async function sendOperationalEmailTestAction(
   formData: FormData,
 ): Promise<SendOperationalEmailTestActionResult> {
+  let actorUserId: string | null = null;
   try {
     const context = await requireTeamAccess();
+    actorUserId = context.profile.id;
     if (context.profile.role !== "admin") {
+      await recordSensitiveAccessAudit({
+        actorUserId,
+        action: "authorization_failure",
+        resourceType: "email_dispatch",
+        result: "denied",
+        errorCode: "admin_only",
+        origin: "sendOperationalEmailTestAction",
+      });
       return {
         ok: false,
         error: "Apenas administradores podem enviar e-mail de teste.",
@@ -320,16 +400,30 @@ export async function sendOperationalEmailTestAction(
       };
     }
 
-    const rate = checkSmtpTestRateLimit(context.user.id);
+    const rate = await enforceSensitiveRateLimit({
+      action: "email_test",
+      userId: context.user.id,
+      useIpDimension: true,
+      audit: {
+        action: "email_test",
+        resourceType: "email_dispatch",
+        origin: "sendOperationalEmailTestAction",
+      },
+    });
     if (!rate.allowed) {
-      return {
-        ok: false,
-        error: `Aguarde ${rate.retryAfterSeconds}s antes de enviar outro teste.`,
-      };
+      return { ok: false, error: rate.message };
     }
 
     const result = await sendOperationalTestEmail({ to });
-    markSmtpTestSent(context.user.id);
+
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: "email_test",
+      resourceType: "email_dispatch",
+      result: "success",
+      origin: "sendOperationalEmailTestAction",
+      metadata: { triggered_by: "smtp_test" },
+    });
 
     return {
       ok: true,
@@ -341,6 +435,14 @@ export async function sendOperationalEmailTestAction(
     const raw =
       error instanceof Error ? error.message : "Falha ao enviar e-mail de teste.";
     const sanitized = sanitizeSmtpErrorMessage(raw);
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: "email_test",
+      resourceType: "email_dispatch",
+      result: "error",
+      errorCode: "email_test_failed",
+      origin: "sendOperationalEmailTestAction",
+    });
     if (/ZEPTOMAIL_SMTP_PASSWORD|Senha SMTP|password/i.test(raw)) {
       return { ok: false, error: ZEPTOMAIL_SMTP_PASSWORD_HINT };
     }
@@ -352,7 +454,11 @@ export async function listEmailAttachmentBackupsAction(input?: {
   yearMonth?: string;
   audience?: EmailBackupAudience | "all";
 }): Promise<
-  | { ok: true; rows: EmailDispatchAttachmentBackup[]; months: string[] }
+  | {
+      ok: true;
+      rows: EmailDispatchAttachmentBackupListItem[];
+      months: string[];
+    }
   | { ok: false; error: string }
 > {
   try {
@@ -382,20 +488,57 @@ export async function downloadEmailAttachmentBackupAction(input: {
 }): Promise<
   { ok: true; url: string; filename: string } | { ok: false; error: string }
 > {
+  let actorUserId: string | null = null;
   try {
-    await requireTeamAccess();
-    const result = await createEmailAttachmentBackupSignedUrl(
-      input.backupId.trim(),
-    );
+    const { profile } = await requireTeamAccess();
+    actorUserId = profile.id;
+
+    const rate = await enforceSensitiveRateLimit({
+      action: "signed_url",
+      userId: profile.id,
+      useIpDimension: true,
+      audit: {
+        action: "email_backup_signed_url",
+        resourceType: "email_attachment_backup",
+        resourceId: input.backupId,
+        origin: "downloadEmailAttachmentBackupAction",
+      },
+    });
+    if (!rate.allowed) {
+      return { ok: false, error: rate.message };
+    }
+
+    const result = await createEmailAttachmentBackupSignedUrl({
+      backupId: input.backupId.trim(),
+      actorRole: profile.role,
+    });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: profile.id,
+      action: "email_backup_signed_url",
+      resourceType: "email_attachment_backup",
+      resourceId: input.backupId.trim(),
+      result: "success",
+      origin: "downloadEmailAttachmentBackupAction",
+    });
+
     return { ok: true, url: result.url, filename: result.filename };
   } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Falha ao gerar download do backup.",
-    };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Falha ao gerar download do backup.";
+    const denied = /permissão|não encontrado|Backup inválido/i.test(message);
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: denied ? "authorization_failure" : "email_backup_signed_url",
+      resourceType: "email_attachment_backup",
+      resourceId: input.backupId,
+      result: denied ? "denied" : "error",
+      errorCode: denied ? "forbidden" : "backup_signed_url_failed",
+      origin: "downloadEmailAttachmentBackupAction",
+    });
+    return { ok: false, error: message };
   }
 }
 
@@ -406,8 +549,10 @@ export async function downloadEmailAttachmentBackupZipAction(input: {
   | { ok: true; filename: string; base64: string }
   | { ok: false; error: string }
 > {
+  let actorUserId: string | null = null;
   try {
-    await requireTeamAccess();
+    const { profile } = await requireTeamAccess();
+    actorUserId = profile.id;
     const yearMonth = input.yearMonth.trim();
     if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
       return { ok: false, error: "Competência inválida." };
@@ -415,22 +560,62 @@ export async function downloadEmailAttachmentBackupZipAction(input: {
     if (input.audience !== "financeiro" && input.audience !== "rh") {
       return { ok: false, error: "Destinatário de backup inválido." };
     }
+
+    const rate = await enforceSensitiveRateLimit({
+      action: "backup_zip",
+      userId: profile.id,
+      audit: {
+        action: "email_backup_zip",
+        resourceType: "email_attachment_backup_zip",
+        resourceId: `${yearMonth}:${input.audience}`,
+        yearMonth,
+        origin: "downloadEmailAttachmentBackupZipAction",
+        metadata: { send_type_code: input.audience },
+      },
+    });
+    if (!rate.allowed) {
+      return { ok: false, error: rate.message };
+    }
+
     const zip = await buildEmailAttachmentBackupZip({
       yearMonth,
       audience: input.audience,
+      actorRole: profile.role,
     });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: profile.id,
+      action: "email_backup_zip",
+      resourceType: "email_attachment_backup_zip",
+      resourceId: `${yearMonth}:${input.audience}`,
+      yearMonth,
+      result: "success",
+      origin: "downloadEmailAttachmentBackupZipAction",
+      metadata: { send_type_code: input.audience },
+    });
+
     return {
       ok: true,
       filename: zip.filename,
       base64: Buffer.from(zip.bytes).toString("base64"),
     };
   } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Falha ao gerar ZIP de backup.",
-    };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Falha ao gerar ZIP de backup.";
+    const denied = /permissão/i.test(message);
+    await recordSensitiveAccessAudit({
+      actorUserId,
+      action: denied ? "authorization_failure" : "email_backup_zip",
+      resourceType: "email_attachment_backup_zip",
+      resourceId: `${input.yearMonth}:${input.audience}`,
+      yearMonth: input.yearMonth,
+      result: denied ? "denied" : "error",
+      errorCode: denied ? "forbidden" : "backup_zip_failed",
+      origin: "downloadEmailAttachmentBackupZipAction",
+      metadata: { send_type_code: input.audience },
+    });
+    return { ok: false, error: message };
   }
 }

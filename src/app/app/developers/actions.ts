@@ -29,6 +29,7 @@ import {
   isUserRole,
   updateProfileRoleAdmin,
 } from "@/services/profiles/admin";
+import { recordSensitiveAccessAudit } from "@/services/security/sensitive-access-audit";
 import {
   isCompensationBaseType,
   isDeveloperJobTitle,
@@ -594,9 +595,24 @@ export async function updateDeveloperAccessRoleAction(
       };
     }
 
+    const previousRole = developer.profile.role;
     await updateProfileRoleAdmin({
       profileId: developer.profile.id,
       role: roleRaw,
+    });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: context.profile.id,
+      action: "profile_role_change",
+      resourceType: "profile",
+      resourceId: developer.profile.id,
+      result: "success",
+      origin: "updateDeveloperAccessRoleAction",
+      metadata: {
+        role_from: previousRole,
+        role_to: roleRaw,
+        developer_id: developerId,
+      },
     });
 
     revalidatePath("/app/developers");
@@ -606,11 +622,25 @@ export async function updateDeveloperAccessRoleAction(
       success: "Privilégios de acesso atualizados.",
     };
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível atualizar os privilégios.";
+    try {
+      const context = await requireTeamAccess();
+      await recordSensitiveAccessAudit({
+        actorUserId: context.profile.id,
+        action: "profile_role_change",
+        resourceType: "profile",
+        result: "error",
+        errorCode: "role_change_failed",
+        origin: "updateDeveloperAccessRoleAction",
+      });
+    } catch {
+      // ignore
+    }
     return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar os privilégios.",
+      error: message,
       success: null,
     };
   }
@@ -627,7 +657,7 @@ export async function inviteUserForDeveloperAction(
   _prev: InviteUserFormState,
   formData: FormData,
 ): Promise<InviteUserFormState> {
-  await requireTeamAccess();
+  const context = await requireTeamAccess();
 
   const email = String(formData.get("email") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
@@ -648,6 +678,20 @@ export async function inviteUserForDeveloperAction(
       developerId,
       developerEmail,
       linkToDeveloper,
+    });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: context.profile.id,
+      action: "profile_role_change",
+      resourceType: "profile",
+      resourceId: result.profile.id,
+      result: "success",
+      origin: "inviteUserForDeveloperAction",
+      metadata: {
+        role_to: roleRaw,
+        invite: true,
+        developer_id: developerId,
+      },
     });
 
     if (developerId) {

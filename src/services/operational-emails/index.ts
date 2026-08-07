@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDeveloperAdmin } from "@/services/developers/admin";
 import {
   listMonthlyClosingAttachments,
+  listMonthlyClosingAttachmentStorageRefs,
   getMonthlyClosingById,
   MONTHLY_CLOSING_STORAGE_BUCKET,
 } from "@/services/monthly-closings";
@@ -551,7 +552,7 @@ async function downloadClosingAttachments(
     return { files: [], attachedTypes: [] };
   }
 
-  const attachments = await listMonthlyClosingAttachments(closingId);
+  const attachments = await listMonthlyClosingAttachmentStorageRefs(closingId);
   const admin = createAdminClient();
   const files: OperationalEmailAttachment[] = [];
   const attachedTypes: string[] = [];

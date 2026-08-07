@@ -200,9 +200,11 @@ export function GestorClosingDecisionPanel({
     });
   }
 
-  function openAttachment(storageKey: string) {
+  function openAttachment(attachmentId: string) {
     startTransition(async () => {
-      const result = await getMonthlyClosingAttachmentUrlAction({ storageKey });
+      const result = await getMonthlyClosingAttachmentUrlAction({
+        attachmentId,
+      });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -623,7 +625,7 @@ export function GestorClosingDecisionPanel({
                 {attachment ? (
                   <button
                     type="button"
-                    onClick={() => openAttachment(attachment.file_storage_key)}
+                    onClick={() => openAttachment(attachment.id)}
                     disabled={pending}
                     className="shrink-0 text-xs font-medium text-brand underline-offset-4 hover:underline"
                   >
@@ -678,7 +680,7 @@ export function GestorClosingDecisionPanel({
                 {mealPix ? (
                   <button
                     type="button"
-                    onClick={() => openAttachment(mealPix.file_storage_key)}
+                    onClick={() => openAttachment(mealPix.id)}
                     disabled={pending}
                     className="shrink-0 text-xs font-medium text-brand underline-offset-4 hover:underline"
                   >

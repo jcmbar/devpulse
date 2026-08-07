@@ -155,7 +155,6 @@ export type MonthlyClosingAttachment = {
   id: string;
   monthly_closing_id: string;
   type: MonthlyClosingAttachmentType;
-  file_storage_key: string;
   original_filename: string;
   mime_type: string;
   uploaded_at: string;

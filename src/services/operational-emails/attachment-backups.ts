@@ -5,13 +5,20 @@ import {
   buildEmailAttachmentBackupStoragePath,
   EMAIL_ATTACHMENT_BACKUP_BUCKET,
   emailBackupAudienceFolder,
+  toEmailAttachmentBackupListItem,
   type EmailBackupAudience,
   type EmailDispatchAttachmentBackup,
+  type EmailDispatchAttachmentBackupListItem,
 } from "@/lib/email/attachment-backup-path";
 import type { OperationalEmailAttachment } from "@/lib/email/zeptomail-smtp";
+import {
+  assertCanAccessEmailAttachmentBackup,
+  SENSITIVE_SIGNED_URL_TTL_SECONDS,
+} from "@/lib/security/authorized-downloads";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { MonthlyClosingAttachmentType } from "@/types/monthly-closing";
+import type { UserRole } from "@/types/profile";
 
 function mapBackup(row: Record<string, unknown>): EmailDispatchAttachmentBackup {
   const developer = row.developers as
@@ -116,6 +123,15 @@ export async function listEmailAttachmentBackups(input?: {
   yearMonth?: string;
   audience?: EmailBackupAudience | "all";
   limit?: number;
+}): Promise<EmailDispatchAttachmentBackupListItem[]> {
+  const rows = await listEmailAttachmentBackupsInternal(input);
+  return rows.map(toEmailAttachmentBackupListItem);
+}
+
+async function listEmailAttachmentBackupsInternal(input?: {
+  yearMonth?: string;
+  audience?: EmailBackupAudience | "all";
+  limit?: number;
 }): Promise<EmailDispatchAttachmentBackup[]> {
   const supabase = await createClient();
   let query = supabase
@@ -156,10 +172,18 @@ export async function listEmailAttachmentBackupMonths(): Promise<string[]> {
   return [...months];
 }
 
-export async function createEmailAttachmentBackupSignedUrl(
-  backupId: string,
-  expiresInSeconds = 60 * 10,
-): Promise<{ url: string; filename: string }> {
+export async function createEmailAttachmentBackupSignedUrl(input: {
+  backupId: string;
+  actorRole: UserRole;
+  expiresInSeconds?: number;
+}): Promise<{ url: string; filename: string }> {
+  assertCanAccessEmailAttachmentBackup(input.actorRole);
+
+  const backupId = input.backupId.trim();
+  if (!backupId) {
+    throw new Error("Backup inválido.");
+  }
+
   const supabase = await createClient();
   const { data: row, error } = await supabase
     .from("email_dispatch_attachment_backups")
@@ -171,6 +195,9 @@ export async function createEmailAttachmentBackupSignedUrl(
       `Backup não encontrado: ${error?.message ?? "registro ausente"}`,
     );
   }
+
+  const expiresInSeconds =
+    input.expiresInSeconds ?? SENSITIVE_SIGNED_URL_TTL_SECONDS;
 
   const { data, error: signError } = await supabase.storage
     .from(EMAIL_ATTACHMENT_BACKUP_BUCKET)
@@ -188,8 +215,11 @@ export async function createEmailAttachmentBackupSignedUrl(
 export async function buildEmailAttachmentBackupZip(input: {
   yearMonth: string;
   audience: EmailBackupAudience;
+  actorRole: UserRole;
 }): Promise<{ filename: string; bytes: Uint8Array }> {
-  const rows = await listEmailAttachmentBackups({
+  assertCanAccessEmailAttachmentBackup(input.actorRole);
+
+  const rows = await listEmailAttachmentBackupsInternal({
     yearMonth: input.yearMonth,
     audience: input.audience,
     limit: 500,

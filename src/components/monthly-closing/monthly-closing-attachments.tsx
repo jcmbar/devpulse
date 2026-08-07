@@ -93,7 +93,7 @@ function AttachmentSlot({
     }
     startTransition(async () => {
       const result = await getMonthlyClosingAttachmentUrlAction({
-        storageKey: attachment.file_storage_key,
+        attachmentId: attachment.id,
       });
       if (!result.ok) {
         setError(result.error);
