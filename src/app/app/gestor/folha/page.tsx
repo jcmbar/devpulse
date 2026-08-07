@@ -1,23 +1,19 @@
 import Link from "next/link";
 import { PayrollAttendancePanel } from "@/components/folha/payroll-attendance-panel";
-import { PayrollItemEditor } from "@/components/folha/payroll-item-editor";
 import { PayrollMonthStatusControl } from "@/components/folha/payroll-month-status";
 import { PayrollSinteticoExportButton } from "@/components/folha/payroll-sintetico-export-button";
+import { PayrollSinteticoPanel } from "@/components/folha/payroll-sintetico-panel";
 import { PayrollSyncFromCompensationButton } from "@/components/folha/payroll-sync-button";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { DataTable, EmptyState } from "@/components/surface";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { FilterBar } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { buildGestorNavTabs } from "@/lib/gestor/nav-tabs";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
-import {
-  computeContractedHoursDelta,
-} from "@/lib/metrics/payroll-calc";
 import {
   parseTeamListFilter,
   teamListFilterParam,
@@ -120,7 +116,13 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       ? await listAttendanceForItem(selectedItem.id)
       : [];
 
-  const totals = items.reduce(
+  const readOnly = closing.status === "closed";
+
+  const sinteticoItems =
+    selectedItem != null
+      ? items.filter((item) => item.id === selectedItem.id)
+      : items;
+  const sinteticoTotals = sinteticoItems.reduce(
     (acc, item) => {
       acc.base += item.base_amount;
       acc.differential += item.differential_amount;
@@ -145,9 +147,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       reviewed: 0,
     },
   );
-
-  const readOnly = closing.status === "closed";
-  const finalizedCount = items.filter((item) =>
+  const sinteticoFinalizedCount = sinteticoItems.filter((item) =>
     finalizedByDeveloper.has(item.developer_id),
   ).length;
 
@@ -281,135 +281,18 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         />
       ) : null}
 
-      <section className="ui-dashboard-panel space-y-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Sintético mensal</h2>
-            <p className="text-sm text-muted-foreground">
-              Base + diferencial − descontos + deslocamento + refeição = valor
-              NF. Total horas Jira = mesma fonte do Gestor (time spent dos cards
-              com entrega no mês), agregando o lote Compilado de cada time quando
-              o filtro é “todos”. Diferença contratada = horas Jira − horas/mês
-              do cadastro (negativo = abaixo do mínimo; base para futuro banco
-              de horas).
-            </p>
-            {finalizedCount > 0 ? (
-              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-                {finalizedCount} linha(s) com fechamento mensal finalizado —
-                edição bloqueada. Reabra o fechamento para alterar.
-              </p>
-            ) : null}
-          </div>
-          <div className="space-y-1 text-right">
-            <p className="text-sm font-medium tabular-nums">
-              Total NF:{" "}
-              {totals.invoice.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
-            </p>
-            {items.length > 0 ? (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                Conferidos: {totals.reviewed}/{items.length}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        {items.length === 0 ? (
-          <EmptyState
-            title="Nenhuma pessoa neste filtro"
-            description="Cadastre pessoas ativas no time ou remova o filtro de time."
-          />
-        ) : (
-          <DataTable minWidthClassName="min-w-[1180px]" stickyFirstColumn>
-            <thead>
-              <tr>
-                <th>Pessoa</th>
-                <th>Base</th>
-                <th>Total horas Jira</th>
-                <th>Diferença contratada</th>
-                <th colSpan={5}>Valores do mês / NF</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const jiraHours =
-                  jiraHoursByDeveloper.get(item.developer_id) ?? 0;
-                const finalizedClosingId =
-                  finalizedByDeveloper.get(item.developer_id) ?? null;
-                return (
-                  <PayrollItemEditor
-                    key={item.id}
-                    item={item}
-                    issuers={issuers}
-                    readOnly={readOnly}
-                    finalizedClosingId={finalizedClosingId}
-                    jiraHours={jiraHours}
-                    contractedHoursDelta={computeContractedHoursDelta({
-                      jiraHours,
-                      contractedHoursPerMonth: item.contracted_hours_per_month,
-                    })}
-                    attendanceHref={buildFolhaHref({
-                      teamId: teamParam,
-                      month,
-                      itemId: item.id,
-                    })}
-                  />
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td className="font-medium">Totais</td>
-                <td className="tabular-nums font-medium">
-                  {totals.base.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}
-                </td>
-                <td className="tabular-nums font-medium">
-                  {totals.jiraHours.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  h
-                </td>
-                <td className="text-muted-foreground">—</td>
-                <td colSpan={5} className="text-sm text-muted-foreground">
-                  Dif.{" "}
-                  {totals.differential.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}{" "}
-                  · Desc.{" "}
-                  {totals.discounts.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}{" "}
-                  · Desl.{" "}
-                  {totals.travel.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}{" "}
-                  · Ref.{" "}
-                  {totals.meal.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}{" "}
-                  · NF{" "}
-                  <span className="font-medium text-foreground tabular-nums">
-                    {totals.invoice.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
-          </DataTable>
-        )}
-      </section>
+      <PayrollSinteticoPanel
+        items={sinteticoItems}
+        issuers={issuers}
+        readOnly={readOnly}
+        totals={sinteticoTotals}
+        finalizedCount={sinteticoFinalizedCount}
+        focusedDeveloperName={selectedItem?.developer_name ?? null}
+        teamId={teamParam}
+        month={month}
+        jiraHoursByDeveloper={Object.fromEntries(jiraHoursByDeveloper)}
+        finalizedByDeveloper={Object.fromEntries(finalizedByDeveloper)}
+      />
     </PageShell>
   );
 }

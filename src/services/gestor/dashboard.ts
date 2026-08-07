@@ -29,7 +29,7 @@ import type { ImportBatchOption } from "@/types/import-period";
 import type { JiraCard } from "@/types/jira-card";
 import type { CompiladoSourceMode } from "@/lib/metrics/gestor-data-source";
 import {
-  resolveCompiladoSnapshot,
+  resolveCompiladoSnapshotsForDashboard,
   type CompiladoSnapshotProvenance,
 } from "@/services/compilado/resolve-snapshot";
 import {
@@ -158,6 +158,22 @@ function groupCardsByDeveloper(cards: JiraCard[]): Map<string, JiraCard[]> {
   return map;
 }
 
+function mergeKeySetsByDeveloper(
+  maps: Array<Map<string, Set<string>>>,
+): Map<string, Set<string>> {
+  const merged = new Map<string, Set<string>>();
+  for (const map of maps) {
+    for (const [developerId, keys] of map) {
+      const set = merged.get(developerId) ?? new Set<string>();
+      for (const key of keys) {
+        set.add(key);
+      }
+      merged.set(developerId, set);
+    }
+  }
+  return merged;
+}
+
 /**
  * Pending requests only count while the card is still classified in the metric.
  * A reclassification can orphan a request, and the gestor has no way to decide
@@ -245,6 +261,10 @@ function buildMonthlyMatrix(input: {
 
 /**
  * Dashboard do gestor: ranking + totais do intervalo + matriz mensal.
+ *
+ * Compilado batches are per team. When viewing all teams without an explicit
+ * `importId`, resolves one winning snapshot per team and merges cards (a
+ * single global winner would zero out people from other teams).
  */
 export async function getGestorDashboard(input: {
   importId?: string | null;
@@ -256,27 +276,39 @@ export async function getGestorDashboard(input: {
   const dataSource = input.dataSource ?? "auto";
   const teamId = input.teamId?.trim() || null;
 
-  const [resolved, developers, thresholds] = await Promise.all([
-    resolveCompiladoSnapshot({
-      mode: dataSource,
-      importId: input.importId,
-      dateRange: input.dateRange,
-      teamId,
-    }),
+  const [developers, thresholds] = await Promise.all([
     listDevelopersAdmin(teamId ? { teamId } : undefined),
     getPerformanceThresholds(),
   ]);
 
-  const { batches, selectedBatch, provenance } = resolved;
+  const resolved = await resolveCompiladoSnapshotsForDashboard({
+    mode: dataSource,
+    importId: input.importId,
+    dateRange: input.dateRange,
+    teamId,
+    teamIds: developers.map((developer) => developer.team_id),
+  });
 
-  const rangeCards =
-    selectedBatch != null
-      ? await listJiraCardsByImportInRange({
-          importId: selectedBatch.id,
-          rangeStart: input.dateRange.start,
-          rangeEnd: input.dateRange.end,
-        })
+  const {
+    batches,
+    selectedBatch,
+    provenance,
+    winningImportIds,
+  } = resolved;
+
+  const rangeCardLists =
+    winningImportIds.length > 0
+      ? await Promise.all(
+          winningImportIds.map((importId) =>
+            listJiraCardsByImportInRange({
+              importId,
+              rangeStart: input.dateRange.start,
+              rangeEnd: input.dateRange.end,
+            }),
+          ),
+        )
       : [];
+  const rangeCards = rangeCardLists.flat();
 
   const cardsByDeveloper = groupCardsByDeveloper(rangeCards);
   const activeDevelopers = developers.filter((developer) => developer.is_active);
@@ -286,9 +318,11 @@ export async function getGestorDashboard(input: {
       developer.is_active || cardsByDeveloper.has(developer.id),
   );
 
+  const developerIds = rankingSource.map((developer) => developer.id);
+
   const [capacities, teamDefaultCapacity, teamLabels] = await Promise.all([
     resolveCapacitiesForDevelopers({
-      developerIds: rankingSource.map((developer) => developer.id),
+      developerIds,
       periodStart: input.dateRange.start,
       periodEnd: input.dateRange.end,
     }),
@@ -305,37 +339,57 @@ export async function getGestorDashboard(input: {
 
   const teamDefaultRequiredHours = teamDefaultCapacity.requiredHours;
 
-  const acceptedByDeveloper =
-    selectedBatch != null
-      ? await listAcceptedDelayKeysByDeveloper({
-          importId: selectedBatch.id,
-          developerIds: rankingSource.map((developer) => developer.id),
-        })
-      : new Map<string, Set<string>>();
-
-  const acceptedReworkByDeveloper =
-    selectedBatch != null
-      ? await listAcceptedReworkKeysByDeveloper({
-          importId: selectedBatch.id,
-          developerIds: rankingSource.map((developer) => developer.id),
-        })
-      : new Map<string, Set<string>>();
-
-  const [pendingDelayKeysByDeveloper, pendingReworkKeysByDeveloper] =
-    selectedBatch != null
-      ? await Promise.all([
-          listPendingJustificationKeysByDeveloper({
-            importId: selectedBatch.id,
-            developerIds: rankingSource.map((developer) => developer.id),
-            kind: "delay",
+  const justificationMaps =
+    winningImportIds.length > 0
+      ? await Promise.all(
+          winningImportIds.map(async (importId) => {
+            const [
+              acceptedDelay,
+              acceptedRework,
+              pendingDelay,
+              pendingRework,
+            ] = await Promise.all([
+              listAcceptedDelayKeysByDeveloper({
+                importId,
+                developerIds,
+              }),
+              listAcceptedReworkKeysByDeveloper({
+                importId,
+                developerIds,
+              }),
+              listPendingJustificationKeysByDeveloper({
+                importId,
+                developerIds,
+                kind: "delay",
+              }),
+              listPendingJustificationKeysByDeveloper({
+                importId,
+                developerIds,
+                kind: "rework",
+              }),
+            ]);
+            return {
+              acceptedDelay,
+              acceptedRework,
+              pendingDelay,
+              pendingRework,
+            };
           }),
-          listPendingJustificationKeysByDeveloper({
-            importId: selectedBatch.id,
-            developerIds: rankingSource.map((developer) => developer.id),
-            kind: "rework",
-          }),
-        ])
-      : [new Map<string, Set<string>>(), new Map<string, Set<string>>()];
+        )
+      : [];
+
+  const acceptedByDeveloper = mergeKeySetsByDeveloper(
+    justificationMaps.map((entry) => entry.acceptedDelay),
+  );
+  const acceptedReworkByDeveloper = mergeKeySetsByDeveloper(
+    justificationMaps.map((entry) => entry.acceptedRework),
+  );
+  const pendingDelayKeysByDeveloper = mergeKeySetsByDeveloper(
+    justificationMaps.map((entry) => entry.pendingDelay),
+  );
+  const pendingReworkKeysByDeveloper = mergeKeySetsByDeveloper(
+    justificationMaps.map((entry) => entry.pendingRework),
+  );
 
   const ranking: GestorRankingRow[] = rankingSource
     .map((developer) => {
@@ -411,9 +465,9 @@ export async function getGestorDashboard(input: {
   );
 
   const matrixCards =
-    selectedBatch != null
+    winningImportIds.length > 0
       ? await listJiraCardsForMonthlyMatrix({
-          importIds: [selectedBatch.id],
+          importIds: winningImportIds,
           rangeStart: input.dateRange.start,
           rangeEnd: input.dateRange.end,
         })
@@ -426,12 +480,32 @@ export async function getGestorDashboard(input: {
     acceptedReworkByDeveloper,
   });
 
+  // Month picker options must cover the Compilado batch period(s), not the
+  // active date filter — otherwise "Exibir todos" + month=2026-07 collapses
+  // the dropdown to a single month.
+  const periodBatches =
+    winningImportIds.length > 0
+      ? batches.filter((batch) => winningImportIds.includes(batch.id))
+      : selectedBatch
+        ? [selectedBatch]
+        : [];
+  let periodStart: string | null = null;
+  let periodEnd: string | null = null;
+  for (const batch of periodBatches) {
+    if (
+      batch.period_start &&
+      (!periodStart || batch.period_start < periodStart)
+    ) {
+      periodStart = batch.period_start;
+    }
+    if (batch.period_end && (!periodEnd || batch.period_end > periodEnd)) {
+      periodEnd = batch.period_end;
+    }
+  }
+
   const monthOptions =
-    selectedBatch?.period_start && selectedBatch.period_end
-      ? listYearMonthsBetween(
-          selectedBatch.period_start,
-          selectedBatch.period_end,
-        )
+    periodStart && periodEnd
+      ? listYearMonthsBetween(periodStart, periodEnd)
       : listYearMonthsBetween(input.dateRange.start, input.dateRange.end);
 
   return {

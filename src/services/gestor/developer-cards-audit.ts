@@ -90,6 +90,8 @@ export type GestorDeveloperCardsAudit = {
 /**
  * Card list for a Gestor ranking drill-down.
  * Uses the same snapshot + `unit_test_delivery_on` window as `getGestorDashboard`.
+ * Scopes Compilado to the developer's team so "Exibir todos" does not pick
+ * another team's global winner and return an empty audit.
  */
 export async function getGestorDeveloperCardsAudit(input: {
   developerId: string;
@@ -101,14 +103,31 @@ export async function getGestorDeveloperCardsAudit(input: {
   const dataSource = input.dataSource ?? "auto";
   const metric = input.metric ?? "cards";
 
-  const [resolved, developer] = await Promise.all([
-    resolveCompiladoSnapshot({
+  const developer = await getDeveloperAdmin(input.developerId);
+  const developerTeamId = developer?.team_id ?? null;
+
+  let importId = input.importId?.trim() || null;
+  // When the dashboard merges per-team snapshots, the UI still sends the
+  // newest winner as importId. Ignore it when it belongs to another team.
+  if (importId && developerTeamId) {
+    const probe = await resolveCompiladoSnapshot({
       mode: dataSource,
-      importId: input.importId,
+      importId,
       dateRange: input.dateRange,
-    }),
-    getDeveloperAdmin(input.developerId),
-  ]);
+      teamId: null,
+    });
+    const batchTeamId = probe.selectedBatch?.team_id ?? null;
+    if (batchTeamId && batchTeamId !== developerTeamId) {
+      importId = null;
+    }
+  }
+
+  const resolved = await resolveCompiladoSnapshot({
+    mode: dataSource,
+    importId,
+    dateRange: input.dateRange,
+    teamId: developerTeamId,
+  });
 
   const selectedBatch = resolved.selectedBatch;
   const periodCards =

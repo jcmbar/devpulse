@@ -39,6 +39,17 @@ export type ResolvedCompiladoSnapshot = {
   usedAutoResolution: boolean;
 };
 
+/**
+ * Dashboard resolution that may merge one winning Compilado batch per team
+ * when viewing all teams (same rule as Folha Jira hours).
+ */
+export type ResolvedCompiladoDashboardSnapshot = ResolvedCompiladoSnapshot & {
+  /** Import ids whose cards must be loaded (deduped). */
+  winningImportIds: string[];
+  /** True when metrics come from multiple per-team snapshots. */
+  mergedAcrossTeams: boolean;
+};
+
 function compareSnapshotRecency(a: ImportBatchOption, b: ImportBatchOption): number {
   const aAt = snapshotCapturedAt(a) ?? "";
   const bAt = snapshotCapturedAt(b) ?? "";
@@ -92,6 +103,27 @@ function buildReason(input: {
   }
 
   return `Automático: nenhum lote cobre o período; usando o snapshot Compilado mais recente disponível (${sourceLabel}${when ? `, ${when}` : ""}).`;
+}
+
+function buildMergedReason(input: {
+  mode: CompiladoSourceMode;
+  winners: ImportBatchOption[];
+  reference: ImportBatchOption;
+}): string {
+  const n = input.winners.length;
+  const when = snapshotCapturedAt(input.reference);
+  const refLabel =
+    input.reference.team_name?.trim() ||
+    mapImportSourceToResolved(input.reference.source);
+
+  if (input.mode === "manuais") {
+    return `Auditoria: métricas mescladas de ${n} snapshots manuais (um por time). Referência na UI: ${refLabel}${when ? ` (${when})` : ""}.`;
+  }
+  if (input.mode === "jira") {
+    return `Auditoria: métricas mescladas de ${n} snapshots Jira Compilado (um por time). Referência na UI: ${refLabel}${when ? ` (${when})` : ""}.`;
+  }
+
+  return `Automático: métricas mescladas de ${n} snapshots Compilado (um por time). Referência na UI: ${refLabel}${when ? ` (${when})` : ""}.`;
 }
 
 async function latestJiraCloudSyncAt(
@@ -192,5 +224,142 @@ export async function resolveCompiladoSnapshot(input: {
       jiraCloudNewerThanSnapshot,
     },
     usedAutoResolution: explicit == null,
+  };
+}
+
+function toSingleDashboardSnapshot(
+  resolved: ResolvedCompiladoSnapshot,
+): ResolvedCompiladoDashboardSnapshot {
+  return {
+    ...resolved,
+    winningImportIds: resolved.selectedBatch ? [resolved.selectedBatch.id] : [],
+    mergedAcrossTeams: false,
+  };
+}
+
+/**
+ * Resolve Compilado for the Gestor dashboard.
+ *
+ * Batches are per team. When viewing all teams without an explicit `importId`,
+ * picks one winning snapshot per team and merges card loads — a single global
+ * winner would zero out people from other teams (same rule as Folha).
+ */
+export async function resolveCompiladoSnapshotsForDashboard(input: {
+  mode?: CompiladoSourceMode;
+  importId?: string | null;
+  dateRange?: CompiladoDateRange | null;
+  teamId?: string | null;
+  /** Distinct team ids among developers in scope (include `null` for unassigned). */
+  teamIds: Array<string | null>;
+}): Promise<ResolvedCompiladoDashboardSnapshot> {
+  const mode = input.mode ?? "auto";
+  const scopedTeamId = input.teamId?.trim() || null;
+  const explicitImportId = input.importId?.trim() || null;
+
+  if (scopedTeamId || explicitImportId) {
+    return toSingleDashboardSnapshot(
+      await resolveCompiladoSnapshot({
+        mode,
+        importId: explicitImportId,
+        dateRange: input.dateRange,
+        teamId: scopedTeamId,
+      }),
+    );
+  }
+
+  const uniqueTeamIds = [...new Set(input.teamIds)];
+  if (uniqueTeamIds.length <= 1) {
+    return toSingleDashboardSnapshot(
+      await resolveCompiladoSnapshot({
+        mode,
+        importId: null,
+        dateRange: input.dateRange,
+        teamId: uniqueTeamIds[0] ?? null,
+      }),
+    );
+  }
+
+  const sources = importSourcesForCompiladoMode(mode);
+  const [batches, perTeam] = await Promise.all([
+    listImportBatches({ sources, teamId: null }),
+    Promise.all(
+      uniqueTeamIds.map(async (teamId) => {
+        const resolved = await resolveCompiladoSnapshot({
+          mode,
+          importId: null,
+          dateRange: input.dateRange,
+          teamId,
+        });
+        return { teamId, selectedBatch: resolved.selectedBatch };
+      }),
+    ),
+  ]);
+
+  const winnersById = new Map<string, ImportBatchOption>();
+  for (const entry of perTeam) {
+    if (entry.selectedBatch) {
+      winnersById.set(entry.selectedBatch.id, entry.selectedBatch);
+    }
+  }
+
+  const winners = [...winnersById.values()].sort(compareSnapshotRecency);
+  const selectedBatch = winners[0] ?? null;
+  const winningImportIds = winners.map((batch) => batch.id);
+
+  if (selectedBatch == null) {
+    return {
+      batches,
+      selectedBatch: null,
+      provenance: null,
+      usedAutoResolution: true,
+      winningImportIds: [],
+      mergedAcrossTeams: false,
+    };
+  }
+
+  const mergedAcrossTeams = winners.length > 1;
+  const resolvedAt =
+    snapshotCapturedAt(selectedBatch) ??
+    selectedBatch.created_at ??
+    new Date(0).toISOString();
+  const resolvedSource = mapImportSourceToResolved(selectedBatch.source);
+
+  const cloudSyncAts = await Promise.all(
+    winners.map((batch) => latestJiraCloudSyncAt(batch.team_id ?? null)),
+  );
+  let jiraCloudSyncAt: string | null = null;
+  for (const at of cloudSyncAts) {
+    if (at && (!jiraCloudSyncAt || at > jiraCloudSyncAt)) {
+      jiraCloudSyncAt = at;
+    }
+  }
+  const jiraCloudNewerThanSnapshot = Boolean(
+    jiraCloudSyncAt && jiraCloudSyncAt > resolvedAt,
+  );
+
+  return {
+    batches,
+    selectedBatch,
+    provenance: {
+      resolvedSource,
+      resolvedAt,
+      resolutionReason: mergedAcrossTeams
+        ? buildMergedReason({ mode, winners, reference: selectedBatch })
+        : buildReason({
+            mode,
+            winner: selectedBatch,
+            usedExplicitImportId: false,
+            overlappingPreferred:
+              input.dateRange != null &&
+              batchPeriodOverlapsRange(selectedBatch, input.dateRange),
+          }),
+      importId: selectedBatch.id,
+      auditMode: mode,
+      jiraCloudSyncAt,
+      jiraCloudNewerThanSnapshot,
+    },
+    usedAutoResolution: true,
+    winningImportIds,
+    mergedAcrossTeams,
   };
 }

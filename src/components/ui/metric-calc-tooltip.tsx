@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/utils";
 import type { MetricCalcExplain } from "@/lib/metrics/metric-calc-explain";
-import { metricCalcExplainToPlainText } from "@/lib/metrics/metric-calc-explain";
 import { Info } from "lucide-react";
 import {
   useCallback,
@@ -58,6 +57,9 @@ function MetricCalcPanel({ explain }: { explain: MetricCalcExplain }) {
 /**
  * Hover tooltip on desktop; tap/click toggle on touch (and as keyboard fallback).
  * Portaled to body so table overflow does not clip the panel.
+ *
+ * Do not set a native `title` on the trigger — it stacks a second browser
+ * tooltip on top of this panel.
  */
 export function MetricCalcTooltip({
   explain,
@@ -72,8 +74,6 @@ export function MetricCalcTooltip({
   const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState<PanelPos | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const plain = metricCalcExplainToPlainText(explain);
 
   const updatePosition = useCallback(() => {
     const el = triggerRef.current;
@@ -164,8 +164,8 @@ export function MetricCalcTooltip({
         className={cn("ui-metric-tooltip__trigger", className)}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
+        aria-describedby={open ? panelId : undefined}
         aria-label="Ver memória de cálculo"
-        title={plain}
         onMouseEnter={openFromHover}
         onMouseLeave={scheduleClose}
         onFocus={openFromHover}

@@ -17,7 +17,7 @@ import type {
   PayrollAutoAmountField,
   PayrollClosingItemWithIssuer,
 } from "@/types/payroll-closing";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
@@ -26,6 +26,8 @@ const initialState: PayrollFormState = {
   error: null,
   success: null,
 };
+
+const MASKED_MONEY = "R$ ••••";
 
 function moneyInputValue(value: number): string {
   return String(value);
@@ -40,6 +42,9 @@ type PayrollItemEditorProps = {
   readOnly?: boolean;
   /** When set, monthly closing is finalized — line is locked. */
   finalizedClosingId?: string | null;
+  /** When false, monetary amounts are masked. */
+  moneyVisible?: boolean;
+  onToggleMoneyVisible?: () => void;
 };
 
 function formatHours(value: number): string {
@@ -78,6 +83,8 @@ export function PayrollItemEditor({
   contractedHoursDelta,
   readOnly = false,
   finalizedClosingId = null,
+  moneyVisible = false,
+  onToggleMoneyVisible,
 }: PayrollItemEditorProps) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
@@ -142,6 +149,33 @@ export function PayrollItemEditor({
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium text-foreground">{item.developer_name}</p>
+            {onToggleMoneyVisible ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onToggleMoneyVisible();
+                }}
+                className="inline-flex size-7 items-center justify-center rounded-[var(--radius-sm)] border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                aria-label={
+                  moneyVisible
+                    ? `Ocultar valores de ${item.developer_name}`
+                    : `Exibir valores de ${item.developer_name}`
+                }
+                title={
+                  moneyVisible
+                    ? "Ocultar valores desta pessoa"
+                    : "Exibir valores desta pessoa"
+                }
+              >
+                {moneyVisible ? (
+                  <EyeOff className="size-3.5" aria-hidden />
+                ) : (
+                  <Eye className="size-3.5" aria-hidden />
+                )}
+              </button>
+            ) : null}
             {item.is_reviewed ? (
               <span className="inline-flex items-center gap-1 rounded-[calc(var(--radius-sm)-2px)] border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="size-3" aria-hidden />
@@ -152,7 +186,9 @@ export function PayrollItemEditor({
           <p className="text-xs text-muted-foreground">
             {COMPENSATION_BASE_TYPE_LABELS[item.base_type]}
             {item.base_type === "variable" && item.hourly_rate != null
-              ? ` · R$ ${item.hourly_rate.toLocaleString("pt-BR")}/h`
+              ? moneyVisible
+                ? ` · R$ ${item.hourly_rate.toLocaleString("pt-BR")}/h`
+                : " · R$ ••••/h"
               : null}
           </p>
           <Link
@@ -164,10 +200,12 @@ export function PayrollItemEditor({
         </div>
       </td>
       <td className="align-top tabular-nums">
-        {item.base_amount.toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        })}
+        {moneyVisible
+          ? item.base_amount.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })
+          : MASKED_MONEY}
       </td>
       <td className="align-top">
         <p className="tabular-nums font-medium">{formatHours(jiraHours)}</p>
@@ -206,7 +244,7 @@ export function PayrollItemEditor({
                   Diferencial
                   {item.differential_manual ? " · manual" : ""}
                 </span>
-                {!inputsDisabled && item.differential_manual ? (
+                {moneyVisible && !inputsDisabled && item.differential_manual ? (
                   <RestoreCalculatedButton
                     label="Restaurar"
                     disabled={busy}
@@ -214,25 +252,37 @@ export function PayrollItemEditor({
                   />
                 ) : null}
               </div>
-              <input
-                name="differentialAmount"
-                type="text"
-                inputMode="decimal"
-                defaultValue={moneyInputValue(item.differential_amount)}
-                disabled={inputsDisabled}
-                className="ui-input text-sm"
-              />
+              {moneyVisible ? (
+                <input
+                  name="differentialAmount"
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={moneyInputValue(item.differential_amount)}
+                  disabled={inputsDisabled}
+                  className="ui-input text-sm"
+                />
+              ) : (
+                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                  {MASKED_MONEY}
+                </p>
+              )}
             </div>
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Descontos</span>
-              <input
-                name="discountsAmount"
-                type="text"
-                inputMode="decimal"
-                defaultValue={moneyInputValue(item.discounts_amount)}
-                disabled={inputsDisabled}
-                className="ui-input text-sm"
-              />
+              {moneyVisible ? (
+                <input
+                  name="discountsAmount"
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={moneyInputValue(item.discounts_amount)}
+                  disabled={inputsDisabled}
+                  className="ui-input text-sm"
+                />
+              ) : (
+                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                  {MASKED_MONEY}
+                </p>
+              )}
             </label>
             <div className="space-y-1 text-xs">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -240,7 +290,7 @@ export function PayrollItemEditor({
                   Deslocamento
                   {item.travel_manual ? " · manual" : ""}
                 </span>
-                {!inputsDisabled && item.travel_manual ? (
+                {moneyVisible && !inputsDisabled && item.travel_manual ? (
                   <RestoreCalculatedButton
                     label="Restaurar"
                     disabled={busy}
@@ -248,14 +298,20 @@ export function PayrollItemEditor({
                   />
                 ) : null}
               </div>
-              <input
-                name="travelAmount"
-                type="text"
-                inputMode="decimal"
-                defaultValue={moneyInputValue(item.travel_amount)}
-                disabled={inputsDisabled}
-                className="ui-input text-sm"
-              />
+              {moneyVisible ? (
+                <input
+                  name="travelAmount"
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={moneyInputValue(item.travel_amount)}
+                  disabled={inputsDisabled}
+                  className="ui-input text-sm"
+                />
+              ) : (
+                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                  {MASKED_MONEY}
+                </p>
+              )}
             </div>
             <div className="space-y-1 text-xs">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -263,7 +319,7 @@ export function PayrollItemEditor({
                   Refeição
                   {item.meal_manual ? " · manual" : ""}
                 </span>
-                {!inputsDisabled && item.meal_manual ? (
+                {moneyVisible && !inputsDisabled && item.meal_manual ? (
                   <RestoreCalculatedButton
                     label="Restaurar"
                     disabled={busy}
@@ -271,14 +327,20 @@ export function PayrollItemEditor({
                   />
                 ) : null}
               </div>
-              <input
-                name="mealAmount"
-                type="text"
-                inputMode="decimal"
-                defaultValue={moneyInputValue(item.meal_amount)}
-                disabled={inputsDisabled}
-                className="ui-input text-sm"
-              />
+              {moneyVisible ? (
+                <input
+                  name="mealAmount"
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={moneyInputValue(item.meal_amount)}
+                  disabled={inputsDisabled}
+                  className="ui-input text-sm"
+                />
+              ) : (
+                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                  {MASKED_MONEY}
+                </p>
+              )}
             </div>
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Empresa NF</span>
@@ -300,10 +362,12 @@ export function PayrollItemEditor({
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm font-medium tabular-nums">
               NF:{" "}
-              {item.invoice_amount.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
+              {moneyVisible
+                ? item.invoice_amount.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })
+                : MASKED_MONEY}
             </p>
             {lockedByFinalized ? (
               <p className="text-xs text-amber-800 dark:text-amber-200">
@@ -320,7 +384,12 @@ export function PayrollItemEditor({
                 <button
                   type="submit"
                   className="ui-btn-secondary text-xs"
-                  disabled={busy}
+                  disabled={busy || !moneyVisible}
+                  title={
+                    moneyVisible
+                      ? undefined
+                      : "Exiba os valores (olho) antes de salvar a linha"
+                  }
                 >
                   {isPending ? "Salvando..." : "Salvar linha"}
                 </button>
