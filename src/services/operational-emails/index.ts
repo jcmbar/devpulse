@@ -6,6 +6,7 @@ import {
   EMAIL_PREVIEW_SAMPLE_VARS,
   renderEmailTemplate,
 } from "@/lib/email/render-template";
+import { buildOperationalEmailAttachmentFilename } from "@/lib/email/attachment-filename";
 import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
 import {
   sendViaZeptoMailSmtp,
@@ -475,6 +476,11 @@ async function resolveRecipients(input: {
 async function downloadClosingAttachments(
   types: MonthlyClosingAttachmentType[],
   closingId: string,
+  naming?: {
+    developerName: string;
+    yearMonth: string;
+    audience: EmailSendTypeCode | null;
+  },
 ): Promise<{
   files: OperationalEmailAttachment[];
   attachedTypes: string[];
@@ -502,8 +508,24 @@ async function downloadClosingAttachments(
       );
     }
     const buffer = Buffer.from(await data.arrayBuffer());
+    const useFriendlyName =
+      naming != null &&
+      (naming.audience === "financeiro" || naming.audience === "rh");
+    const filename = useFriendlyName
+      ? buildOperationalEmailAttachmentFilename({
+          attachmentType: type,
+          originalFilename: row.original_filename,
+          developerName: naming.developerName,
+          yearMonth: naming.yearMonth,
+          audience: naming.audience,
+        })
+      : row.original_filename?.toLowerCase().endsWith(".pdf")
+        ? row.original_filename
+        : row.original_filename
+          ? `${row.original_filename}.pdf`
+          : `${type}.pdf`;
     files.push({
-      filename: row.original_filename || `${type}.pdf`,
+      filename,
       content: buffer,
       contentType: row.mime_type || "application/pdf",
     });
@@ -656,6 +678,13 @@ export async function sendOperationalClosingEmail(input: {
     const downloaded = await downloadClosingAttachments(
       attachmentTypesToFetch,
       closing.id,
+      input.typeCode === "financeiro" || input.typeCode === "rh"
+        ? {
+            developerName: developer.full_name,
+            yearMonth: closing.year_month,
+            audience: input.typeCode,
+          }
+        : undefined,
     );
     files = downloaded.files;
     attachedTypes = downloaded.attachedTypes;
