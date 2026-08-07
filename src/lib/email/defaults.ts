@@ -3,7 +3,7 @@
  * Auth invite/reset stay on Supabase Auth — not covered here.
  */
 
-export const OPERATIONAL_EMAIL_FROM_NAME_DEFAULT = "DevPulse";
+export const OPERATIONAL_EMAIL_FROM_NAME_DEFAULT = "Athos Labs";
 export const OPERATIONAL_EMAIL_FROM_EMAIL_DEFAULT = "contato@athoslabs.com.br";
 export const OPERATIONAL_EMAIL_REPLY_TO_DEFAULT = "jefferson@athoslabs.com.br";
 

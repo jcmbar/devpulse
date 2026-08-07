@@ -34,14 +34,14 @@ describe("resolveOperationalEmailEnvelope", () => {
     }
   });
 
-  it("uses DevPulse + contato@athoslabs.com.br + jefferson reply-to by default", () => {
+  it("uses Athos Labs + contato@athoslabs.com.br + jefferson reply-to by default", () => {
     const envelope = resolveOperationalEmailEnvelope();
     assert.equal(envelope.fromName, OPERATIONAL_EMAIL_FROM_NAME_DEFAULT);
     assert.equal(envelope.fromEmail, OPERATIONAL_EMAIL_FROM_EMAIL_DEFAULT);
     assert.equal(envelope.replyTo, OPERATIONAL_EMAIL_REPLY_TO_DEFAULT);
     assert.equal(
       envelope.from,
-      "DevPulse <contato@athoslabs.com.br>",
+      "Athos Labs <contato@athoslabs.com.br>",
     );
     assert.equal(envelope.replyTo, "jefferson@athoslabs.com.br");
   });
