@@ -2,7 +2,7 @@ import "server-only";
 
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
-import { sendViaZeptoMailSmtp } from "@/lib/email/zeptomail-smtp";
+import { sendViaZeptoMail } from "@/lib/email/zeptomail-send";
 import { getZeptoMailSmtpConfig } from "@/lib/email/zeptomail-smtp-config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,7 +62,7 @@ export async function sendOperationalTestEmail(input: {
     </div>
   `.trim();
 
-  const result = await sendViaZeptoMailSmtp({
+  const result = await sendViaZeptoMail({
     from: envelope.from,
     to: [to],
     replyTo: envelope.replyTo,

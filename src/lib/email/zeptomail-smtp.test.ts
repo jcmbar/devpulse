@@ -11,6 +11,9 @@ const ENV_KEYS = [
   "ZEPTOMAIL_SMTP_USER",
   "ZEPTOMAIL_SMTP_PASSWORD",
   "ZEPTOMAIL_SMTP_PASS",
+  "ZEPTOMAIL_TRANSPORT",
+  "ZEPTOMAIL_API_TOKEN",
+  "ZEPTOMAIL_API_URL",
   "SMTP_HOST",
   "SMTP_PORT",
   "SMTP_USER",
@@ -81,6 +84,30 @@ describe("getZeptoMailSmtpConfig", () => {
     assert.equal(status.passwordConfigured, true);
     assert.equal(status.missingHint, null);
     assert.equal(status.host, "smtp.zeptomail.com");
+    assert.equal(status.transport, "api");
     assert.ok(!("password" in status));
+  });
+
+  it("allows forcing SMTP transport", () => {
+    process.env.ZEPTOMAIL_SMTP_PASSWORD = "secret-token";
+    process.env.ZEPTOMAIL_TRANSPORT = "smtp";
+    const status = getZeptoMailSmtpPublicStatus();
+    assert.equal(status.transport, "smtp");
+  });
+});
+
+describe("normalizeZeptoMailApiToken", () => {
+  it("strips Zoho-enczapikey prefix pasted from dashboards", async () => {
+    const { normalizeZeptoMailApiToken } = await import(
+      "./zeptomail-smtp-config.ts"
+    );
+    assert.equal(
+      normalizeZeptoMailApiToken("Zoho-enczapikey abc.def=="),
+      "abc.def==",
+    );
+    assert.equal(
+      normalizeZeptoMailApiToken("Authorization: Zoho-enczapikey xyz"),
+      "xyz",
+    );
   });
 });

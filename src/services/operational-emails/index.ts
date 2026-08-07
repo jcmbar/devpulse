@@ -9,9 +9,9 @@ import {
 import { buildOperationalEmailAttachmentFilename } from "@/lib/email/attachment-filename";
 import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
 import {
-  sendViaZeptoMailSmtp,
+  sendViaZeptoMail,
   type OperationalEmailAttachment,
-} from "@/lib/email/zeptomail-smtp";
+} from "@/lib/email/zeptomail-send";
 import { archiveOperationalEmailAttachments } from "@/services/operational-emails/attachment-backups";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -697,7 +697,7 @@ export async function sendOperationalClosingEmail(input: {
     }
 
     const envelope = resolveOperationalEmailEnvelope();
-    const result = await sendViaZeptoMailSmtp({
+    const result = await sendViaZeptoMail({
       from: envelope.from,
       to: recipients.to,
       cc: recipients.cc,

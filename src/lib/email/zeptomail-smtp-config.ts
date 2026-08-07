@@ -6,18 +6,24 @@ export type ZeptoMailSmtpConfig = {
   secure: boolean;
 };
 
+export type ZeptoMailTransportMode = "api" | "smtp";
+
 /** Safe snapshot for UI — never includes the password. */
 export type ZeptoMailSmtpPublicStatus = {
   passwordConfigured: boolean;
   host: string;
   port: number;
   user: string;
+  transport: ZeptoMailTransportMode;
+  apiUrl: string;
   /** Human-readable hint when misconfigured. */
   missingHint: string | null;
 };
 
 const PASSWORD_MISSING_HINT =
-  "Configure ZEPTOMAIL_SMTP_PASSWORD no ambiente e reinicie/redeploye o serviço.";
+  "Configure ZEPTOMAIL_SMTP_PASSWORD (ou ZEPTOMAIL_API_TOKEN) no ambiente e reinicie/redeploye o serviço.";
+
+const DEFAULT_API_URL = "https://api.zeptomail.com/v1.1/email";
 
 function readEnv(...names: string[]): string | undefined {
   for (const name of names) {
@@ -56,37 +62,74 @@ function readSmtpPassword(): string | undefined {
   return password || undefined;
 }
 
+/**
+ * Transport for operational mail.
+ * Default is HTTPS API — Render Free blocks outbound SMTP on 25/465/587.
+ * Set ZEPTOMAIL_TRANSPORT=smtp only when the host allows SMTP egress.
+ */
+export function getZeptoMailTransportMode(): ZeptoMailTransportMode {
+  const raw = readEnv("ZEPTOMAIL_TRANSPORT", "EMAIL_TRANSPORT")?.toLowerCase();
+  if (raw === "smtp") {
+    return "smtp";
+  }
+  return "api";
+}
+
+export function getZeptoMailApiUrl(): string {
+  return (readEnv("ZEPTOMAIL_API_URL") ?? DEFAULT_API_URL).replace(/\/$/, "");
+}
+
+/** Send-mail token for ZeptoMail REST API (same agent token as SMTP password in most setups). */
+export function getZeptoMailApiToken(): string {
+  const raw = readEnv("ZEPTOMAIL_API_TOKEN") ?? readSmtpPassword();
+  if (!raw) {
+    throw new Error(PASSWORD_MISSING_HINT);
+  }
+  return normalizeZeptoMailApiToken(unwrapEnvSecret(raw));
+}
+
+/**
+ * Env dashboards often paste the full "Zoho-enczapikey …" header value.
+ * Authorization must be built as `Zoho-enczapikey <token>` once.
+ */
+export function normalizeZeptoMailApiToken(value: string): string {
+  let token = value.trim();
+  token = token.replace(/^Authorization\s*:\s*/i, "").trim();
+  token = token.replace(/^Zoho-enczapikey\s+/i, "").trim();
+  return token;
+}
+
 /** Public status for the email settings panel (no secrets). */
 export function getZeptoMailSmtpPublicStatus(): ZeptoMailSmtpPublicStatus {
   const host =
     readEnv("ZEPTOMAIL_SMTP_HOST", "SMTP_HOST") ?? "smtp.zeptomail.com";
-  const port = Number(
-    readEnv("ZEPTOMAIL_SMTP_PORT", "SMTP_PORT") ?? "587",
+  const port = Number(readEnv("ZEPTOMAIL_SMTP_PORT", "SMTP_PORT") ?? "587");
+  const user = readEnv("ZEPTOMAIL_SMTP_USER", "SMTP_USER") ?? "emailapikey";
+  const passwordConfigured = Boolean(
+    readEnv("ZEPTOMAIL_API_TOKEN") || readSmtpPassword(),
   );
-  const user =
-    readEnv("ZEPTOMAIL_SMTP_USER", "SMTP_USER") ?? "emailapikey";
-  const passwordConfigured = Boolean(readSmtpPassword());
+  const transport = getZeptoMailTransportMode();
 
   return {
     passwordConfigured,
     host,
     port: Number.isFinite(port) && port > 0 ? port : 587,
     user,
+    transport,
+    apiUrl: getZeptoMailApiUrl(),
     missingHint: passwordConfigured ? null : PASSWORD_MISSING_HINT,
   };
 }
 
 /**
- * ZeptoMail SMTP settings (TLS on 587). Credentials stay in env.
+ * ZeptoMail SMTP settings (TLS on 587 / SSL on 465). Credentials stay in env.
  * Throws with a clear, non-secret message when misconfigured.
  */
 export function getZeptoMailSmtpConfig(): ZeptoMailSmtpConfig {
   const host = (
     readEnv("ZEPTOMAIL_SMTP_HOST", "SMTP_HOST") ?? "smtp.zeptomail.com"
   ).trim();
-  const port = Number(
-    readEnv("ZEPTOMAIL_SMTP_PORT", "SMTP_PORT") ?? "587",
-  );
+  const port = Number(readEnv("ZEPTOMAIL_SMTP_PORT", "SMTP_PORT") ?? "587");
   const user = (
     readEnv("ZEPTOMAIL_SMTP_USER", "SMTP_USER") ?? "emailapikey"
   ).trim();
@@ -99,7 +142,9 @@ export function getZeptoMailSmtpConfig(): ZeptoMailSmtpConfig {
     throw new Error("Porta SMTP ZeptoMail inválida (ZEPTOMAIL_SMTP_PORT).");
   }
   if (!user) {
-    throw new Error("Usuário SMTP ZeptoMail não configurado (ZEPTOMAIL_SMTP_USER).");
+    throw new Error(
+      "Usuário SMTP ZeptoMail não configurado (ZEPTOMAIL_SMTP_USER).",
+    );
   }
   if (!password) {
     throw new Error(PASSWORD_MISSING_HINT);

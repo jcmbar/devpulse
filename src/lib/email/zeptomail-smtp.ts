@@ -87,7 +87,8 @@ export function sanitizeSmtpErrorMessage(raw: string): string {
   if (/connection timeout|greeting timeout|socket timeout|etimedout|econnreset|econnrefused/i.test(message)) {
     return (
       "Timeout na conexão SMTP com o ZeptoMail. " +
-      "Tente novamente em alguns segundos. Se persistir, verifique a saída de rede na porta 587 do ambiente de deploy."
+      "No Render Free as portas SMTP (25/465/587) são bloqueadas — use ZEPTOMAIL_TRANSPORT=api (padrão) e redeploye. " +
+      "Em plano pago, confira a saída na porta 587/465."
     );
   }
   if (message.length > 280) {

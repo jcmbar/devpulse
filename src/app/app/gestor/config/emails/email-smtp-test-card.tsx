@@ -71,11 +71,23 @@ export function EmailSmtpTestCard({
       <div className="rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         {smtpStatus.passwordConfigured ? (
           <p>
-            SMTP: {smtpStatus.host}:{smtpStatus.port} · usuário{" "}
-            <span className="font-medium text-foreground">
-              {smtpStatus.user}
-            </span>{" "}
-            · senha configurada
+            {smtpStatus.transport === "api" ? (
+              <>
+                Transporte:{" "}
+                <span className="font-medium text-foreground">API HTTPS</span>
+                {" · "}
+                {smtpStatus.apiUrl}
+                {" · "}token configurado
+              </>
+            ) : (
+              <>
+                SMTP: {smtpStatus.host}:{smtpStatus.port} · usuário{" "}
+                <span className="font-medium text-foreground">
+                  {smtpStatus.user}
+                </span>{" "}
+                · senha configurada
+              </>
+            )}
           </p>
         ) : (
           <p className="text-danger">
@@ -83,7 +95,14 @@ export function EmailSmtpTestCard({
               "Configure ZEPTOMAIL_SMTP_PASSWORD no ambiente e reinicie/redeploye o serviço."}
           </p>
         )}
-      </div>
+        {smtpStatus.passwordConfigured && smtpStatus.transport === "api" ? (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Padrão recomendado no Render Free (SMTP 25/465/587 bloqueados). Para
+            forçar SMTP em host pago:{" "}
+            <code className="rounded bg-muted px-1">ZEPTOMAIL_TRANSPORT=smtp</code>
+            .
+          </p>
+        ) : null}      </div>
 
       <form onSubmit={onSubmit} className="space-y-3">
         <label className="block space-y-1.5">
