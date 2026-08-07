@@ -92,12 +92,28 @@ export function InspectionDeterrent({
   }, []);
 
   useEffect(() => {
+    const rawEnv =
+      process.env.NEXT_PUBLIC_INSPECTION_DETERRENT?.trim() || "(unset)";
+    // Temporary diagnostics — confirm mount + flag + listener in the browser console.
+    console.info("[inspection-deterrent]", {
+      mounted: true,
+      enabled,
+      rawEnv,
+      nodeEnv: process.env.NODE_ENV,
+      pathname:
+        typeof window !== "undefined" ? window.location.pathname : "(ssr)",
+    });
+
     if (!enabled) {
+      console.info(
+        "[inspection-deterrent] inactive — listeners NOT registered. In development, set NEXT_PUBLIC_INSPECTION_DETERRENT=1 and restart `next dev`.",
+      );
       return;
     }
 
-    function onContextMenu(event: MouseEvent) {
+    function onContextMenu(event: Event) {
       event.preventDefault();
+      event.stopPropagation();
     }
 
     function onKeyDown(event: KeyboardEvent) {
@@ -116,6 +132,10 @@ export function InspectionDeterrent({
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("resize", onResize);
 
+    console.info(
+      "[inspection-deterrent] contextmenu listener registered on document (capture)",
+    );
+
     evaluateDevtools();
     const timer = window.setInterval(evaluateDevtools, CHECK_INTERVAL_MS);
 
@@ -128,14 +148,13 @@ export function InspectionDeterrent({
     };
   }, [enabled, evaluateDevtools]);
 
-  if (!enabled) {
-    return <>{children}</>;
-  }
-
   return (
-    <div className={cn("relative", className)}>
+    <div
+      className={cn("relative", className)}
+      data-inspection-deterrent={enabled ? "on" : "off"}
+    >
       {children}
-      {devtoolsOpen ? (
+      {enabled && devtoolsOpen ? (
         <div
           className="fixed inset-0 z-[80] flex items-center justify-center bg-background/80 px-6 backdrop-blur-[2px]"
           role="alertdialog"
