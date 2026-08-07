@@ -53,6 +53,15 @@ export function FinanceiroEmailSendButton({
           ? "Pronto"
           : "Indisp.";
 
+  const buttonLabel =
+    status === "sent"
+      ? compact || matrix
+        ? "Reenv."
+        : "Reenviar"
+      : compact || matrix
+        ? "Fin."
+        : "Financeiro";
+
   return (
     <div
       className={cn(
@@ -97,7 +106,7 @@ export function FinanceiroEmailSendButton({
             strokeWidth={2}
           />
         )}
-        {compact || matrix ? "Fin." : "Financeiro"}
+        {buttonLabel}
       </button>
       <span
         className={cn(
