@@ -240,13 +240,14 @@ values
   )
 on conflict (code) do nothing;
 
--- Default templates (inactive until from_email/recipients are configured in UI;
--- seeded as active with placeholder from — gestor deve revisar).
+-- Default templates (ZeptoMail / athoslabs.com.br).
+-- Auth invite/reset remain on Supabase Auth.
 insert into public.email_templates (
   send_type_id,
   internal_name,
   from_name,
   from_email,
+  reply_to,
   subject_template,
   body_html,
   signature_html,
@@ -256,7 +257,8 @@ select
   t.id,
   v.internal_name,
   'DevPulse',
-  'noreply@devpulse.local',
+  'contato@athoslabs.com.br',
+  'jefferson@athoslabs.com.br',
   v.subject_template,
   v.body_html,
   v.signature_html,

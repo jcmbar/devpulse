@@ -1064,7 +1064,12 @@ export async function listMonthlyClosingAttachmentPresence(
 ): Promise<Map<string, MonthlyClosingAttachmentPresence>> {
   const result = new Map<string, MonthlyClosingAttachmentPresence>();
   for (const id of closingIds) {
-    result.set(id, { hasInvoicePdf: false, hasBoletoPdf: false });
+    result.set(id, {
+      hasInvoicePdf: false,
+      hasBoletoPdf: false,
+      hasMealPixReceipt: false,
+      mealPixValid: null,
+    });
   }
   if (closingIds.length === 0) {
     return result;
@@ -1073,7 +1078,7 @@ export async function listMonthlyClosingAttachmentPresence(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("monthly_closing_attachments")
-    .select("monthly_closing_id, type")
+    .select("monthly_closing_id, type, is_valid")
     .in("monthly_closing_id", closingIds);
 
   if (error) {
@@ -1085,11 +1090,17 @@ export async function listMonthlyClosingAttachmentPresence(
     const entry = result.get(closingId) ?? {
       hasInvoicePdf: false,
       hasBoletoPdf: false,
+      hasMealPixReceipt: false,
+      mealPixValid: null,
     };
     if (row.type === "invoice_pdf") {
       entry.hasInvoicePdf = true;
     } else if (row.type === "boleto_pdf") {
       entry.hasBoletoPdf = true;
+    } else if (row.type === "meal_pix_receipt") {
+      entry.hasMealPixReceipt = true;
+      entry.mealPixValid =
+        row.is_valid == null ? null : Boolean(row.is_valid);
     }
     result.set(closingId, entry);
   }

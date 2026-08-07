@@ -6,10 +6,11 @@ import {
   EMAIL_PREVIEW_SAMPLE_VARS,
   renderEmailTemplate,
 } from "@/lib/email/render-template";
+import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
 import {
-  sendViaResend,
+  sendViaZeptoMailSmtp,
   type OperationalEmailAttachment,
-} from "@/lib/email/resend";
+} from "@/lib/email/zeptomail-smtp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getDeveloperAdmin } from "@/services/developers/admin";
@@ -665,12 +666,12 @@ export async function sendOperationalClosingEmail(input: {
       }
     }
 
-    const from = `${template.from_name} <${template.from_email}>`;
-    const result = await sendViaResend({
-      from,
+    const envelope = resolveOperationalEmailEnvelope();
+    const result = await sendViaZeptoMailSmtp({
+      from: envelope.from,
       to: recipients.to,
       cc: recipients.cc,
-      replyTo: template.reply_to,
+      replyTo: envelope.replyTo,
       subject,
       html,
       attachments: files,

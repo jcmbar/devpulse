@@ -1,5 +1,6 @@
 "use client";
 
+import { loadDeveloperClosingMonthDetailAction } from "@/app/app/monthly-closing-actions";
 import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
 import { MonthlyClosingAttachmentsPanel } from "@/components/monthly-closing/monthly-closing-attachments";
 import {
@@ -23,8 +24,16 @@ import type {
   MonthlyClosingCardAuditRow,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
-import Link from "next/link";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 export type DeveloperClosingYearMonthRow = {
   yearMonth: string;
@@ -50,6 +59,24 @@ type DeveloperClosingsYearViewProps = {
   mealPixBlockReason?: string | null;
 };
 
+type DetailPanelProps = {
+  detailRow: DeveloperClosingYearMonthRow | null;
+  importId: string | null;
+  sourceMode: string | null;
+  detailClosing: MonthlyClosing | null;
+  detailAuditRows: MonthlyClosingCardAuditRow[];
+  detailCanSubmit: boolean;
+  detailBlockingCount: number;
+  detailAttachments: MonthlyClosingAttachment[];
+  developerCompensation: DeveloperCompensation | null;
+  closingInvoiceIssuer?: InvoiceIssuer | null;
+  closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
+  mealPixBlockReason?: string | null;
+  empty?: boolean;
+  /** Compact header when rendered inside the desktop drawer. */
+  embedded?: boolean;
+};
+
 function formatPercent(value: number | null): string {
   if (value == null) {
     return "—";
@@ -64,6 +91,18 @@ function formatHours(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })} h`;
+}
+
+function shortMonthLabel(yearMonth: string): string {
+  const [year, monthPart] = yearMonth.split("-");
+  const date = new Date(Number(year), Number(monthPart) - 1, 1);
+  if (Number.isNaN(date.getTime())) {
+    return yearMonth;
+  }
+  return new Intl.DateTimeFormat("pt-BR", { month: "short" })
+    .format(date)
+    .replace(".", "")
+    .replace(/^\w/, (char) => char.toUpperCase());
 }
 
 function buildFechamentosHref(input: {
@@ -93,10 +132,10 @@ function actionLabel(
   startedAt: string | null | undefined,
 ): string {
   if (isOpen) {
-    return "Ocultar";
+    return "Fechar";
   }
   if (status === "open" && !startedAt) {
-    return "Abrir / iniciar";
+    return "Abrir";
   }
   if (status === "open") {
     return "Continuar";
@@ -151,32 +190,11 @@ function summarizeYear(rows: DeveloperClosingYearMonthRow[]) {
     finalized,
     totalCards,
     totalTimeSpentHours,
-    avgUtilization:
-      utilCount > 0 ? utilSum / utilCount : null,
+    avgUtilization: utilCount > 0 ? utilSum / utilCount : null,
   };
 }
 
-function MonthActionLink({
-  href,
-  label,
-  className,
-}: {
-  href: string;
-  label: string;
-  className?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn("ui-btn-ghost", className)}
-      onClick={() => persistFiltersFromHref("developer-home", href)}
-    >
-      {label}
-    </Link>
-  );
-}
-
-function MonthDetailPanel({
+function MonthDetailContent({
   detailRow,
   importId,
   sourceMode,
@@ -190,40 +208,48 @@ function MonthDetailPanel({
   closingHolidays = [],
   mealPixBlockReason = null,
   empty,
-}: {
-  detailRow: DeveloperClosingYearMonthRow | null;
-  importId: string | null;
-  sourceMode: string | null;
-  detailClosing: MonthlyClosing | null;
-  detailAuditRows: MonthlyClosingCardAuditRow[];
-  detailCanSubmit: boolean;
-  detailBlockingCount: number;
-  detailAttachments: MonthlyClosingAttachment[];
-  developerCompensation: DeveloperCompensation | null;
-  closingInvoiceIssuer?: InvoiceIssuer | null;
-  closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
-  mealPixBlockReason?: string | null;
-  empty?: boolean;
-}) {
+  embedded = false,
+  loading = false,
+}: DetailPanelProps & { loading?: boolean }) {
   if (empty || detailRow == null) {
     return (
-      <div className="ui-dashboard-panel flex min-h-[12rem] flex-col items-center justify-center text-center">
+      <div
+        className={cn(
+          "flex min-h-[10rem] flex-col items-center justify-center text-center",
+          !embedded && "ui-dashboard-panel",
+        )}
+      >
         <p className="text-sm font-medium text-foreground">
           Selecione um mês
         </p>
-        <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-          Abra um mês na lista para ver ações, auditoria e documentos do
-          fechamento.
+        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+          Clique em Abrir no mês desejado para ver ações, auditoria e documentos
+          do fechamento.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="ui-dashboard-panel space-y-4">
+    <div
+      className={cn(
+        "space-y-4",
+        !embedded && "ui-dashboard-panel ring-1 ring-brand/15",
+      )}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-base font-semibold tracking-tight">
+          {!embedded ? (
+            <p className="text-[11px] font-semibold tracking-[0.08em] text-brand uppercase">
+              Detalhe do mês
+            </p>
+          ) : null}
+          <h3
+            className={cn(
+              "font-semibold tracking-tight",
+              embedded ? "text-lg" : "mt-0.5 text-base",
+            )}
+          >
             {formatYearMonthLabel(detailRow.yearMonth)}
           </h3>
           <p className="text-xs text-muted-foreground">
@@ -235,95 +261,324 @@ function MonthDetailPanel({
             {formatHours(detailRow.metrics.totalTimeSpentHours)}
           </p>
         </div>
-        <MonthlyClosingControls
-          yearMonth={detailRow.yearMonth}
-          importId={importId}
-          sourceMode={sourceMode}
-          closing={detailClosing}
-          canSubmit={detailCanSubmit}
-          blockingCount={detailBlockingCount}
-          compensation={developerCompensation}
-          workedHours={detailRow.metrics.totalTimeSpentHours}
-          holidays={closingHolidays}
-          mealPixBlockReason={mealPixBlockReason}
-        />
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <MonthlyClosingStatusBadge status={rowStatus(detailRow)} />
+          {!loading ? (
+            <MonthlyClosingControls
+              yearMonth={detailRow.yearMonth}
+              importId={importId}
+              sourceMode={sourceMode}
+              closing={detailClosing}
+              canSubmit={detailCanSubmit}
+              blockingCount={detailBlockingCount}
+              compensation={developerCompensation}
+              workedHours={detailRow.metrics.totalTimeSpentHours}
+              holidays={closingHolidays}
+              mealPixBlockReason={mealPixBlockReason}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">Carregando ações…</p>
+          )}
+        </div>
       </div>
 
-      <MonthlyClosingAuditSection
-        closing={detailClosing}
-        auditRows={detailAuditRows}
-      />
+      {loading ? (
+        <div className="rounded-[var(--radius-sm)] border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">
+          Carregando auditoria e documentos…
+        </div>
+      ) : (
+        <>
+          <MonthlyClosingAuditSection
+            closing={detailClosing}
+            auditRows={detailAuditRows}
+          />
 
-      {detailClosing ? (
-        <MonthlyClosingAttachmentsPanel
-          closing={detailClosing}
-          attachments={detailAttachments}
-          invoiceIssuer={closingInvoiceIssuer}
-          requireMealPixReceipt={
-            developerCompensation?.require_meal_pix_receipt ?? false
-          }
-        />
-      ) : null}
+          {detailClosing ? (
+            <MonthlyClosingAttachmentsPanel
+              closing={detailClosing}
+              attachments={detailAttachments}
+              invoiceIssuer={closingInvoiceIssuer}
+              requireMealPixReceipt={
+                developerCompensation?.require_meal_pix_receipt ?? false
+              }
+            />
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
 
-function MonthListItem({
+function MonthDetailDrawer({
+  open,
+  onClose,
+  detailProps,
+  loading,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  detailProps: DetailPanelProps;
+  loading: boolean;
+  error?: string | null;
+}) {
+  const titleId = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    setVisible(false);
+    const timeout = window.setTimeout(() => setMounted(false), 320);
+    return () => window.clearTimeout(timeout);
+  }, [open]);
+
+  // Paint off-canvas (right), then slide into place (right → left).
+  useEffect(() => {
+    if (!mounted || !open) {
+      return;
+    }
+    setVisible(false);
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        setVisible(true);
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [mounted, open]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    closeRef.current?.focus();
+  }, [visible]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!mounted) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 hidden lg:block" role="presentation">
+      <button
+        type="button"
+        aria-label="Fechar detalhe do mês"
+        onClick={onClose}
+        className={cn(
+          "absolute inset-0 bg-black/20 transition-opacity duration-300 ease-out",
+          visible ? "opacity-100" : "opacity-0",
+        )}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="absolute top-0 right-0 flex h-full w-full max-w-xl flex-col border-l border-border bg-[var(--surface-elevated)] shadow-[var(--shadow-md)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform"
+        style={{
+          transform: visible ? "translateX(0)" : "translateX(100%)",
+        }}
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.08em] text-brand uppercase">
+              Fechamento do mês
+            </p>
+            <h2
+              id={titleId}
+              className="truncate text-lg font-semibold tracking-tight"
+            >
+              {detailProps.detailRow
+                ? formatYearMonthLabel(detailProps.detailRow.yearMonth)
+                : "Detalhe"}
+            </h2>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            aria-label="Fechar painel"
+          >
+            <X className="size-4" strokeWidth={1.9} />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          {error ? (
+            <p className="mb-3 text-sm text-danger">{error}</p>
+          ) : null}
+          <MonthDetailContent
+            {...detailProps}
+            embedded
+            empty={false}
+            loading={loading}
+          />
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function MonthGridCard({
   row,
-  selectedYear,
-  importId,
-  detailMonth,
+  isOpen,
+  onToggle,
 }: {
   row: DeveloperClosingYearMonthRow;
-  selectedYear: number;
-  importId: string | null;
-  detailMonth: string | null;
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
-  const isOpen = detailMonth === row.yearMonth;
   const status = rowStatus(row);
-  const href = buildFechamentosHref({
-    importId,
-    closingYear: selectedYear,
-    detailMonth: isOpen ? null : row.yearMonth,
-  });
+  const openLabel = actionLabel(isOpen, status, row.closing?.started_at);
 
   return (
     <div
+      aria-current={isOpen ? "true" : undefined}
       className={cn(
-        "rounded-[var(--radius-sm)] border border-border/80 bg-card px-3 py-2.5 transition-colors",
-        isOpen && "border-brand/50 bg-brand-soft/30 ring-1 ring-brand/20",
+        "group flex h-full flex-col gap-2 rounded-[var(--radius)] border border-border/80 bg-card p-3 transition",
+        isOpen && "border-brand/55 bg-brand-soft/35 ring-1 ring-brand/30",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-medium text-foreground">
+          <p className="text-sm font-semibold tracking-tight text-foreground">
+            {shortMonthLabel(row.yearMonth)}
+          </p>
+          <p className="truncate text-[10px] text-muted-foreground">
             {formatYearMonthLabel(row.yearMonth)}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-            {row.metrics.totalCards} cards
-            {" · "}
-            Atraso {row.metrics.delayedCardsNet}
-            {" · "}
-            Aprov. {formatPercent(row.metrics.utilizationRate)}
-            {" · "}
-            Índ. {formatDeliveryIndex(row.metrics.deliveryIndex)}
-          </p>
-          <p className="mt-1 text-xs font-medium tabular-nums text-foreground">
-            Total de horas realizadas:{" "}
-            {formatHours(row.metrics.totalTimeSpentHours)}
-          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <MonthlyClosingStatusBadge
-            status={status}
-            className="px-1.5 py-0.5 text-[10px]"
-          />
-          <MonthActionLink
-            href={href}
-            label={actionLabel(isOpen, status, row.closing?.started_at)}
-          />
-        </div>
+        <MonthlyClosingStatusBadge
+          status={status}
+          className="shrink-0 px-1.5 py-0.5 text-[10px]"
+        />
       </div>
+
+      <dl className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] tabular-nums">
+        <div>
+          <dt className="text-muted-foreground">Cards</dt>
+          <dd className="font-semibold text-foreground">
+            {row.metrics.totalCards}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Atraso</dt>
+          <dd className="font-semibold text-foreground">
+            {row.metrics.delayedCardsNet}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Aprov.</dt>
+          <dd className="font-semibold text-foreground">
+            {formatPercent(row.metrics.utilizationRate)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Índ.</dt>
+          <dd className="font-semibold text-foreground">
+            {formatDeliveryIndex(row.metrics.deliveryIndex)}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-2">
+        <p className="min-w-0 text-[11px] font-medium tabular-nums text-foreground">
+          {formatHours(row.metrics.totalTimeSpentHours)}
+          <span className="ml-1 font-normal text-muted-foreground">
+            realizadas
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={cn(
+            "ui-btn-secondary shrink-0 px-2 py-1 text-[11px]",
+            isOpen && "ui-btn-ghost",
+          )}
+        >
+          {openLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function YearKpiGrid({ summary }: { summary: ReturnType<typeof summarizeYear> }) {
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-2 xl:grid-cols-2">
+      <KpiMetricCard
+        variant="hero"
+        label="Cards no ano"
+        value={String(summary.totalCards)}
+        tone="info"
+        hint="Soma dos meses com Entrega TU"
+      />
+      <KpiMetricCard
+        variant="hero"
+        label="Horas realizadas"
+        value={formatHours(summary.totalTimeSpentHours)}
+        tone="brand"
+        hint="Soma do time spent no ano"
+      />
+      <KpiMetricCard
+        variant="hero"
+        label="Finalizados"
+        value={String(summary.finalized)}
+        tone="success"
+      />
+      <KpiMetricCard
+        variant="hero"
+        label="Em andamento"
+        value={String(summary.inReview + summary.closed)}
+        tone="warning"
+        hint={
+          summary.inReview + summary.closed > 0
+            ? `${summary.inReview} em revisão · ${summary.closed} fechado(s)`
+            : "Revisão ou fechado (anexos)"
+        }
+      />
+      <KpiMetricCard
+        variant="hero"
+        label="Ajuste necessário"
+        value={String(summary.rejected)}
+        tone={summary.rejected > 0 ? "danger" : "neutral"}
+      />
+      <KpiMetricCard
+        variant="hero"
+        label="Abertos"
+        value={String(summary.open)}
+        tone="info"
+        hint="Ainda sem envio ao gestor"
+      />
+      <KpiMetricCard
+        variant="hero"
+        label="Aproveitamento médio"
+        value={
+          summary.avgUtilization == null
+            ? "—"
+            : formatPercent(summary.avgUtilization)
+        }
+        tone="brand"
+        hint="Média dos meses com entrega"
+        className="col-span-2"
+      />
     </div>
   );
 }
@@ -346,174 +601,361 @@ export function DeveloperClosingsYearView({
   mealPixBlockReason = null,
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
-  const detailRow =
-    detailMonth != null
-      ? (rows.find((row) => row.yearMonth === detailMonth) ?? null)
+  const [, startDetailTransition] = useTransition();
+  const [panelMonth, setPanelMonth] = useState<string | null>(detailMonth);
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(detailMonth);
+  const [clientClosing, setClientClosing] = useState<MonthlyClosing | null>(
+    detailClosing,
+  );
+  const [clientAuditRows, setClientAuditRows] =
+    useState<MonthlyClosingCardAuditRow[]>(detailAuditRows);
+  const [clientCanSubmit, setClientCanSubmit] = useState(detailCanSubmit);
+  const [clientBlockingCount, setClientBlockingCount] =
+    useState(detailBlockingCount);
+  const [clientAttachments, setClientAttachments] =
+    useState<MonthlyClosingAttachment[]>(detailAttachments);
+  const [clientIssuer, setClientIssuer] = useState<InvoiceIssuer | null>(
+    closingInvoiceIssuer,
+  );
+  const [clientHolidays, setClientHolidays] = useState(closingHolidays);
+  const [clientMealPixBlock, setClientMealPixBlock] = useState(
+    mealPixBlockReason,
+  );
+  const [clientCompensation, setClientCompensation] = useState(
+    developerCompensation,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const activeRow =
+    panelMonth != null
+      ? (rows.find((row) => row.yearMonth === panelMonth) ?? null)
       : null;
+  const detailSynced = panelMonth != null && panelMonth === loadedMonth;
+  const loadingDetail = panelMonth != null && !detailSynced;
 
   const summary = summarizeYear(rows);
   const trendPoints = rows.map((row) =>
     metricsToTrendPoint(row.yearMonth, row.metrics),
   );
 
-  const detailProps = {
-    detailRow,
+  const syncUrl = useCallback(
+    (nextMonth: string | null) => {
+      const href = buildFechamentosHref({
+        importId,
+        closingYear: selectedYear,
+        detailMonth: nextMonth,
+      });
+      persistFiltersFromHref("developer-home", href);
+      // Soft URL update — avoids RSC remount / black flash behind the drawer.
+      window.history.pushState(null, "", href);
+    },
+    [importId, selectedYear],
+  );
+
+  const applyServerDetail = useCallback(
+    (yearMonth: string) => {
+      setLoadedMonth(yearMonth);
+      setClientClosing(detailClosing);
+      setClientAuditRows(detailAuditRows);
+      setClientCanSubmit(detailCanSubmit);
+      setClientBlockingCount(detailBlockingCount);
+      setClientAttachments(detailAttachments);
+      setClientIssuer(closingInvoiceIssuer);
+      setClientHolidays(closingHolidays);
+      setClientMealPixBlock(mealPixBlockReason);
+      setClientCompensation(developerCompensation);
+      setLoadError(null);
+    },
+    [
+      detailClosing,
+      detailAuditRows,
+      detailCanSubmit,
+      detailBlockingCount,
+      detailAttachments,
+      closingInvoiceIssuer,
+      closingHolidays,
+      mealPixBlockReason,
+      developerCompensation,
+    ],
+  );
+
+  // Hydrate from SSR when the page already has this month (deep link / refresh).
+  useEffect(() => {
+    if (detailMonth && detailMonth === panelMonth) {
+      applyServerDetail(detailMonth);
+    }
+  }, [detailMonth, panelMonth, applyServerDetail]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("detailMonth");
+      const yearMonth =
+        next && /^\d{4}-\d{2}$/.test(next) ? next : null;
+      setPanelMonth(yearMonth);
+      if (!yearMonth) {
+        return;
+      }
+      if (yearMonth === detailMonth) {
+        applyServerDetail(yearMonth);
+        return;
+      }
+      // Fetch handled below via panelMonthRef check in a dedicated effect.
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [detailMonth, applyServerDetail]);
+
+  const panelMonthRef = useRef(panelMonth);
+  panelMonthRef.current = panelMonth;
+
+  useEffect(() => {
+    if (!panelMonth || panelMonth === loadedMonth) {
+      return;
+    }
+    if (panelMonth === detailMonth) {
+      applyServerDetail(panelMonth);
+      return;
+    }
+    fetchMonthDetail(panelMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelMonth]);
+
+  function fetchMonthDetail(yearMonth: string) {
+    setLoadError(null);
+    startDetailTransition(async () => {
+      const result = await loadDeveloperClosingMonthDetailAction({
+        yearMonth,
+        importId,
+      });
+      if (panelMonthRef.current !== yearMonth) {
+        return;
+      }
+      if (!result.ok) {
+        setLoadError(result.error);
+        return;
+      }
+      setLoadedMonth(yearMonth);
+      setClientClosing(result.detail.closing);
+      setClientAuditRows(result.detail.auditRows);
+      setClientCanSubmit(result.detail.canSubmit);
+      setClientBlockingCount(result.detail.blockingCount);
+      setClientAttachments(result.detail.attachments);
+      setClientIssuer(result.detail.invoiceIssuer);
+      setClientHolidays(result.detail.holidays);
+      setClientMealPixBlock(result.detail.mealPixBlockReason);
+      setClientCompensation(result.detail.compensation);
+    });
+  }
+
+  function openMonth(yearMonth: string) {
+    setPanelMonth(yearMonth);
+    syncUrl(yearMonth);
+  }
+
+  function closeMonth() {
+    setPanelMonth(null);
+    syncUrl(null);
+  }
+
+  function toggleMonth(yearMonth: string) {
+    if (panelMonth === yearMonth) {
+      closeMonth();
+      return;
+    }
+    openMonth(yearMonth);
+  }
+
+  const detailProps: DetailPanelProps = {
+    detailRow: activeRow,
     importId,
     sourceMode,
-    detailClosing,
-    detailAuditRows,
-    detailCanSubmit,
-    detailBlockingCount,
-    detailAttachments,
-    developerCompensation,
-    closingInvoiceIssuer,
-    closingHolidays,
-    mealPixBlockReason,
+    detailClosing: detailSynced ? clientClosing : null,
+    detailAuditRows: detailSynced ? clientAuditRows : [],
+    detailCanSubmit: detailSynced ? clientCanSubmit : false,
+    detailBlockingCount: detailSynced ? clientBlockingCount : 0,
+    detailAttachments: detailSynced ? clientAttachments : [],
+    developerCompensation: clientCompensation,
+    closingInvoiceIssuer: detailSynced ? clientIssuer : null,
+    closingHolidays: detailSynced ? clientHolidays : [],
+    mealPixBlockReason: detailSynced ? clientMealPixBlock : null,
   };
+
+  const yearSelect = (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Ano
+      </label>
+      <select
+        className="ui-select max-w-[8rem] py-1.5"
+        value={String(selectedYear)}
+        onChange={(event) => {
+          setPanelMonth(null);
+          const href = buildFechamentosHref({
+            importId,
+            closingYear: Number(event.target.value),
+          });
+          persistFiltersFromHref("developer-home", href);
+          router.push(href);
+        }}
+      >
+        {years.map((year) => (
+          <option key={year} value={year}>
+            {year}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
-      <SectionShell
-        title="Fechamentos do ano"
-        description="Resumo mensal (mesma lógica dos cards por período) e status do fechamento administrativo."
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Ano
-          </label>
-          <select
-            className="ui-select max-w-[8rem] py-1.5"
-            value={String(selectedYear)}
-            onChange={(event) => {
-              const href = buildFechamentosHref({
-                importId,
-                closingYear: Number(event.target.value),
-              });
-              persistFiltersFromHref("developer-home", href);
-              router.push(href);
-            }}
-          >
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Mobile: stacked KPIs + chart */}
+      <div className="space-y-4 lg:hidden">
+        <SectionShell
+          title="Fechamentos do ano"
+          description="Resumo mensal (mesma lógica dos cards por período) e status do fechamento administrativo."
+        >
+          {yearSelect}
+          <div className="ui-kpi-grid--hero">
+            <KpiMetricCard
+              variant="hero"
+              label="Cards no ano"
+              value={String(summary.totalCards)}
+              tone="info"
+              hint="Soma dos meses com Entrega TU"
+            />
+            <KpiMetricCard
+              variant="hero"
+              label="Horas realizadas"
+              value={formatHours(summary.totalTimeSpentHours)}
+              tone="brand"
+              hint="Soma do time spent no ano"
+            />
+            <KpiMetricCard
+              variant="hero"
+              label="Finalizados"
+              value={String(summary.finalized)}
+              tone="success"
+            />
+            <KpiMetricCard
+              variant="hero"
+              label="Em andamento"
+              value={String(summary.inReview + summary.closed)}
+              tone="warning"
+              hint={
+                summary.inReview + summary.closed > 0
+                  ? `${summary.inReview} em revisão · ${summary.closed} fechado(s)`
+                  : "Revisão ou fechado (anexos)"
+              }
+            />
+            <KpiMetricCard
+              variant="hero"
+              label="Ajuste necessário"
+              value={String(summary.rejected)}
+              tone={summary.rejected > 0 ? "danger" : "neutral"}
+            />
+            <KpiMetricCard
+              variant="hero"
+              label="Abertos"
+              value={String(summary.open)}
+              tone="info"
+              hint="Ainda sem envio ao gestor"
+            />
+            <KpiMetricCard
+              variant="hero"
+              label="Aproveitamento médio"
+              value={
+                summary.avgUtilization == null
+                  ? "—"
+                  : formatPercent(summary.avgUtilization)
+              }
+              tone="brand"
+              hint="Média dos meses com entrega"
+            />
+          </div>
+        </SectionShell>
 
-        <div className="ui-kpi-grid--hero">
-          <KpiMetricCard
-            variant="hero"
-            label="Cards no ano"
-            value={String(summary.totalCards)}
-            tone="info"
-            hint="Soma dos meses com Entrega TU"
-          />
-          <KpiMetricCard
-            variant="hero"
-            label="Horas realizadas"
-            value={formatHours(summary.totalTimeSpentHours)}
-            tone="brand"
-            hint="Soma do time spent no ano"
-          />
-          <KpiMetricCard
-            variant="hero"
-            label="Finalizados"
-            value={String(summary.finalized)}
-            tone="success"
-          />
-          <KpiMetricCard
-            variant="hero"
-            label="Em andamento"
-            value={String(summary.inReview + summary.closed)}
-            tone="warning"
-            hint={
-              summary.inReview + summary.closed > 0
-                ? `${summary.inReview} em revisão · ${summary.closed} fechado(s)`
-                : "Revisão ou fechado (anexos)"
-            }
-          />
-          <KpiMetricCard
-            variant="hero"
-            label="Ajuste necessário"
-            value={String(summary.rejected)}
-            tone={summary.rejected > 0 ? "danger" : "neutral"}
-          />
-          <KpiMetricCard
-            variant="hero"
-            label="Abertos"
-            value={String(summary.open)}
-            tone="info"
-            hint="Ainda sem envio ao gestor"
-          />
-          <KpiMetricCard
-            variant="hero"
-            label="Aproveitamento médio"
-            value={
-              summary.avgUtilization == null
-                ? "—"
-                : formatPercent(summary.avgUtilization)
-            }
-            tone="brand"
-            hint="Média dos meses com entrega"
-          />
+        <MonthlyTrendChart
+          compact
+          title={`Acompanhamento ${selectedYear}`}
+          description="Evolução mensal com as mesmas métricas da grade de fechamentos."
+          points={trendPoints}
+        />
+      </div>
+
+      {/* Desktop: KPIs left + chart right */}
+      <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-stretch">
+        <SectionShell
+          title="Fechamentos do ano"
+          description="Resumo anual e status do fechamento."
+          className="h-full"
+          bodyClassName="flex h-full flex-col"
+        >
+          {yearSelect}
+          <YearKpiGrid summary={summary} />
+        </SectionShell>
+
+        <MonthlyTrendChart
+          compact
+          className="h-full"
+          title={`Acompanhamento ${selectedYear}`}
+          description="Evolução mensal com as mesmas métricas da grade."
+          points={trendPoints}
+        />
+      </div>
+
+      <SectionShell
+        title="Meses do ano"
+        description="Os 12 meses em vista rápida. Clique em Abrir para ver o detalhe do fechamento."
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+          {rows.map((row) => (
+            <MonthGridCard
+              key={row.yearMonth}
+              row={row}
+              isOpen={panelMonth === row.yearMonth}
+              onToggle={() => toggleMonth(row.yearMonth)}
+            />
+          ))}
         </div>
       </SectionShell>
 
-      <MonthlyTrendChart
-        title={`Acompanhamento ${selectedYear}`}
-        description="Evolução mensal com as mesmas métricas da lista de fechamentos."
-        points={trendPoints}
-      />
-
-      {/* Desktop: lista + detalhe sticky */}
-      <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
-        <SectionShell
-          title="Meses do ano"
-          description="Selecione um mês para ações, auditoria e documentos."
-        >
-          <div className="space-y-2">
-            {rows.map((row) => (
-              <MonthListItem
-                key={row.yearMonth}
-                row={row}
-                selectedYear={selectedYear}
-                importId={importId}
-                detailMonth={detailMonth}
-              />
-            ))}
+      {/* Mobile detail below */}
+      <section className="space-y-2 lg:hidden">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">
+              {activeRow
+                ? `Fechamento · ${formatYearMonthLabel(activeRow.yearMonth)}`
+                : "Fechamento do mês"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Ações, auditoria e documentos do mês selecionado.
+            </p>
           </div>
-        </SectionShell>
-
-        <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
-          <MonthDetailPanel {...detailProps} empty={detailRow == null} />
+          {activeRow ? (
+            <MonthlyClosingStatusBadge status={rowStatus(activeRow)} />
+          ) : null}
         </div>
-      </div>
+        <MonthDetailContent
+          {...detailProps}
+          empty={activeRow == null}
+          loading={loadingDetail}
+        />
+        {loadError ? (
+          <p className="text-sm text-danger">{loadError}</p>
+        ) : null}
+      </section>
 
-      {/* Mobile: cards empilhados + detalhe inline */}
-      <div className="space-y-3 lg:hidden">
-        <SectionShell
-          title="Meses do ano"
-          description="Toque em um mês para abrir o fechamento."
-        >
-          <div className="space-y-3">
-            {rows.map((row) => {
-              const isOpen = detailMonth === row.yearMonth;
-              return (
-                <div key={row.yearMonth} className="space-y-3">
-                  <MonthListItem
-                    row={row}
-                    selectedYear={selectedYear}
-                    importId={importId}
-                    detailMonth={detailMonth}
-                  />
-                  {isOpen ? <MonthDetailPanel {...detailProps} /> : null}
-                </div>
-              );
-            })}
-          </div>
-        </SectionShell>
-      </div>
+      {/* Desktop contextual drawer — opens instantly; detail loads without remount */}
+      <MonthDetailDrawer
+        open={activeRow != null}
+        onClose={closeMonth}
+        loading={loadingDetail}
+        error={loadError}
+        detailProps={{ ...detailProps, empty: false }}
+      />
     </div>
   );
 }

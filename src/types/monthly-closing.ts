@@ -168,10 +168,13 @@ export type MonthlyClosingAttachment = {
   created_at: string;
 };
 
-/** Lightweight flags for the gestor year matrix (NF / boleto sent). */
+/** Lightweight flags for the gestor year matrix (NF / boleto / meal PIX). */
 export type MonthlyClosingAttachmentPresence = {
   hasInvoicePdf: boolean;
   hasBoletoPdf: boolean;
+  hasMealPixReceipt: boolean;
+  /** null = pendente de revisão; true = aceito; false = recusado. */
+  mealPixValid: boolean | null;
 };
 
 export function monthlyClosingAttachmentTypeLabel(

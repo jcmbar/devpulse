@@ -32,7 +32,7 @@ export const FILTER_SCOPE_KEYS: Record<FilterScope, readonly string[]> = {
   "developer-home": ["tab", "month", "from", "to", "closingYear"],
   "gestor-dashboard": ["teamId", "source", "month", "from", "to"],
   "gestor-analitico": ["teamId", "source", "month", "from", "to"],
-  "gestor-fechamentos": ["teamId", "closingYear"],
+  "gestor-fechamentos": ["teamId", "closingYear", "closingMonth"],
   "gestor-folha": ["teamId", "month"],
   "gestor-config": ["year", "month"],
   "admin-developers": ["teamId", "active", "jiraId"],

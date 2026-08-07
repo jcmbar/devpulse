@@ -1,19 +1,24 @@
 import Link from "next/link";
 import { GestorClosingsInReviewSection } from "@/components/monthly-closing/gestor-closings-in-review";
-import { GestorClosingsYearMatrix } from "@/components/monthly-closing/gestor-closings-year-matrix";
-import { GestorTeamFilter } from "@/components/gestor-team-filter";
+import { GestorFechamentosOpsBoard } from "@/components/monthly-closing/gestor-fechamentos-ops-board";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
-import { FilterBar } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
+import {
+  buildFechamentoOpsCell,
+  FECHAMENTO_OPS_STATUS_ORDER,
+  type FechamentoOpsDeveloperData,
+  type FechamentoOpsStatus,
+} from "@/lib/fechamentos/ops-status";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { buildGestorNavTabs } from "@/lib/gestor/nav-tabs";
 import {
   parseTeamListFilter,
   teamListFilterParam,
 } from "@/lib/teams/team-filter";
+import { listCurrentCompensationsByDeveloperIds } from "@/services/developers/compensation";
 import { listDevelopersAdmin } from "@/services/developers/admin";
 import {
   listFinalizedClosingsWithJiraDrift,
@@ -33,24 +38,22 @@ type PageProps = {
   searchParams: Promise<{
     teamId?: string;
     closingYear?: string;
+    closingMonth?: string;
+    view?: string;
+    status?: string;
+    q?: string;
   }>;
 };
 
-function buildFechamentosHref(input: {
-  teamId?: string;
-  closingYear?: number | null;
-}): string {
-  const params = new URLSearchParams();
-  if (input.teamId) {
-    params.set("teamId", input.teamId);
+function parseOpsStatus(
+  value: string | undefined,
+): FechamentoOpsStatus | "all" {
+  if (!value || value === "all") {
+    return "all";
   }
-  if (input.closingYear != null) {
-    params.set("closingYear", String(input.closingYear));
-  }
-  const query = params.toString();
-  return query
-    ? `/app/gestor/fechamentos?${query}`
-    : "/app/gestor/fechamentos";
+  return FECHAMENTO_OPS_STATUS_ORDER.includes(value as FechamentoOpsStatus)
+    ? (value as FechamentoOpsStatus)
+    : "all";
 }
 
 export default async function GestorFechamentosPage({ searchParams }: PageProps) {
@@ -66,10 +69,22 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
     teamFilter.kind === "team" ? teamFilter.teamId : null;
   const teamParam = teamListFilterParam(teamFilter) || undefined;
 
-  const currentYear = new Date().getUTCFullYear();
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
   const closingSelectedYear = Number.isFinite(Number(params.closingYear))
     ? Number(params.closingYear)
     : currentYear;
+  const closingSelectedMonthRaw = Number(params.closingMonth);
+  const closingSelectedMonth =
+    Number.isFinite(closingSelectedMonthRaw) &&
+    closingSelectedMonthRaw >= 1 &&
+    closingSelectedMonthRaw <= 12
+      ? closingSelectedMonthRaw
+      : currentMonth;
+  const view = params.view === "year" ? "year" : "month";
+  const statusFilter = parseOpsStatus(params.status);
+  const query = String(params.q ?? "").trim();
 
   const [
     teams,
@@ -115,7 +130,6 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
   );
 
   const developerIds = new Set(developers.map((row) => row.id));
-  // Include inactive/unlisted developers who still have closings in the year.
   const extraDeveloperIds = [
     ...new Set(
       yearClosings
@@ -157,19 +171,74 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       .map((row) => row.id),
   );
 
-  const financeiroType = await getEmailSendTypeByCode("financeiro");
-  const financeiroDispatchByClosingId = new Map<string, EmailDispatchStatus>();
-  if (financeiroType) {
-    const finalizedIds = yearClosingsReviewed
-      .filter((row) => row.status === "finalized")
-      .map((row) => row.id);
-    const dispatches = await listEmailDispatchesForClosings(finalizedIds);
+  const [financeiroType, rhType, colaboradorType, compensations] =
+    await Promise.all([
+      getEmailSendTypeByCode("financeiro"),
+      getEmailSendTypeByCode("rh"),
+      getEmailSendTypeByCode("colaborador"),
+      listCurrentCompensationsByDeveloperIds(
+        matrixDevelopers.map((row) => row.id),
+      ),
+    ]);
+
+  const dispatchByClosingAndType = new Map<string, EmailDispatchStatus>();
+  if (yearClosingsReviewed.length > 0) {
+    const dispatches = await listEmailDispatchesForClosings(
+      yearClosingsReviewed.map((row) => row.id),
+    );
     for (const row of dispatches) {
-      if (row.send_type_id === financeiroType.id) {
-        financeiroDispatchByClosingId.set(row.monthly_closing_id, row.status);
-      }
+      dispatchByClosingAndType.set(
+        `${row.monthly_closing_id}:${row.send_type_id}`,
+        row.status,
+      );
     }
   }
+
+  function dispatchStatus(
+    closingId: string,
+    typeId: string | null | undefined,
+  ): EmailDispatchStatus | null {
+    if (!typeId) {
+      return null;
+    }
+    return dispatchByClosingAndType.get(`${closingId}:${typeId}`) ?? null;
+  }
+
+  const closingsByDeveloper = new Map<string, typeof yearClosingsReviewed>();
+  for (const closing of yearClosingsReviewed) {
+    const list = closingsByDeveloper.get(closing.developer_id) ?? [];
+    list.push(closing);
+    closingsByDeveloper.set(closing.developer_id, list);
+  }
+
+  const boardDevelopers: FechamentoOpsDeveloperData[] = matrixDevelopers.map(
+    (dev) => {
+      const requireMealPix =
+        compensations.get(dev.id)?.require_meal_pix_receipt ?? false;
+      const cellsByMonth: FechamentoOpsDeveloperData["cellsByMonth"] = {};
+
+      for (const closing of closingsByDeveloper.get(dev.id) ?? []) {
+        const presence = attachmentPresence.get(closing.id) ?? null;
+        cellsByMonth[closing.year_month] = buildFechamentoOpsCell({
+          yearMonth: closing.year_month,
+          closing,
+          presence,
+          financeiro: dispatchStatus(closing.id, financeiroType?.id),
+          rh: dispatchStatus(closing.id, rhType?.id),
+          colaborador: dispatchStatus(closing.id, colaboradorType?.id),
+          requireMealPix,
+        });
+      }
+
+      return {
+        id: dev.id,
+        fullName: dev.fullName,
+        isActive: dev.isActive,
+        requireMealPix,
+        cellsByMonth,
+      };
+    },
+  );
 
   const years = [
     ...new Set([
@@ -183,11 +252,6 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
     .filter((year) => Number.isFinite(year))
     .sort((a, b) => a - b);
 
-  const selectedTeamName =
-    selectedTeamId != null
-      ? (teams.find((team) => team.id === selectedTeamId)?.name ?? null)
-      : null;
-
   return (
     <PageShell size="full">
       <FilterPersistenceSync
@@ -195,31 +259,13 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
         params={{
           teamId: teamParam,
           closingYear: String(closingSelectedYear),
+          closingMonth: String(closingSelectedMonth),
         }}
       />
       <PageHeader
         eyebrow="Operação"
-        title="Fechamentos"
-        description={
-          <>
-            Fila administrativa de fechamento mensal
-            {selectedTeamName ? (
-              <>
-                {" "}
-                ·{" "}
-                <span className="font-medium text-foreground">
-                  {selectedTeamName}
-                </span>
-              </>
-            ) : (
-              " · todos os times"
-            )}
-            {" · "}
-            <span className="font-medium text-foreground">
-              {closingSelectedYear}
-            </span>
-          </>
-        }
+        title="Fechamento mensal"
+        description="Acompanhe comprovantes, recibos e envios por developer"
         actions={
           <Link href="/app/gestor" className="ui-btn-secondary">
             Voltar ao dashboard
@@ -235,51 +281,22 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
         })}
       />
 
-      <FilterBar>
-        <div className="ui-filter-bar__fields md:grid-cols-2">
-          <div className="ui-filter-bar__field">
-            <p className="ui-filter-bar__label">Time</p>
-            <GestorTeamFilter
-              basePath="/app/gestor/fechamentos"
-              teams={teams}
-              selectedTeamId={selectedTeamId}
-              preservedParams={{
-                closingYear: String(closingSelectedYear),
-              }}
-              persistScope="gestor-fechamentos"
-              embedded
-            />
-          </div>
-          <div className="ui-filter-bar__field">
-            <p className="ui-filter-bar__label">Ano</p>
-            <div className="flex flex-wrap gap-1.5">
-              {years.map((year) => (
-                <Link
-                  key={year}
-                  href={buildFechamentosHref({
-                    teamId: teamParam,
-                    closingYear: year,
-                  })}
-                  className={
-                    year === closingSelectedYear
-                      ? "ui-btn-primary"
-                      : "ui-btn-secondary"
-                  }
-                >
-                  {year}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      </FilterBar>
-
-      <GestorClosingsYearMatrix
+      <GestorFechamentosOpsBoard
         year={closingSelectedYear}
-        developers={matrixDevelopers}
-        closings={yearClosingsReviewed}
-        attachmentPresence={attachmentPresence}
-        financeiroDispatchByClosingId={financeiroDispatchByClosingId}
+        month={closingSelectedMonth}
+        view={view}
+        statusFilter={statusFilter}
+        query={query}
+        years={years}
+        teams={teams}
+        selectedTeamId={selectedTeamId}
+        teamParam={teamParam}
+        developers={boardDevelopers}
+        sendTypeIds={{
+          financeiroId: financeiroType?.id ?? null,
+          rhId: rhType?.id ?? null,
+          colaboradorId: colaboradorType?.id ?? null,
+        }}
       />
 
       <GestorClosingsInReviewSection

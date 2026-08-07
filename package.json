@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:jira-jql": "node --experimental-strip-types --test src/services/integrations/jira/sync/build-jql.test.ts",
     "test:business-days": "node --experimental-strip-types --test src/lib/metrics/business-days.test.ts",
-    "test:payroll": "node --experimental-strip-types --test src/lib/metrics/payroll-calc.test.ts src/lib/metrics/payroll-attendance-batch.test.ts src/lib/metrics/payroll-jira-hours.test.ts"
+    "test:payroll": "node --experimental-strip-types --test src/lib/metrics/payroll-calc.test.ts src/lib/metrics/payroll-attendance-batch.test.ts src/lib/metrics/payroll-jira-hours.test.ts",
+    "test:email": "node --experimental-strip-types --test src/lib/email/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
@@ -18,10 +19,10 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.26.0",
     "next": "16.2.11",
+    "nodemailer": "^9.0.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.10.0",
-    "resend": "^6.18.1",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/xlsx": "^0.0.35",

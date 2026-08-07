@@ -5,10 +5,23 @@ import { requireTeamAccess } from "@/lib/auth/permissions";
 import {
   addEmailTypeRecipient,
   deleteEmailTypeRecipient,
+  getEmailSendTypeByCode,
+  listEmailDispatchesForClosings,
   sendOperationalClosingEmail,
   upsertEmailTemplate,
 } from "@/services/operational-emails";
+import {
+  getMonthlyClosingById,
+  listMonthlyClosingAttachments,
+  listMonthlyClosingEvents,
+} from "@/services/monthly-closings";
 import { isEmailSendTypeCode } from "@/types/operational-email";
+import type { EmailDispatch } from "@/types/operational-email";
+import type {
+  MonthlyClosing,
+  MonthlyClosingAttachment,
+  MonthlyClosingEvent,
+} from "@/types/monthly-closing";
 
 export type OperationalEmailActionResult =
   | { ok: true }
@@ -170,6 +183,78 @@ export async function sendOperationalEmailByTypeAction(input: {
       ok: false,
       error:
         error instanceof Error ? error.message : "Não foi possível enviar.",
+    };
+  }
+}
+
+export type ClosingOpsDetailResult =
+  | {
+      ok: true;
+      closing: MonthlyClosing;
+      attachments: MonthlyClosingAttachment[];
+      events: MonthlyClosingEvent[];
+      dispatches: EmailDispatch[];
+    }
+  | { ok: false; error: string };
+
+export async function loadClosingOpsDetailAction(input: {
+  closingId: string;
+}): Promise<ClosingOpsDetailResult> {
+  try {
+    await requireTeamAccess();
+    const closingId = input.closingId.trim();
+    if (!closingId) {
+      return { ok: false, error: "Fechamento inválido." };
+    }
+    const closing = await getMonthlyClosingById(closingId);
+    if (!closing) {
+      return { ok: false, error: "Fechamento não encontrado." };
+    }
+    const [attachments, events, dispatches] = await Promise.all([
+      listMonthlyClosingAttachments(closingId),
+      listMonthlyClosingEvents(closingId),
+      listEmailDispatchesForClosings([closingId]),
+    ]);
+    return { ok: true, closing, attachments, events, dispatches };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os detalhes.",
+    };
+  }
+}
+
+/** Prefetch send type ids once for the ops board (optional helper). */
+export async function listOperationalSendTypeIdsAction(): Promise<
+  | {
+      ok: true;
+      financeiroId: string | null;
+      rhId: string | null;
+      colaboradorId: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireTeamAccess();
+    const [financeiro, rh, colaborador] = await Promise.all([
+      getEmailSendTypeByCode("financeiro"),
+      getEmailSendTypeByCode("rh"),
+      getEmailSendTypeByCode("colaborador"),
+    ]);
+    return {
+      ok: true,
+      financeiroId: financeiro?.id ?? null,
+      rhId: rh?.id ?? null,
+      colaboradorId: colaborador?.id ?? null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Falha ao carregar tipos.",
     };
   }
 }

@@ -298,6 +298,10 @@ export function OperationalEmailsAdminPanel({
                   defaultValue={formTemplate.from_name}
                   className="ui-input"
                 />
+                <span className="text-[11px] text-muted-foreground">
+                  No envio operacional usa DevPulse &lt;contato@athoslabs.com.br&gt;
+                  (ZeptoMail), independentemente deste campo.
+                </span>
               </label>
               <label className="space-y-1 text-sm">
                 <span className="font-medium">E-mail remetente</span>
@@ -317,6 +321,9 @@ export function OperationalEmailsAdminPanel({
                   defaultValue={formTemplate.reply_to ?? ""}
                   className="ui-input"
                 />
+                <span className="text-[11px] text-muted-foreground">
+                  No envio operacional usa jefferson@athoslabs.com.br.
+                </span>
               </label>
               <label className="space-y-1 text-sm">
                 <span className="font-medium">To padrão (fallback)</span>

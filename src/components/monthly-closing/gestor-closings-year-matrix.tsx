@@ -80,10 +80,10 @@ function DocumentStatusIcons({
   hasBoletoPdf: boolean;
 }) {
   return (
-    <div className="mt-1 flex items-center justify-center gap-1">
+    <div className="flex items-center justify-center gap-1.5">
       <span
         className={cn(
-          "inline-flex size-5 items-center justify-center rounded-[calc(var(--radius-sm)-2px)] border",
+          "inline-flex size-6 items-center justify-center rounded-[calc(var(--radius-sm)-2px)] border",
           hasInvoicePdf
             ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
             : "border-border bg-muted/40 text-muted-foreground",
@@ -92,21 +92,21 @@ function DocumentStatusIcons({
           hasInvoicePdf ? "Nota fiscal enviada" : "Nota fiscal pendente"
         }
       >
-        <FileText className="size-3" strokeWidth={2} aria-hidden />
+        <FileText className="size-3.5" strokeWidth={2} aria-hidden />
         <span className="sr-only">
           {hasInvoicePdf ? "Nota fiscal enviada" : "Nota fiscal pendente"}
         </span>
       </span>
       <span
         className={cn(
-          "inline-flex size-5 items-center justify-center rounded-[calc(var(--radius-sm)-2px)] border",
+          "inline-flex size-6 items-center justify-center rounded-[calc(var(--radius-sm)-2px)] border",
           hasBoletoPdf
             ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
             : "border-border bg-muted/40 text-muted-foreground",
         )}
         title={hasBoletoPdf ? "Boleto enviado" : "Boleto pendente"}
       >
-        <Banknote className="size-3" strokeWidth={2} aria-hidden />
+        <Banknote className="size-3.5" strokeWidth={2} aria-hidden />
         <span className="sr-only">
           {hasBoletoPdf ? "Boleto enviado" : "Boleto pendente"}
         </span>
@@ -155,12 +155,22 @@ export function GestorClosingsYearMatrix({
           Marque como conferido em Folha para aparecer aqui.
         </p>
       ) : (
-        <DataTable minWidthClassName="min-w-[980px]" stickyFirstColumn>
+        <DataTable
+          className="w-full"
+          minWidthClassName="w-full min-w-[1100px] table-fixed"
+          stickyFirstColumn
+          metricGrid
+        >
           <thead>
             <tr>
-              <th>Developer</th>
+              <th className="w-[13rem] min-w-[11rem] max-w-[16rem] lg:w-[15rem]">
+                Developer
+              </th>
               {months.map((month) => (
-                <th key={month} className="whitespace-nowrap text-center">
+                <th
+                  key={month}
+                  className="min-w-[5.75rem] whitespace-nowrap text-center"
+                >
                   {shortMonthLabel(month)}
                 </th>
               ))}
@@ -169,10 +179,11 @@ export function GestorClosingsYearMatrix({
           <tbody>
             {developers.map((developer) => (
               <tr key={developer.id}>
-                <td className="font-medium whitespace-nowrap">
+                <td className="max-w-[16rem] font-medium">
                   <Link
                     href={`/app/developers/${developer.id}`}
-                    className="underline-offset-4 hover:underline"
+                    className="block truncate underline-offset-4 hover:underline"
+                    title={developer.fullName}
                   >
                     {developer.fullName}
                   </Link>
@@ -208,7 +219,10 @@ export function GestorClosingsYearMatrix({
                       : null;
 
                   return (
-                    <td key={month} className="text-center align-middle">
+                    <td
+                      key={month}
+                      className="min-w-[5.75rem] px-2 py-2.5 text-center align-middle sm:px-2.5"
+                    >
                       {cell.status == null ? (
                         <span
                           className="text-xs text-muted-foreground"
@@ -217,27 +231,27 @@ export function GestorClosingsYearMatrix({
                           —
                         </span>
                       ) : (
-                        <div className="inline-flex flex-col items-center gap-0.5">
+                        <div className="mx-auto flex w-full max-w-[7.5rem] flex-col items-center gap-1.5">
                           {href ? (
                             <Link
                               href={href}
-                              className="inline-flex flex-col items-center"
+                              className="inline-flex flex-col items-center gap-1.5"
                               title="Abrir fechamento"
                             >
                               <MonthlyClosingStatusBadge
                                 status={cell.status}
-                                className="px-1.5 py-0.5 text-[10px]"
+                                className="px-2 py-0.5 text-[10px]"
                               />
                               {docs}
                             </Link>
                           ) : (
-                            <>
+                            <div className="inline-flex flex-col items-center gap-1.5">
                               <MonthlyClosingStatusBadge
                                 status={cell.status}
-                                className="px-1.5 py-0.5 text-[10px]"
+                                className="px-2 py-0.5 text-[10px]"
                               />
                               {docs}
-                            </>
+                            </div>
                           )}
                           {cell.status === "finalized" && cell.closingId ? (
                             <FinanceiroEmailSendButton
@@ -245,6 +259,7 @@ export function GestorClosingsYearMatrix({
                               enabled={canSendFinanceiro}
                               status={financeiroStatus}
                               compact
+                              matrix
                             />
                           ) : null}
                         </div>

@@ -28,6 +28,8 @@ type MonthlyTrendChartProps = {
   points: MonthlyTrendPoint[];
   /** When true, utilization/index are averages across developers (gestor matrix). */
   averagesNote?: boolean;
+  /** Shorter chart area for dense personal dashboards. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -46,6 +48,7 @@ export function MonthlyTrendChart({
   description,
   points,
   averagesNote = false,
+  compact = false,
   className,
 }: MonthlyTrendChartProps) {
   const [metric, setMetric] = useState<MonthlyTrendMetric>("cards");
@@ -101,7 +104,12 @@ export function MonthlyTrendChart({
           filtro.
         </p>
       ) : (
-        <div className="mt-4 h-64 w-full sm:h-72">
+        <div
+          className={cn(
+            "mt-3 w-full",
+            compact ? "h-48 sm:h-52" : "mt-4 h-64 sm:h-72",
+          )}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={points}

@@ -5,10 +5,17 @@ import { getAppContext } from "@/lib/auth/app-context";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { assertClosingValuesMatchFolha } from "@/services/closing-folha-compare";
+import { getInvoiceIssuer } from "@/services/invoice-issuers";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   approveMonthlyClosing,
   createMonthlyClosingAttachmentSignedUrl,
   finalizeMonthlyClosing,
+  getMealPixClosingBlockReason,
+  getMonthlyClosingForDeveloperMonth,
+  listMonthlyClosingAttachments,
+  listMonthlyClosingItems,
+  loadMonthlyClosingAuditForDeveloper,
   rejectMonthlyClosing,
   reviewMealPixReceipt,
   revertMonthlyClosingStatus,
@@ -16,7 +23,14 @@ import {
   submitMonthlyClosingForReview,
   uploadMonthlyClosingAttachment,
 } from "@/services/monthly-closings";
-import type { MonthlyClosingAttachmentType } from "@/types/monthly-closing";
+import type { DeveloperCompensation } from "@/types/developer-compensation";
+import type { InvoiceIssuer } from "@/types/invoice-issuer";
+import type {
+  MonthlyClosing,
+  MonthlyClosingAttachment,
+  MonthlyClosingAttachmentType,
+  MonthlyClosingCardAuditRow,
+} from "@/types/monthly-closing";
 
 export type MonthlyClosingActionResult =
   | { ok: true; closingId: string }
@@ -339,6 +353,164 @@ export async function reviewMealPixReceiptAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível revisar o comprovante PIX.",
+    };
+  }
+}
+
+export type DeveloperClosingMonthDetailPayload = {
+  yearMonth: string;
+  closing: MonthlyClosing | null;
+  auditRows: MonthlyClosingCardAuditRow[];
+  canSubmit: boolean;
+  blockingCount: number;
+  attachments: MonthlyClosingAttachment[];
+  invoiceIssuer: InvoiceIssuer | null;
+  holidays: Array<{ date: string; name: string }>;
+  mealPixBlockReason: string | null;
+  compensation: DeveloperCompensation | null;
+};
+
+export type LoadDeveloperClosingMonthDetailResult =
+  | { ok: true; detail: DeveloperClosingMonthDetailPayload }
+  | { ok: false; error: string };
+
+/** Loads month detail for the developer drawer without a full page navigation. */
+export async function loadDeveloperClosingMonthDetailAction(input: {
+  yearMonth: string;
+  importId: string | null;
+}): Promise<LoadDeveloperClosingMonthDetailResult> {
+  try {
+    const { developer } = await getAppContext();
+    if (!developer) {
+      return { ok: false, error: "Developer não vinculado ao perfil." };
+    }
+    const yearMonth = input.yearMonth.trim();
+    if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+      return { ok: false, error: "Mês inválido." };
+    }
+
+    const monthlyClosing = await getMonthlyClosingForDeveloperMonth({
+      developerId: developer.id,
+      yearMonth,
+    });
+
+    let auditRows: MonthlyClosingCardAuditRow[] = [];
+    let canSubmit = false;
+    let blockingCount = 0;
+    let attachments: MonthlyClosingAttachment[] = [];
+
+    if (
+      input.importId != null &&
+      monthlyClosing != null &&
+      monthlyClosing.started_at != null
+    ) {
+      if (
+        monthlyClosing.status === "in_review" ||
+        monthlyClosing.status === "closed" ||
+        monthlyClosing.status === "finalized"
+      ) {
+        const [items, listedAttachments] = await Promise.all([
+          listMonthlyClosingItems(monthlyClosing.id),
+          listMonthlyClosingAttachments(monthlyClosing.id),
+        ]);
+        attachments = listedAttachments;
+        auditRows = items.map((item) => ({
+          cardId: item.jira_card_id ?? item.id,
+          jiraKey: item.jira_key,
+          summary: item.summary,
+          status: item.status_name,
+          estimateHours: item.estimate_hours,
+          actualHours: item.actual_hours,
+          delayDays: item.delay_days,
+          isDelayed: item.is_delayed,
+          isRework: item.is_rework,
+          reworkWeight: item.rework_weight,
+          dueOn: item.due_on,
+          unitTestDeliveryOn: item.unit_test_delivery_on,
+          delayJustification: {
+            status: item.delay_justification_status,
+            developerNote: item.delay_developer_note,
+            managerNote: item.delay_manager_note,
+          },
+          reworkJustification: {
+            status: item.rework_justification_status,
+            developerNote: item.rework_developer_note,
+            managerNote: item.rework_manager_note,
+          },
+          blocksSubmit: false,
+          blockReasons: [],
+        }));
+      } else {
+        const audit = await loadMonthlyClosingAuditForDeveloper({
+          developerId: developer.id,
+          importId: input.importId,
+          yearMonth,
+        });
+        auditRows = audit.auditRows;
+        canSubmit = audit.canSubmit;
+        blockingCount = audit.blockingCount;
+      }
+    } else if (
+      input.importId != null &&
+      (monthlyClosing == null || monthlyClosing.started_at == null)
+    ) {
+      const audit = await loadMonthlyClosingAuditForDeveloper({
+        developerId: developer.id,
+        importId: input.importId,
+        yearMonth,
+      });
+      auditRows = audit.auditRows;
+      canSubmit = audit.canSubmit;
+      blockingCount = audit.blockingCount;
+    }
+
+    if (
+      monthlyClosing != null &&
+      attachments.length === 0 &&
+      (monthlyClosing.status === "closed" ||
+        monthlyClosing.status === "finalized" ||
+        monthlyClosing.status === "in_review")
+    ) {
+      attachments = await listMonthlyClosingAttachments(monthlyClosing.id);
+    }
+
+    const [compensation, mealPixBlockReason, invoiceIssuer, holidayMap] =
+      await Promise.all([
+        getCurrentDeveloperCompensation(developer.id),
+        getMealPixClosingBlockReason(developer.id),
+        monthlyClosing?.invoice_issuer_id
+          ? getInvoiceIssuer(monthlyClosing.invoice_issuer_id)
+          : Promise.resolve(null),
+        listApplicableHolidayDatesForDeveloperMonth({
+          developerId: developer.id,
+          yearMonth,
+        }),
+      ]);
+
+    return {
+      ok: true,
+      detail: {
+        yearMonth,
+        closing: monthlyClosing,
+        auditRows,
+        canSubmit,
+        blockingCount,
+        attachments,
+        invoiceIssuer,
+        holidays: Array.from(holidayMap.byDate.entries()).map(
+          ([date, name]) => ({ date, name }),
+        ),
+        mealPixBlockReason,
+        compensation,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar o detalhe do mês.",
     };
   }
 }
