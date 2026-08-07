@@ -186,6 +186,16 @@ export function GestorClosingOpsDrawer({
     Boolean(invoice) &&
     Boolean(boleto);
 
+  const canResendRh =
+    target.closingId != null &&
+    target.requireMealPix &&
+    Boolean(mealPix);
+
+  const canResendColaborador =
+    target.closingId != null && closing?.status === "finalized";
+
+  const reciboAnexaDocs = Boolean(invoice) && Boolean(boleto);
+
   function resend(typeCode: "financeiro" | "rh" | "colaborador") {
     if (!target?.closingId) {
       return;
@@ -356,15 +366,30 @@ export function GestorClosingOpsDrawer({
                   {target.requireMealPix && target.closingId ? (
                     <button
                       type="button"
-                      disabled={
-                        actionPending ||
-                        !mealPix ||
-                        rhStatus === "sent"
-                      }
+                      disabled={!canResendRh || actionPending}
                       onClick={() => resend("rh")}
                       className="ui-btn-secondary text-xs"
                     >
-                      Reenviar RH
+                      {rhStatus === "sent" ? "Reenviar RH" : "Enviar RH"}
+                    </button>
+                  ) : null}
+                  {target.closingId ? (
+                    <button
+                      type="button"
+                      disabled={!canResendColaborador || actionPending}
+                      onClick={() => resend("colaborador")}
+                      className="ui-btn-secondary text-xs"
+                      title={
+                        canResendColaborador
+                          ? reciboAnexaDocs
+                            ? "Recibo com NF e boleto anexados"
+                            : "Recibo sem NF/boleto (ainda não enviados no fechamento)"
+                          : "Disponível após finalize"
+                      }
+                    >
+                      {colaboradorStatus === "sent"
+                        ? "Reenviar recibo"
+                        : "Enviar recibo"}
                     </button>
                   ) : null}
                   {target.closingId ? (
@@ -381,6 +406,28 @@ export function GestorClosingOpsDrawer({
                     Financeiro: {EMAIL_DISPATCH_STATUS_LABELS[financeiroStatus]}
                     {financeiroDispatch?.error_message
                       ? ` · ${financeiroDispatch.error_message}`
+                      : ""}
+                  </p>
+                ) : null}
+                {target.requireMealPix && rhStatus ? (
+                  <p className="text-xs text-muted-foreground">
+                    RH: {EMAIL_DISPATCH_STATUS_LABELS[rhStatus]}
+                    {rhDispatch?.error_message
+                      ? ` · ${rhDispatch.error_message}`
+                      : ""}
+                  </p>
+                ) : null}
+                {colaboradorStatus ? (
+                  <p className="text-xs text-muted-foreground">
+                    Recibo colaborador:{" "}
+                    {EMAIL_DISPATCH_STATUS_LABELS[colaboradorStatus]}
+                    {colaboradorDispatch?.error_message
+                      ? ` · ${colaboradorDispatch.error_message}`
+                      : ""}
+                    {canResendColaborador
+                      ? reciboAnexaDocs
+                        ? " · anexa NF + boleto"
+                        : " · sem NF/boleto"
                       : ""}
                   </p>
                 ) : null}

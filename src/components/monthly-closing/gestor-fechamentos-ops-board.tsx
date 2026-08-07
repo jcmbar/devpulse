@@ -4,7 +4,7 @@ import {
   GestorClosingOpsDrawer,
   type ClosingOpsDrawerTarget,
 } from "@/components/monthly-closing/gestor-closing-ops-drawer";
-import { FinanceiroEmailSendButton } from "@/components/monthly-closing/financeiro-email-send-button";
+import { OperationalEmailSendButton } from "@/components/monthly-closing/operational-email-send-button";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { FilterBar } from "@/components/ui/section-shell";
@@ -503,7 +503,7 @@ export function GestorFechamentosOpsBoard({
           </div>
 
           <div className="overflow-auto rounded-[var(--radius-md)] border border-border">
-            <table className="w-full min-w-[56rem] border-collapse text-sm">
+            <table className="w-full min-w-[68rem] border-collapse text-sm">
               <thead className="sticky top-0 z-20 bg-[var(--surface-elevated)]">
                 <tr className="border-b border-border text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   <th className="sticky left-0 z-30 bg-[var(--surface-elevated)] px-3 py-2.5 shadow-[1px_0_0_var(--border)]">
@@ -512,7 +512,8 @@ export function GestorFechamentosOpsBoard({
                   <th className="px-3 py-2.5">Status geral</th>
                   <th className="px-3 py-2.5">Comprovante</th>
                   <th className="px-3 py-2.5">Financeiro</th>
-                  <th className="px-3 py-2.5">RH</th>
+                  <th className="px-3 py-2.5">Envio RH</th>
+                  <th className="px-3 py-2.5">Recibo colaborador</th>
                   <th className="px-3 py-2.5">Última atualização</th>
                   <th className="px-3 py-2.5 text-right">Ações</th>
                 </tr>
@@ -521,7 +522,7 @@ export function GestorFechamentosOpsBoard({
                 {visibleMonthRows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-3 py-8 text-center text-muted-foreground"
                     >
                       Nenhum developer para os filtros atuais.
@@ -541,7 +542,24 @@ export function GestorFechamentosOpsBoard({
                       cell.financeiro,
                       financeiroReady,
                     );
-                    const rhState = emailDispatchToDocState(cell.rh);
+                    const rhReady =
+                      Boolean(cell.closingId) &&
+                      cell.requireMealPix &&
+                      Boolean(cell.presence?.hasMealPixReceipt);
+                    const rhState = emailDispatchToDocState(
+                      cell.rh,
+                      rhReady,
+                    );
+                    const colaboradorReady =
+                      cell.closingStatus === "finalized" &&
+                      Boolean(cell.closingId);
+                    const colaboradorState = emailDispatchToDocState(
+                      cell.colaborador,
+                      colaboradorReady,
+                    );
+                    const reciboAnexaDocs =
+                      Boolean(cell.presence?.hasInvoicePdf) &&
+                      Boolean(cell.presence?.hasBoletoPdf);
 
                     return (
                       <tr
@@ -591,6 +609,25 @@ export function GestorFechamentosOpsBoard({
                             }
                           />
                         </td>
+                        <td className="px-3 py-2.5">
+                          <div className="space-y-0.5">
+                            <CompactDocState
+                              label="Envio"
+                              state={
+                                cell.closingStatus === "finalized"
+                                  ? colaboradorState
+                                  : "indisponivel"
+                              }
+                            />
+                            {cell.closingStatus === "finalized" ? (
+                              <p className="text-[10px] text-muted-foreground">
+                                {reciboAnexaDocs
+                                  ? "Anexa NF + boleto"
+                                  : "Sem NF/boleto anexos"}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground tabular-nums">
                           {cell.lastUpdatedAt
                             ? formatDateTimeShortBrazil(cell.lastUpdatedAt)
@@ -602,12 +639,38 @@ export function GestorFechamentosOpsBoard({
                         >
                           <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                             {cell.closingId && financeiroReady ? (
-                              <FinanceiroEmailSendButton
+                              <OperationalEmailSendButton
+                                typeCode="financeiro"
                                 closingId={cell.closingId}
                                 enabled
                                 status={cell.financeiro}
                                 errorMessage={cell.financeiroError}
                                 compact
+                              />
+                            ) : null}
+                            {cell.closingId && cell.requireMealPix ? (
+                              <OperationalEmailSendButton
+                                typeCode="rh"
+                                closingId={cell.closingId}
+                                enabled={rhReady}
+                                status={cell.rh}
+                                compact
+                              />
+                            ) : null}
+                            {cell.closingId ? (
+                              <OperationalEmailSendButton
+                                typeCode="colaborador"
+                                closingId={cell.closingId}
+                                enabled={colaboradorReady}
+                                status={cell.colaborador}
+                                compact
+                                titleExtra={
+                                  colaboradorReady
+                                    ? reciboAnexaDocs
+                                      ? "NF e boleto serão anexados"
+                                      : "Sem NF/boleto no fechamento"
+                                    : null
+                                }
                               />
                             ) : null}
                             {cell.closingId ? (
