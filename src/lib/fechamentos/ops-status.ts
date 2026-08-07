@@ -215,6 +215,8 @@ export type FechamentoOpsCellData = {
   lastUpdatedAt: string | null;
   presence: MonthlyClosingAttachmentPresence | null;
   financeiro: EmailDispatchStatus | null;
+  /** Last Financeiro dispatch error (when status is error). */
+  financeiroError: string | null;
   rh: EmailDispatchStatus | null;
   colaborador: EmailDispatchStatus | null;
   requireMealPix: boolean;
@@ -235,6 +237,7 @@ export function buildFechamentoOpsCell(input: {
   closing: MonthlyClosing | null;
   presence: MonthlyClosingAttachmentPresence | null;
   financeiro: EmailDispatchStatus | null;
+  financeiroError?: string | null;
   rh: EmailDispatchStatus | null;
   colaborador: EmailDispatchStatus | null;
   requireMealPix: boolean;
@@ -253,6 +256,7 @@ export function buildFechamentoOpsCell(input: {
     lastUpdatedAt: lastUpdatedAt(input.closing),
     presence: input.presence,
     financeiro: input.financeiro,
+    financeiroError: input.financeiroError ?? null,
     rh: input.rh,
     colaborador: input.colaborador,
     requireMealPix: input.requireMealPix,

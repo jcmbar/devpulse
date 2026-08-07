@@ -154,9 +154,9 @@ export async function deleteEmailTypeRecipientAction(
 export async function sendFinanceiroClosingEmailAction(input: {
   closingId: string;
 }): Promise<OperationalEmailActionResult> {
+  const closingId = input.closingId.trim();
   try {
     const { profile } = await requireTeamAccess();
-    const closingId = input.closingId.trim();
     if (!closingId) {
       return { ok: false, error: "Fechamento inválido." };
     }
@@ -171,6 +171,9 @@ export async function sendFinanceiroClosingEmailAction(input: {
     revalidateEmailPaths(closingId);
     return { ok: true };
   } catch (error) {
+    if (closingId) {
+      revalidateEmailPaths(closingId);
+    }
     return {
       ok: false,
       error:
@@ -185,20 +188,24 @@ export async function sendOperationalEmailByTypeAction(input: {
   closingId: string;
   typeCode: string;
 }): Promise<OperationalEmailActionResult> {
+  const closingId = input.closingId.trim();
   try {
     const { profile } = await requireTeamAccess();
     if (!isEmailSendTypeCode(input.typeCode)) {
       return { ok: false, error: "Tipo de envio inválido." };
     }
     await sendOperationalClosingEmail({
-      closingId: input.closingId.trim(),
+      closingId,
       typeCode: input.typeCode,
       actorUserId: profile.id,
       triggeredBy: "manual",
     });
-    revalidateEmailPaths(input.closingId);
+    revalidateEmailPaths(closingId);
     return { ok: true };
   } catch (error) {
+    if (closingId) {
+      revalidateEmailPaths(closingId);
+    }
     return {
       ok: false,
       error:

@@ -46,6 +46,7 @@ export function GestorClosingDecisionPanel({
   valuesMismatchSummary = null,
   requireMealPixReceipt = false,
   financeiroDispatchStatus = null,
+  financeiroDispatchError = null,
   hasInvoicePdf = false,
   hasBoletoPdf = false,
 }: {
@@ -62,6 +63,7 @@ export function GestorClosingDecisionPanel({
   /** Cadastro Valores: cobrar comprovante PIX após finalize. */
   requireMealPixReceipt?: boolean;
   financeiroDispatchStatus?: EmailDispatchStatus | null;
+  financeiroDispatchError?: string | null;
   hasInvoicePdf?: boolean;
   hasBoletoPdf?: boolean;
 }) {
@@ -783,6 +785,7 @@ export function GestorClosingDecisionPanel({
                     ? "ready"
                     : "unavailable")
                 }
+                errorMessage={financeiroDispatchError}
               />
             </div>
           ) : null}

@@ -181,7 +181,10 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       ),
     ]);
 
-  const dispatchByClosingAndType = new Map<string, EmailDispatchStatus>();
+  const dispatchByClosingAndType = new Map<
+    string,
+    { status: EmailDispatchStatus; errorMessage: string | null }
+  >();
   if (yearClosingsReviewed.length > 0) {
     const dispatches = await listEmailDispatchesForClosings(
       yearClosingsReviewed.map((row) => row.id),
@@ -189,7 +192,10 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
     for (const row of dispatches) {
       dispatchByClosingAndType.set(
         `${row.monthly_closing_id}:${row.send_type_id}`,
-        row.status,
+        {
+          status: row.status,
+          errorMessage: row.error_message,
+        },
       );
     }
   }
@@ -201,7 +207,20 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
     if (!typeId) {
       return null;
     }
-    return dispatchByClosingAndType.get(`${closingId}:${typeId}`) ?? null;
+    return dispatchByClosingAndType.get(`${closingId}:${typeId}`)?.status ?? null;
+  }
+
+  function dispatchError(
+    closingId: string,
+    typeId: string | null | undefined,
+  ): string | null {
+    if (!typeId) {
+      return null;
+    }
+    return (
+      dispatchByClosingAndType.get(`${closingId}:${typeId}`)?.errorMessage ??
+      null
+    );
   }
 
   const closingsByDeveloper = new Map<string, typeof yearClosingsReviewed>();
@@ -224,6 +243,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
           closing,
           presence,
           financeiro: dispatchStatus(closing.id, financeiroType?.id),
+          financeiroError: dispatchError(closing.id, financeiroType?.id),
           rh: dispatchStatus(closing.id, rhType?.id),
           colaborador: dispatchStatus(closing.id, colaboradorType?.id),
           requireMealPix,

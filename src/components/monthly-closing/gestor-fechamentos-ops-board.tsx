@@ -606,6 +606,7 @@ export function GestorFechamentosOpsBoard({
                                 closingId={cell.closingId}
                                 enabled
                                 status={cell.financeiro}
+                                errorMessage={cell.financeiroError}
                                 compact
                               />
                             ) : null}

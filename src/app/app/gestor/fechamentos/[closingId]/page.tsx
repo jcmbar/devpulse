@@ -135,12 +135,14 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
   ]);
 
   let financeiroDispatchStatus: EmailDispatchStatus | null = null;
+  let financeiroDispatchError: string | null = null;
   if (financeiroType && closing.status === "finalized") {
     const dispatch = await getEmailDispatchForClosingType({
       closingId: closing.id,
       sendTypeId: financeiroType.id,
     });
     financeiroDispatchStatus = dispatch?.status ?? null;
+    financeiroDispatchError = dispatch?.error_message ?? null;
   }
 
   return (
@@ -181,6 +183,7 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
           compensation?.require_meal_pix_receipt ?? false
         }
         financeiroDispatchStatus={financeiroDispatchStatus}
+        financeiroDispatchError={financeiroDispatchError}
       />
 
       <SectionShell
