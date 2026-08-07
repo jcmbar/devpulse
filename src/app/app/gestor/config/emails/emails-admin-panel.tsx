@@ -6,6 +6,8 @@ import {
   upsertEmailTemplateAction,
 } from "@/app/app/gestor/email-actions";
 import { EmailSmtpTestCard } from "@/app/app/gestor/config/emails/email-smtp-test-card";
+import { EmailAttachmentBackupsPanel } from "@/app/app/gestor/config/emails/email-attachment-backups-panel";
+import type { EmailDispatchAttachmentBackup } from "@/lib/email/attachment-backup-path";
 import type { ZeptoMailSmtpPublicStatus } from "@/lib/email/zeptomail-smtp-config";
 import { cn } from "@/lib/utils";
 import type {
@@ -26,6 +28,8 @@ type Props = {
   smtpStatus: ZeptoMailSmtpPublicStatus;
   defaultTestTo: string;
   canSendSmtpTest: boolean;
+  attachmentBackups: EmailDispatchAttachmentBackup[];
+  attachmentBackupMonths: string[];
 };
 
 export function OperationalEmailsAdminPanel({
@@ -36,6 +40,8 @@ export function OperationalEmailsAdminPanel({
   smtpStatus,
   defaultTestTo,
   canSendSmtpTest,
+  attachmentBackups,
+  attachmentBackupMonths,
 }: Props) {
   const router = useRouter();
   const [selectedTypeId, setSelectedTypeId] = useState(
@@ -125,6 +131,11 @@ export function OperationalEmailsAdminPanel({
         defaultTo={defaultTestTo}
         smtpStatus={smtpStatus}
         canSend={canSendSmtpTest}
+      />
+
+      <EmailAttachmentBackupsPanel
+        initialRows={attachmentBackups}
+        months={attachmentBackupMonths}
       />
 
       <div className="flex flex-wrap gap-2">

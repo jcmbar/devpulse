@@ -12,6 +12,10 @@ import {
   listEmailTypeRecipients,
   previewEmailTemplate,
 } from "@/services/operational-emails";
+import {
+  listEmailAttachmentBackupMonths,
+  listEmailAttachmentBackups,
+} from "@/services/operational-emails/attachment-backups";
 
 export default async function GestorEmailsConfigPage() {
   const context = await requireTeamAccess();
@@ -22,6 +26,20 @@ export default async function GestorEmailsConfigPage() {
   const envelope = resolveOperationalEmailEnvelope();
   const canSendSmtpTest = context.profile.role === "admin";
 
+  let attachmentBackups: Awaited<
+    ReturnType<typeof listEmailAttachmentBackups>
+  > = [];
+  let attachmentBackupMonths: string[] = [];
+  try {
+    [attachmentBackups, attachmentBackupMonths] = await Promise.all([
+      listEmailAttachmentBackups({ limit: 300 }),
+      listEmailAttachmentBackupMonths(),
+    ]);
+  } catch {
+    // Table/bucket may not be migrated yet on a given environment.
+    attachmentBackups = [];
+    attachmentBackupMonths = [];
+  }
   const recipientsByTypeId: Record<
     string,
     Awaited<ReturnType<typeof listEmailTypeRecipients>>
@@ -76,6 +94,8 @@ export default async function GestorEmailsConfigPage() {
           smtpStatus={smtpStatus}
           defaultTestTo={envelope.replyTo}
           canSendSmtpTest={canSendSmtpTest}
+          attachmentBackups={attachmentBackups}
+          attachmentBackupMonths={attachmentBackupMonths}
         />
       </Surface>
     </PageShell>

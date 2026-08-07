@@ -12,6 +12,7 @@ import {
   sendViaZeptoMailSmtp,
   type OperationalEmailAttachment,
 } from "@/lib/email/zeptomail-smtp";
+import { archiveOperationalEmailAttachments } from "@/services/operational-emails/attachment-backups";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getDeveloperAdmin } from "@/services/developers/admin";
@@ -706,7 +707,7 @@ export async function sendOperationalClosingEmail(input: {
       attachments: files,
     });
 
-    return upsertDispatchRecord({
+    const dispatch = await upsertDispatchRecord({
       sendTypeId: sendType.id,
       closing,
       status: "sent",
@@ -722,6 +723,23 @@ export async function sendOperationalClosingEmail(input: {
       errorMessage: null,
       sentAt: new Date().toISOString(),
     });
+
+    if (input.typeCode === "financeiro" || input.typeCode === "rh") {
+      const archiveFiles = files.map((file, index) => ({
+        ...file,
+        attachmentType: attachedTypes[index] as MonthlyClosingAttachmentType,
+      }));
+      await archiveOperationalEmailAttachments({
+        emailDispatchId: dispatch.id,
+        monthlyClosingId: closing.id,
+        developerId: closing.developer_id,
+        yearMonth: closing.year_month,
+        audience: input.typeCode,
+        files: archiveFiles,
+      });
+    }
+
+    return dispatch;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Falha desconhecida no envio.";

@@ -18,6 +18,16 @@ import {
   upsertEmailTemplate,
 } from "@/services/operational-emails";
 import {
+  buildEmailAttachmentBackupZip,
+  createEmailAttachmentBackupSignedUrl,
+  listEmailAttachmentBackupMonths,
+  listEmailAttachmentBackups,
+} from "@/services/operational-emails/attachment-backups";
+import type {
+  EmailBackupAudience,
+  EmailDispatchAttachmentBackup,
+} from "@/lib/email/attachment-backup-path";
+import {
   isValidTestEmailAddress,
   sendOperationalTestEmail,
 } from "@/services/operational-emails/send-test";
@@ -335,5 +345,92 @@ export async function sendOperationalEmailTestAction(
       return { ok: false, error: ZEPTOMAIL_SMTP_PASSWORD_HINT };
     }
     return { ok: false, error: sanitized };
+  }
+}
+
+export async function listEmailAttachmentBackupsAction(input?: {
+  yearMonth?: string;
+  audience?: EmailBackupAudience | "all";
+}): Promise<
+  | { ok: true; rows: EmailDispatchAttachmentBackup[]; months: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireTeamAccess();
+    const [rows, months] = await Promise.all([
+      listEmailAttachmentBackups({
+        yearMonth: input?.yearMonth,
+        audience: input?.audience ?? "all",
+        limit: 300,
+      }),
+      listEmailAttachmentBackupMonths(),
+    ]);
+    return { ok: true, rows, months };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha ao listar backups de anexos.",
+    };
+  }
+}
+
+export async function downloadEmailAttachmentBackupAction(input: {
+  backupId: string;
+}): Promise<
+  { ok: true; url: string; filename: string } | { ok: false; error: string }
+> {
+  try {
+    await requireTeamAccess();
+    const result = await createEmailAttachmentBackupSignedUrl(
+      input.backupId.trim(),
+    );
+    return { ok: true, url: result.url, filename: result.filename };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha ao gerar download do backup.",
+    };
+  }
+}
+
+export async function downloadEmailAttachmentBackupZipAction(input: {
+  yearMonth: string;
+  audience: EmailBackupAudience;
+}): Promise<
+  | { ok: true; filename: string; base64: string }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireTeamAccess();
+    const yearMonth = input.yearMonth.trim();
+    if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+      return { ok: false, error: "Competência inválida." };
+    }
+    if (input.audience !== "financeiro" && input.audience !== "rh") {
+      return { ok: false, error: "Destinatário de backup inválido." };
+    }
+    const zip = await buildEmailAttachmentBackupZip({
+      yearMonth,
+      audience: input.audience,
+    });
+    return {
+      ok: true,
+      filename: zip.filename,
+      base64: Buffer.from(zip.bytes).toString("base64"),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha ao gerar ZIP de backup.",
+    };
   }
 }
