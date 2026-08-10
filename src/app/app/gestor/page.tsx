@@ -56,10 +56,7 @@ import {
   formatGestorMonthLabel,
   getGestorDashboard,
 } from "@/services/gestor/dashboard";
-import {
-  getJiraSyncStatusSummary,
-  listJiraIntegrations,
-} from "@/services/integrations/jira";
+import { listJiraIntegrations } from "@/services/integrations/jira";
 import { listTeamsAdmin } from "@/services/teams";
 import type { DeveloperPeriodMetrics } from "@/types/developer-period-metrics";
 import {
@@ -256,11 +253,7 @@ export default async function GestorDashboardPage({
       )
     : jiraIntegrations.filter((row) => row.is_enabled);
 
-  const syncStatusSummaries = (
-    await Promise.all(
-      autoSyncScope.map((row) => getJiraSyncStatusSummary(row.id)),
-    )
-  ).filter((row): row is NonNullable<typeof row> => row != null);
+  const autoSyncIntegrationIds = autoSyncScope.map((row) => row.id);
 
   const emptySourceMessage =
     dataSource === "jira"
@@ -318,8 +311,10 @@ export default async function GestorDashboardPage({
             </Link>
             {syncTarget ? (
               <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:items-end">
-                {syncStatusSummaries.length > 0 ? (
-                  <GestorSyncStatus initialSummaries={syncStatusSummaries} />
+                {autoSyncIntegrationIds.length > 0 ? (
+                  <GestorSyncStatus
+                    integrationIds={autoSyncIntegrationIds}
+                  />
                 ) : null}
                 <RunSyncNowButton
                   integrationId={syncTarget.id}

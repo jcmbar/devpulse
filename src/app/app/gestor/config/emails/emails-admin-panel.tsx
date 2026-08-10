@@ -7,8 +7,8 @@ import {
 } from "@/app/app/gestor/email-actions";
 import { EmailSmtpTestCard } from "@/app/app/gestor/config/emails/email-smtp-test-card";
 import { EmailAttachmentBackupsPanel } from "@/app/app/gestor/config/emails/email-attachment-backups-panel";
-import type { EmailDispatchAttachmentBackupListItem } from "@/lib/email/attachment-backup-path";
 import type { ZeptoMailSmtpPublicStatus } from "@/lib/email/zeptomail-smtp-config";
+import { previewEmailTemplate } from "@/lib/email/preview-template";
 import { cn } from "@/lib/utils";
 import type {
   EmailSendType,
@@ -24,24 +24,18 @@ type Props = {
   sendTypes: EmailSendType[];
   templates: EmailTemplate[];
   recipientsByTypeId: Record<string, EmailTypeRecipient[]>;
-  previewByTemplateId: Record<string, { subject: string; html: string }>;
   smtpStatus: ZeptoMailSmtpPublicStatus;
   defaultTestTo: string;
   canSendSmtpTest: boolean;
-  attachmentBackups: EmailDispatchAttachmentBackupListItem[];
-  attachmentBackupMonths: string[];
 };
 
 export function OperationalEmailsAdminPanel({
   sendTypes,
   templates,
   recipientsByTypeId,
-  previewByTemplateId,
   smtpStatus,
   defaultTestTo,
   canSendSmtpTest,
-  attachmentBackups,
-  attachmentBackupMonths,
 }: Props) {
   const router = useRouter();
   const [selectedTypeId, setSelectedTypeId] = useState(
@@ -71,9 +65,10 @@ export function OperationalEmailsAdminPanel({
     ? (recipientsByTypeId[selectedType.id] ?? [])
     : [];
 
-  const preview = formTemplate
-    ? previewByTemplateId[formTemplate.id]
-    : null;
+  const preview = useMemo(
+    () => (formTemplate ? previewEmailTemplate(formTemplate) : null),
+    [formTemplate],
+  );
 
   function saveTemplate(formData: FormData) {
     setError(null);
@@ -133,10 +128,7 @@ export function OperationalEmailsAdminPanel({
         canSend={canSendSmtpTest}
       />
 
-      <EmailAttachmentBackupsPanel
-        initialRows={attachmentBackups}
-        months={attachmentBackupMonths}
-      />
+      <EmailAttachmentBackupsPanel />
 
       <div className="flex flex-wrap gap-2">
         {sendTypes.map((type) => (

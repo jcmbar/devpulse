@@ -3,6 +3,7 @@
 import {
   downloadEmailAttachmentBackupAction,
   downloadEmailAttachmentBackupZipAction,
+  listEmailAttachmentBackupsAction,
 } from "@/app/app/gestor/email-actions";
 import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import type {
@@ -13,11 +14,12 @@ import { emailBackupAudienceFolder } from "@/lib/email/attachment-backup-path";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
 import { Archive, Download, FolderArchive, Loader2 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 type Props = {
-  initialRows: EmailDispatchAttachmentBackupListItem[];
-  months: string[];
+  /** Optional SSR seed; when omitted the panel loads after first paint. */
+  initialRows?: EmailDispatchAttachmentBackupListItem[];
+  months?: string[];
 };
 
 function triggerBrowserDownload(filename: string, href: string) {
@@ -44,16 +46,45 @@ function triggerBase64Download(filename: string, base64: string, mime: string) {
 
 export function EmailAttachmentBackupsPanel({
   initialRows,
-  months,
+  months: initialMonths,
 }: Props) {
-  const [yearMonth, setYearMonth] = useState(months[0] ?? "");
+  const seeded = initialRows != null && initialMonths != null;
+  const [rows, setRows] = useState<EmailDispatchAttachmentBackupListItem[]>(
+    initialRows ?? [],
+  );
+  const [months, setMonths] = useState<string[]>(initialMonths ?? []);
+  const [yearMonth, setYearMonth] = useState(initialMonths?.[0] ?? "");
   const [audience, setAudience] = useState<EmailBackupAudience | "all">("all");
   const [pending, startTransition] = useTransition();
+  const [loadingList, setLoadingList] = useState(!seeded);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (seeded) {
+      return;
+    }
+    let cancelled = false;
+    void listEmailAttachmentBackupsAction().then((result) => {
+      if (cancelled) {
+        return;
+      }
+      setLoadingList(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setRows(result.rows);
+      setMonths(result.months);
+      setYearMonth((current) => current || result.months[0] || "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [seeded]);
+
   const filtered = useMemo(() => {
-    return initialRows.filter((row) => {
+    return rows.filter((row) => {
       if (yearMonth && row.year_month !== yearMonth) {
         return false;
       }
@@ -62,7 +93,7 @@ export function EmailAttachmentBackupsPanel({
       }
       return true;
     });
-  }, [audience, initialRows, yearMonth]);
+  }, [audience, rows, yearMonth]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, EmailDispatchAttachmentBackupListItem[]>();
@@ -134,129 +165,131 @@ export function EmailAttachmentBackupsPanel({
         para o seu computador.
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <label className="space-y-1 text-xs">
-          <span className="font-medium">Competência</span>
-          <select
-            value={yearMonth}
-            onChange={(event) => setYearMonth(event.target.value)}
-            className="block min-w-[10rem] rounded-[var(--radius-sm)] border border-border bg-background px-2 py-1.5 text-sm"
-          >
-            <option value="">Todas</option>
-            {months.map((month) => (
-              <option key={month} value={month}>
-                {formatYearMonthLabel(month)} ({month})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-1 text-xs">
-          <span className="font-medium">Pasta</span>
-          <select
-            value={audience}
-            onChange={(event) =>
-              setAudience(event.target.value as EmailBackupAudience | "all")
-            }
-            className="block min-w-[10rem] rounded-[var(--radius-sm)] border border-border bg-background px-2 py-1.5 text-sm"
-          >
-            <option value="all">Financeiro + RH</option>
-            <option value="financeiro">Financeiro</option>
-            <option value="rh">RH</option>
-          </select>
-        </label>
-      </div>
-
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
-
-      {grouped.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nenhum backup ainda. Os arquivos aparecem aqui depois do próximo
-          envio Financeiro ou RH bem-sucedido.
-        </p>
-      ) : (
-        <div className="space-y-4">
-          {grouped.map(([key, rows]) => {
-            const [month, code] = key.split(":") as [string, EmailBackupAudience];
-            const folder = emailBackupAudienceFolder(code);
-            const zipBusy = busyId === `zip:${month}:${code}`;
-            return (
-              <div
-                key={key}
-                className="space-y-2 rounded-[var(--radius-sm)] border border-border p-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">
-                      /{month.slice(0, 4)}/{month}/{folder}/
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {rows.length} arquivo{rows.length === 1 ? "" : "s"} ·{" "}
-                      {formatYearMonthLabel(month)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => downloadZip(month, code)}
-                    className="ui-btn-secondary inline-flex items-center gap-1.5 text-xs"
-                  >
-                    {zipBusy ? (
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                    ) : (
-                      <FolderArchive className="size-3.5" aria-hidden />
-                    )}
-                    Baixar ZIP
-                  </button>
-                </div>
-                <ul className="space-y-1.5">
-                  {rows.map((row) => {
-                    const rowBusy = busyId === row.id;
-                    return (
-                      <li
-                        key={row.id}
-                        className="flex items-start justify-between gap-2 rounded-[var(--radius-sm)] bg-muted/30 px-2.5 py-2 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium" title={row.filename}>
-                            {row.filename}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {row.developer_name ?? "Colaborador"}
-                            {row.created_at
-                              ? ` · ${formatDateTimeShortBrazil(row.created_at)}`
-                              : ""}
-                            {row.byte_size != null
-                              ? ` · ${(row.byte_size / 1024).toFixed(0)} KB`
-                              : ""}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => downloadOne(row.id)}
-                          className={cn(
-                            "ui-btn-secondary inline-flex shrink-0 items-center gap-1 text-xs",
-                          )}
-                          title="Baixar PDF"
-                        >
-                          {rowBusy ? (
-                            <Loader2
-                              className="size-3.5 animate-spin"
-                              aria-hidden
-                            />
-                          ) : (
-                            <Download className="size-3.5" aria-hidden />
-                          )}
-                          PDF
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
+      {loadingList ? (
+        <div
+          role="status"
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Carregando backups…
         </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <label className="space-y-1 text-xs">
+              <span className="font-medium">Competência</span>
+              <select
+                value={yearMonth}
+                onChange={(event) => setYearMonth(event.target.value)}
+                className="block min-w-[10rem] rounded-[var(--radius-sm)] border border-border bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="">Todas</option>
+                {months.map((month) => (
+                  <option key={month} value={month}>
+                    {formatYearMonthLabel(month)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-xs">
+              <span className="font-medium">Setor</span>
+              <select
+                value={audience}
+                onChange={(event) =>
+                  setAudience(event.target.value as EmailBackupAudience | "all")
+                }
+                className="block min-w-[10rem] rounded-[var(--radius-sm)] border border-border bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="all">Todos</option>
+                <option value="financeiro">Financeiro</option>
+                <option value="rh">RH</option>
+              </select>
+            </label>
+          </div>
+
+          {error ? (
+            <p className="text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {grouped.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum backup encontrado para este filtro.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {grouped.map(([key, list]) => {
+                const [month, sendType] = key.split(":");
+                const folderAudience = sendType as EmailBackupAudience;
+                const zipBusy = busyId === `zip:${month}:${folderAudience}`;
+                return (
+                  <div
+                    key={key}
+                    className="space-y-2 rounded-[var(--radius-sm)] border border-border/80 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">
+                        {formatYearMonthLabel(month)} ·{" "}
+                        {emailBackupAudienceFolder(folderAudience)}
+                      </p>
+                      <button
+                        type="button"
+                        className="ui-btn-secondary text-xs"
+                        disabled={pending || zipBusy}
+                        onClick={() => downloadZip(month, folderAudience)}
+                      >
+                        {zipBusy ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <FolderArchive className="size-3.5" />
+                        )}
+                        ZIP da pasta
+                      </button>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {list.map((row) => {
+                        const rowBusy = busyId === row.id;
+                        return (
+                          <li
+                            key={row.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] bg-muted/30 px-2.5 py-2 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">
+                                {row.filename}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {row.developer_name ?? "—"} ·{" "}
+                                {formatDateTimeShortBrazil(row.created_at)}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className={cn(
+                                "ui-btn-secondary text-xs",
+                                rowBusy && "opacity-70",
+                              )}
+                              disabled={pending || rowBusy}
+                              onClick={() => downloadOne(row.id)}
+                            >
+                              {rowBusy ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <Download className="size-3.5" />
+                              )}
+                              Baixar
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </section>
   );

@@ -162,6 +162,7 @@ export function AppChrome({ profile, children }: AppChromeProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 xl:gap-2 xl:px-2.5",
                     active
@@ -227,6 +228,7 @@ export function AppChrome({ profile, children }: AppChromeProps) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch
                     onClick={() => setOpen(false)}
                     className={cn(
                       "inline-flex items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium transition-colors",

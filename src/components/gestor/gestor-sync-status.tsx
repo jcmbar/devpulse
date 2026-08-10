@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 type GestorSyncStatusProps = {
-  initialSummaries: JiraSyncStatusSummary[];
+  /** Seed from SSR when available; empty + integrationIds defers status off the critical path. */
+  initialSummaries?: JiraSyncStatusSummary[];
+  /** When provided (and summaries empty), fetch status right after paint. */
+  integrationIds?: string[];
 };
 
 function formatRelativeMinutes(iso: string | null, nowMs: number): string | null {
@@ -48,7 +51,10 @@ function pickPrimary(summaries: JiraSyncStatusSummary[]): JiraSyncStatusSummary 
   return summaries[0] ?? null;
 }
 
-export function GestorSyncStatus({ initialSummaries }: GestorSyncStatusProps) {
+export function GestorSyncStatus({
+  initialSummaries = [],
+  integrationIds: integrationIdsProp,
+}: GestorSyncStatusProps) {
   const router = useRouter();
   const [summaries, setSummaries] = useState(initialSummaries);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -56,14 +62,12 @@ export function GestorSyncStatus({ initialSummaries }: GestorSyncStatusProps) {
   const wasRunningRef = useRef(false);
   const busyRef = useRef(false);
 
-  const integrationIds = useMemo(
-    () => initialSummaries.map((row) => row.integrationId),
-    [initialSummaries],
-  );
-
-  useEffect(() => {
-    setSummaries(initialSummaries);
-  }, [initialSummaries]);
+  const integrationIds = useMemo(() => {
+    if (integrationIdsProp && integrationIdsProp.length > 0) {
+      return integrationIdsProp;
+    }
+    return initialSummaries.map((row) => row.integrationId);
+  }, [initialSummaries, integrationIdsProp]);
 
   const primary = pickPrimary(summaries);
   const isRunning =
@@ -103,7 +107,8 @@ export function GestorSyncStatus({ initialSummaries }: GestorSyncStatusProps) {
       });
     };
 
-    // Catch auto-sync that starts shortly after mount (after()).
+    // Immediate paint for deferred SSR path; then catch late auto-sync.
+    refresh();
     const bootTimers = [3_000, 10_000, 25_000].map((ms) =>
       window.setTimeout(refresh, ms),
     );
@@ -124,7 +129,14 @@ export function GestorSyncStatus({ initialSummaries }: GestorSyncStatusProps) {
   }, [integrationIds, startTransition]);
 
   if (!primary) {
-    return null;
+    if (integrationIds.length === 0) {
+      return null;
+    }
+    return (
+      <p className="text-xs text-muted-foreground sm:text-right">
+        Verificando sincronização…
+      </p>
+    );
   }
 
   const relative = formatRelativeMinutes(primary.lastSuccessfulSyncAt, nowMs);

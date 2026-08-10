@@ -2,10 +2,8 @@ import "server-only";
 
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { formatClosingMoney } from "@/lib/metrics/closing-submit-values";
-import {
-  EMAIL_PREVIEW_SAMPLE_VARS,
-  renderEmailTemplate,
-} from "@/lib/email/render-template";
+import { previewEmailTemplate } from "@/lib/email/preview-template";
+import { renderEmailTemplate } from "@/lib/email/render-template";
 import { buildOperationalEmailAttachmentFilename } from "@/lib/email/attachment-filename";
 import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
 import {
@@ -360,21 +358,7 @@ export async function getEmailDispatchForClosingType(input: {
   return data ? mapDispatch(data as Record<string, unknown>) : null;
 }
 
-export function previewEmailTemplate(template: EmailTemplate): {
-  subject: string;
-  html: string;
-} {
-  const vars = {
-    ...EMAIL_PREVIEW_SAMPLE_VARS,
-    logo_url: template.logo_url ?? "",
-    banner_url: template.banner_url ?? "",
-    signature_html: template.signature_html ?? "",
-  };
-  return {
-    subject: renderEmailTemplate(template.subject_template, vars),
-    html: renderEmailTemplate(template.body_html, vars),
-  };
-}
+export { previewEmailTemplate };
 
 function buildClosingVariables(input: {
   closing: MonthlyClosing;
