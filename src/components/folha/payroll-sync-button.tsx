@@ -22,7 +22,7 @@ export function PayrollSyncFromCompensationButton({
         type="button"
         className="ui-btn-secondary text-sm"
         disabled={pending}
-        title="Atualiza base, valor hora e diárias pelo cadastro e recalcula só os campos automáticos. Campos marcados como manuais são preservados."
+        title="Força nova leitura do cadastro (base, valor hora e diárias) e recalcula só os campos automáticos. Ao abrir o mês a Folha já sincroniza valores desatualizados; use isto se acabou de alterar o cadastro. Campos manuais são preservados."
         onClick={() => {
           setError(null);
           setMessage(null);

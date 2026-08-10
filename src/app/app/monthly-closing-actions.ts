@@ -18,12 +18,14 @@ import {
   listMonthlyClosingAttachments,
   listMonthlyClosingItems,
   loadMonthlyClosingAuditForDeveloper,
+  listMonthlyClosingsForDeveloperYear,
   rejectMonthlyClosing,
   restoreMonthlyClosingToInReview,
   revertMonthlyClosingStatus,
   reviewMealPixReceipt,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
+  syncClosingMealFromFolhaIfMissing,
   uploadMonthlyClosingAttachment,
 } from "@/services/monthly-closings";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
@@ -490,6 +492,37 @@ export type LoadDeveloperClosingMonthDetailResult =
   | { ok: true; detail: DeveloperClosingMonthDetailPayload }
   | { ok: false; error: string };
 
+/** Fresh year statuses for the developer grid (avoids stale RSC after gestor reject). */
+export async function listDeveloperYearClosingsAction(input: {
+  year: number;
+}): Promise<
+  | { ok: true; closings: MonthlyClosing[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const { developer } = await getAppContext();
+    if (!developer) {
+      return { ok: false, error: "Developer não vinculado ao perfil." };
+    }
+    if (!Number.isFinite(input.year)) {
+      return { ok: false, error: "Ano inválido." };
+    }
+    const closings = await listMonthlyClosingsForDeveloperYear({
+      developerId: developer.id,
+      year: input.year,
+    });
+    return { ok: true, closings };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar os status dos fechamentos.",
+    };
+  }
+}
+
 /** Loads month detail for the developer drawer without a full page navigation. */
 export async function loadDeveloperClosingMonthDetailAction(input: {
   yearMonth: string;
@@ -505,7 +538,7 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
       return { ok: false, error: "Mês inválido." };
     }
 
-    const monthlyClosing = await getMonthlyClosingForDeveloperMonth({
+    let monthlyClosing = await getMonthlyClosingForDeveloperMonth({
       developerId: developer.id,
       yearMonth,
     });
@@ -580,6 +613,14 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
       auditRows = audit.auditRows;
       canSubmit = audit.canSubmit;
       blockingCount = audit.blockingCount;
+    }
+
+    if (
+      monthlyClosing != null &&
+      (monthlyClosing.status === "closed" ||
+        monthlyClosing.status === "finalized")
+    ) {
+      monthlyClosing = await syncClosingMealFromFolhaIfMissing(monthlyClosing);
     }
 
     if (

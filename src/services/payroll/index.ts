@@ -398,7 +398,8 @@ export async function recalculatePayrollItem(
 
 /**
  * Ensure month header + one item per active person, with default attendance.
- * Snapshots compensation only when creating a new item (not every refresh).
+ * New lines snapshot compensation on insert; existing open lines are refreshed
+ * from cadastro when the snapshot is stale (finalized closings / closed month skip).
  */
 export async function ensurePayrollMonthWithItems(input: {
   yearMonth: string;
@@ -487,6 +488,15 @@ export async function ensurePayrollMonthWithItems(input: {
       developerId: item.developer_id,
       yearMonth: closing.year_month,
       contractedHoursPerDay: item.contracted_hours_per_day,
+    });
+  }
+
+  // Keep base / rates / diárias aligned with cadastro while the month is open.
+  if (closing.status !== "closed") {
+    await syncPayrollItemsFromCompensation({
+      yearMonth: closing.year_month,
+      teamId: input.teamId ?? null,
+      resetManualOverrides: false,
     });
   }
 
@@ -644,9 +654,49 @@ export async function listPayrollPresencialDaysForItem(
     .sort();
 }
 
+function sameNullableNumber(
+  left: number | null,
+  right: number | null,
+): boolean {
+  if (left == null && right == null) {
+    return true;
+  }
+  if (left == null || right == null) {
+    return false;
+  }
+  return Number(left) === Number(right);
+}
+
+/** True when Folha snapshot already matches current cadastro compensation. */
+function itemMatchesCurrentCompensation(
+  item: PayrollClosingItem,
+  comp: {
+    base_amount: number;
+    base_type: CompensationBaseType;
+    hourly_rate: number | null;
+    contracted_hours_per_day: number;
+    contracted_hours_per_month: number;
+    daily_travel_amount: number;
+    daily_meal_amount: number;
+  },
+): boolean {
+  return (
+    Number(item.base_amount) === Number(comp.base_amount) &&
+    item.base_type === comp.base_type &&
+    sameNullableNumber(item.hourly_rate, comp.hourly_rate) &&
+    Number(item.contracted_hours_per_day) ===
+      Number(comp.contracted_hours_per_day) &&
+    Number(item.contracted_hours_per_month) ===
+      Number(comp.contracted_hours_per_month) &&
+    Number(item.daily_travel_amount) === Number(comp.daily_travel_amount) &&
+    Number(item.daily_meal_amount) === Number(comp.daily_meal_amount)
+  );
+}
+
 /**
  * Re-snapshot compensation (base, hourly rate, travel/meal) onto existing
- * items and recalculate. Used when cadastro changes after the month opened.
+ * items and recalculate. Used when cadastro changes after the month opened,
+ * and automatically when opening an open Folha month.
  */
 export async function syncPayrollItemsFromCompensation(input: {
   yearMonth: string;
@@ -694,6 +744,12 @@ export async function syncPayrollItemsFromCompensation(input: {
       continue;
     }
 
+    const compensationChanged = !itemMatchesCurrentCompensation(item, comp);
+    const clearManual = Boolean(input.resetManualOverrides);
+    if (!compensationChanged && !clearManual) {
+      continue;
+    }
+
     const patch: Record<string, unknown> = {
       base_amount: comp.base_amount,
       base_type: comp.base_type,
@@ -704,7 +760,7 @@ export async function syncPayrollItemsFromCompensation(input: {
       daily_meal_amount: comp.daily_meal_amount,
     };
 
-    if (input.resetManualOverrides) {
+    if (clearManual) {
       patch.differential_manual = false;
       patch.travel_manual = false;
       patch.meal_manual = false;

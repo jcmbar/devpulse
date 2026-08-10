@@ -197,7 +197,7 @@ export function DeveloperCompensationForm({
         <FormField
           label="Comprovante PIX (refeição)"
           htmlFor="requireMealPixReceipt"
-          hint="Após finalizar o fechamento com NF e boleto, exige envio do comprovante PIX. Sem aceite do gestor, novos fechamentos ficam bloqueados."
+          hint="Após o fechamento ser aprovado (Fechado), exige envio do comprovante PIX de refeição. Sem aceite do gestor após a finalização, novos fechamentos ficam bloqueados."
         >
           <label
             htmlFor="requireMealPixReceipt"

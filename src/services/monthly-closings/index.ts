@@ -31,6 +31,7 @@ import type {
   MonthlyClosingPresenceKind,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
+import { closingHasMealReimbursement } from "@/types/monthly-closing";
 import type { UserRole } from "@/types/profile";
 
 export const MONTHLY_CLOSING_STORAGE_BUCKET = "monthly-closing-attachments";
@@ -65,7 +66,7 @@ const MEAL_PIX_BLOCK_MESSAGE =
 
 /**
  * When compensation requires meal PIX receipts, every finalized closing with
- * meal days must have an accepted meal_pix_receipt before new closings.
+ * meal reimbursement must have an accepted meal_pix_receipt before new closings.
  */
 export async function getMealPixClosingBlockReason(
   developerId: string,
@@ -78,21 +79,32 @@ export async function getMealPixClosingBlockReason(
   const supabase = await createClient();
   const { data: closings, error } = await supabase
     .from("monthly_closings")
-    .select("id, year_month, meal_presencial_days")
+    .select("id, year_month, meal_presencial_days, meal_amount")
     .eq("developer_id", developerId)
-    .eq("status", "finalized")
-    .gt("meal_presencial_days", 0);
+    .eq("status", "finalized");
 
   if (error) {
     throw new Error(
       `Falha ao verificar comprovantes PIX: ${error.message}`,
     );
   }
-  if (!closings?.length) {
+
+  const withMeal = (closings ?? []).filter((row) =>
+    closingHasMealReimbursement({
+      meal_presencial_days:
+        row.meal_presencial_days == null
+          ? null
+          : Number(row.meal_presencial_days),
+      meal_amount:
+        row.meal_amount == null ? null : Number(row.meal_amount),
+    }),
+  );
+
+  if (withMeal.length === 0) {
     return null;
   }
 
-  const closingIds = closings.map((row) => String(row.id));
+  const closingIds = withMeal.map((row) => String(row.id));
   const { data: pixRows, error: pixError } = await supabase
     .from("monthly_closing_attachments")
     .select("monthly_closing_id, is_valid")
@@ -113,7 +125,7 @@ export async function getMealPixClosingBlockReason(
     );
   }
 
-  const pending = closings.filter(
+  const pending = withMeal.filter(
     (row) => acceptedByClosing.get(String(row.id)) !== true,
   );
   if (pending.length === 0) {
@@ -133,6 +145,81 @@ export async function assertNoPendingMealPixBlockingNewClosing(
   if (reason) {
     throw new Error(reason);
   }
+}
+
+/**
+ * If Folha has meal reimbursement for the month but the closing snapshot does
+ * not, copy meal amount / presencial days onto the closing so the developer
+ * can upload the restaurant PIX receipt.
+ */
+export async function syncClosingMealFromFolhaIfMissing(
+  closing: MonthlyClosing,
+): Promise<MonthlyClosing> {
+  if (closingHasMealReimbursement(closing)) {
+    return closing;
+  }
+
+  const { getPayrollItemForDeveloperMonth, listPayrollPresencialDaysForItem } =
+    await import("@/services/payroll");
+
+  const folha = await getPayrollItemForDeveloperMonth({
+    developerId: closing.developer_id,
+    yearMonth: closing.year_month,
+  });
+  if (!folha || folha.meal_amount <= 0) {
+    return closing;
+  }
+
+  const presencialDays = await listPayrollPresencialDaysForItem(folha.id);
+  const mealDaysCount =
+    presencialDays.length > 0
+      ? presencialDays.length
+      : Math.max(
+          1,
+          Math.round(
+            folha.meal_amount / Math.max(folha.daily_meal_amount, 0.01),
+          ),
+        );
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update({
+      meal_amount: folha.meal_amount,
+      meal_presencial_days: mealDaysCount,
+      compensation_daily_meal_amount:
+        closing.compensation_daily_meal_amount ?? folha.daily_meal_amount,
+    })
+    .eq("id", closing.id)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `Falha ao alinhar refeição com a Folha: ${error?.message ?? "sem retorno"}`,
+    );
+  }
+
+  const existingPresence = await listMonthlyClosingPresenceDays(closing.id);
+  const hasMealPresence = existingPresence.some((row) => row.kind === "meal");
+  if (!hasMealPresence && presencialDays.length > 0) {
+    const { error: insertError } = await supabase
+      .from("monthly_closing_presence_days")
+      .insert(
+        presencialDays.map((day_on) => ({
+          monthly_closing_id: closing.id,
+          kind: "meal" as const,
+          day_on,
+        })),
+      );
+    if (insertError) {
+      throw new Error(
+        `Falha ao gravar dias de refeição da Folha: ${insertError.message}`,
+      );
+    }
+  }
+
+  return mapClosing(data as Record<string, unknown>);
 }
 
 function attachmentUploadEventType(
@@ -1478,7 +1565,7 @@ export async function uploadMonthlyClosingAttachment(input: {
   };
   actorUserId: string;
 }): Promise<MonthlyClosingAttachment> {
-  const closing = await getMonthlyClosingById(input.closingId);
+  let closing = await getMonthlyClosingById(input.closingId);
   if (!closing) {
     throw new Error("Fechamento não encontrado.");
   }
@@ -1488,27 +1575,22 @@ export async function uploadMonthlyClosingAttachment(input: {
 
   const isMealPix = input.type === "meal_pix_receipt";
   if (isMealPix) {
-    if (closing.status !== "finalized") {
+    if (closing.status !== "closed" && closing.status !== "finalized") {
       throw new Error(
-        "Comprovante PIX só pode ser enviado após a finalização do fechamento.",
+        "Comprovante PIX só pode ser enviado com o fechamento Fechado ou Finalizado.",
       );
     }
-    if (
-      (closing.meal_presencial_days ?? 0) <= 0 &&
-      (closing.meal_amount ?? 0) <= 0
-    ) {
+
+    if (!closingHasMealReimbursement(closing)) {
+      closing = await syncClosingMealFromFolhaIfMissing(closing);
+    }
+    if (!closingHasMealReimbursement(closing)) {
       throw new Error(
         "Este fechamento não tem reembolso de refeição para comprovante.",
       );
     }
+
     const existingDocs = await listMonthlyClosingAttachments(closing.id);
-    const hasInvoice = existingDocs.some((row) => row.type === "invoice_pdf");
-    const hasBoleto = existingDocs.some((row) => row.type === "boleto_pdf");
-    if (!hasInvoice || !hasBoleto) {
-      throw new Error(
-        "É necessário ter nota fiscal e boleto anexados antes do comprovante PIX.",
-      );
-    }
     const currentPix = existingDocs.find(
       (row) => row.type === "meal_pix_receipt",
     );
@@ -1753,7 +1835,7 @@ export async function finalizeMonthlyClosing(input: {
   closingId: string;
   actorUserId: string;
 }): Promise<MonthlyClosing> {
-  const closing = await getMonthlyClosingById(input.closingId);
+  let closing = await getMonthlyClosingById(input.closingId);
   if (!closing) {
     throw new Error("Fechamento não encontrado.");
   }
@@ -1761,6 +1843,8 @@ export async function finalizeMonthlyClosing(input: {
     throw new Error("Só é possível finalizar fechamentos Fechados.");
   }
   assertEditableClosing(closing);
+
+  closing = await syncClosingMealFromFolhaIfMissing(closing);
 
   const attachments = await listMonthlyClosingAttachments(closing.id);
   const hasInvoice = attachments.some((row) => row.type === "invoice_pdf");

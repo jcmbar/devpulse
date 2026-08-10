@@ -30,6 +30,7 @@ import {
   listMonthlyClosingItems,
   listMonthlyClosingsForDeveloperYear,
   loadMonthlyClosingAuditForDeveloper,
+  syncClosingMealFromFolhaIfMissing,
 } from "@/services/monthly-closings";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
@@ -293,13 +294,21 @@ export default async function AppPage({ searchParams }: AppPageProps) {
 
   const closingYearMonth = closingDetailMonth;
 
-  const monthlyClosing =
+  let monthlyClosing =
     closingYearMonth != null
       ? await getMonthlyClosingForDeveloperMonth({
           developerId: developer.id,
           yearMonth: closingYearMonth,
         })
       : null;
+
+  if (
+    monthlyClosing != null &&
+    (monthlyClosing.status === "closed" ||
+      monthlyClosing.status === "finalized")
+  ) {
+    monthlyClosing = await syncClosingMealFromFolhaIfMissing(monthlyClosing);
+  }
 
   let closingAuditRows: MonthlyClosingCardAuditRow[] = [];
   let closingCanSubmit = false;

@@ -14,6 +14,7 @@ import type {
   MonthlyClosingAttachmentType,
 } from "@/types/monthly-closing";
 import {
+  closingAllowsMealPixUpload,
   closingHasMealReimbursement,
   monthlyClosingAttachmentTypeLabel,
 } from "@/types/monthly-closing";
@@ -201,7 +202,11 @@ function AttachmentSlot({
   );
 }
 
-function ClosingValuesSummary({ closing }: { closing: MonthlyClosing }) {
+export function MonthlyClosingValuesSummary({
+  closing,
+}: {
+  closing: MonthlyClosing;
+}) {
   const hasValues =
     closing.compensation_base_amount != null ||
     closing.differential_amount != null ||
@@ -268,6 +273,10 @@ function ClosingValuesSummary({ closing }: { closing: MonthlyClosing }) {
   );
 }
 
+function ClosingValuesSummary({ closing }: { closing: MonthlyClosing }) {
+  return <MonthlyClosingValuesSummary closing={closing} />;
+}
+
 export function MonthlyClosingAttachmentsPanel({
   closing,
   attachments,
@@ -291,7 +300,8 @@ export function MonthlyClosingAttachmentsPanel({
     attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
   const docsReadOnly = closing.status === "finalized";
   const showMealPix =
-    closing.status === "finalized" && closingHasMealReimbursement(closing);
+    closingAllowsMealPixUpload(closing) &&
+    (closingHasMealReimbursement(closing) || mealPix != null);
   const mealPixReadOnly = mealPix?.is_valid === true;
 
   return (
@@ -305,7 +315,9 @@ export function MonthlyClosingAttachmentsPanel({
             ? showMealPix
               ? "Fechamento finalizado — NF e boleto ficam bloqueados; o comprovante PIX de refeição ainda pode ser enviado."
               : "Fechamento finalizado — documentos somente leitura."
-            : "Envie a nota fiscal e o boleto em PDF para o gestor finalizar."}
+            : showMealPix
+              ? "Envie a nota fiscal, o boleto e o comprovante PIX de refeição (restaurante) em PDF."
+              : "Envie a nota fiscal e o boleto em PDF para o gestor finalizar."}
         </p>
       </div>
       {invoiceIssuer ? (

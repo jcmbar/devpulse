@@ -347,7 +347,10 @@ export function MonthlyClosingControls({
 
         {status === "closed" ? (
           <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
-            Aprovado · envie NF e boleto em PDF.
+            {(closing?.meal_presencial_days ?? 0) > 0 ||
+            (closing?.meal_amount ?? 0) > 0
+              ? "Aprovado · envie NF, boleto e comprovante de refeição."
+              : "Aprovado · envie NF e boleto em PDF."}
           </p>
         ) : null}
 
@@ -436,9 +439,9 @@ export function MonthlyClosingAuditSection({
     >
       {auditRows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nenhum card com Entrega TU neste mês. Você pode enviar o fechamento
-          mesmo assim — preencha deslocamento, refeição e valores na próxima
-          etapa.
+          {status === "open" || status === "rejected"
+            ? "Nenhum card com Entrega TU neste mês. Você pode enviar o fechamento mesmo assim — preencha deslocamento, refeição e valores na próxima etapa."
+            : "Nenhum card com Entrega TU foi incluído no snapshot deste fechamento."}
         </p>
       ) : (
         <DataTable minWidthClassName="min-w-[1100px]" stickyFirstColumn>

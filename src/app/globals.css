@@ -258,8 +258,37 @@ body {
   }
 }
 
+@keyframes closing-attention-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(244 63 94 / 0.55),
+      var(--shadow-sm);
+  }
+  55% {
+    box-shadow:
+      0 0 0 7px rgb(244 63 94 / 0),
+      var(--shadow-sm);
+  }
+}
+
+@keyframes closing-attention-btn {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-orb {
+    animation: none !important;
+  }
+
+  .ui-closing-attention,
+  .ui-closing-attention-btn {
     animation: none !important;
   }
 }
@@ -275,6 +304,16 @@ body {
 
   .ui-btn-ghost {
     @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-2 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+  }
+
+  .ui-closing-attention {
+    border-color: color-mix(in oklab, var(--danger) 55%, var(--border));
+    animation: closing-attention-pulse 1.7s ease-in-out infinite;
+  }
+
+  .ui-closing-attention-btn {
+    @apply border border-rose-500/50 bg-rose-600 text-rose-50 shadow-[var(--shadow-sm)] hover:bg-rose-500;
+    animation: closing-attention-btn 1.7s ease-in-out infinite;
   }
 
   /** Idle destructive trigger — muted until hover/focus (tables / inline). */

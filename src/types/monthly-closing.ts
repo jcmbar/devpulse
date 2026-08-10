@@ -160,6 +160,13 @@ export function closingHasMealReimbursement(
   );
 }
 
+/** Meal PIX can be sent while Fechado (com NF/boleto) or after Finalizado. */
+export function closingAllowsMealPixUpload(
+  closing: Pick<MonthlyClosing, "status">,
+): boolean {
+  return closing.status === "closed" || closing.status === "finalized";
+}
+
 export type MonthlyClosingAttachment = {
   id: string;
   monthly_closing_id: string;

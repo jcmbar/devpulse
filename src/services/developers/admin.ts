@@ -142,6 +142,17 @@ const DEVELOPER_LIST_SELECT = `
     email,
     full_name,
     role
+  )
+`;
+
+/** Only for paged admin UI / detail — counting all jira_cards per developer is expensive. */
+const DEVELOPER_LIST_SELECT_WITH_CARDS = `
+  *,
+  profile:profiles!profile_id (
+    id,
+    email,
+    full_name,
+    role
   ),
   jira_cards (count)
 `;
@@ -182,7 +193,7 @@ function applyDeveloperFilters(
   return next;
 }
 
-/** Full list (gestor/config). Optional team_id + search; no pagination. */
+/** Full list (gestor/dashboard/folha). Optional team_id + search; no pagination / no card counts. */
 export async function listDevelopersAdmin(
   input?: ListDevelopersAdminInput,
 ): Promise<DeveloperListItem[]> {
@@ -232,7 +243,7 @@ export async function listDevelopersAdminPaged(
 
   let query = supabase
     .from("developers")
-    .select(DEVELOPER_LIST_SELECT)
+    .select(DEVELOPER_LIST_SELECT_WITH_CARDS)
     .order("full_name", { ascending: true })
     .range(from, to);
 

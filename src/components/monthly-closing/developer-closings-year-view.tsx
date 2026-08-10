@@ -1,8 +1,14 @@
 "use client";
 
-import { loadDeveloperClosingMonthDetailAction } from "@/app/app/monthly-closing-actions";
+import {
+  listDeveloperYearClosingsAction,
+  loadDeveloperClosingMonthDetailAction,
+} from "@/app/app/monthly-closing-actions";
 import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
-import { MonthlyClosingAttachmentsPanel } from "@/components/monthly-closing/monthly-closing-attachments";
+import {
+  MonthlyClosingAttachmentsPanel,
+  MonthlyClosingValuesSummary,
+} from "@/components/monthly-closing/monthly-closing-attachments";
 import {
   MonthlyClosingAuditSection,
   MonthlyClosingControls,
@@ -30,6 +36,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   useTransition,
@@ -165,7 +172,7 @@ function actionLabel(
     return "Continuar";
   }
   if (status === "rejected") {
-    return "Ajustar";
+    return "Correção";
   }
   if (status === "closed") {
     return "Anexos";
@@ -286,7 +293,6 @@ function MonthDetailContent({
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <MonthlyClosingStatusBadge status={rowStatus(detailRow)} />
           {!loading ? (
             <MonthlyClosingControls
               yearMonth={detailRow.yearMonth}
@@ -301,7 +307,10 @@ function MonthDetailContent({
               mealPixBlockReason={mealPixBlockReason}
             />
           ) : (
-            <p className="text-xs text-muted-foreground">Carregando ações…</p>
+            <>
+              <MonthlyClosingStatusBadge status={rowStatus(detailRow)} />
+              <p className="text-xs text-muted-foreground">Carregando ações…</p>
+            </>
           )}
         </div>
       </div>
@@ -312,6 +321,12 @@ function MonthDetailContent({
         </div>
       ) : (
         <>
+          {detailClosing &&
+          detailClosing.status !== "closed" &&
+          detailClosing.status !== "finalized" ? (
+            <MonthlyClosingValuesSummary closing={detailClosing} />
+          ) : null}
+
           <MonthlyClosingAuditSection
             closing={detailClosing}
             auditRows={detailAuditRows}
@@ -470,8 +485,11 @@ function MonthGridCard({
   onToggle: () => void;
 }) {
   const status = rowStatus(row);
+  const needsCorrection = status === "rejected" && !isOpen;
   const openLabel = actionLabel(isOpen, status, row.closing?.started_at);
-  const bandColor = monthBandColor(row.yearMonth);
+  const bandColor = needsCorrection
+    ? "#e11d48"
+    : monthBandColor(row.yearMonth);
 
   return (
     <div
@@ -479,6 +497,7 @@ function MonthGridCard({
       className={cn(
         "group flex h-full flex-col overflow-hidden rounded-[var(--radius)] border border-border/80 bg-card shadow-[var(--shadow-sm)] transition",
         isOpen && "border-brand/55 ring-1 ring-brand/30",
+        needsCorrection && "ui-closing-attention bg-rose-500/5",
       )}
     >
       <div
@@ -497,7 +516,10 @@ function MonthGridCard({
           </p>
           <MonthlyClosingStatusBadge
             status={status}
-            className="shrink-0 px-1.5 py-0.5 text-[10px]"
+            className={cn(
+              "shrink-0 px-1.5 py-0.5 text-[10px]",
+              needsCorrection && "animate-pulse",
+            )}
           />
         </div>
 
@@ -540,7 +562,11 @@ function MonthGridCard({
             onClick={onToggle}
             className={cn(
               "shrink-0 px-2.5 py-1 text-[11px] font-semibold",
-              isOpen ? "ui-btn-ghost" : "ui-btn-primary",
+              isOpen
+                ? "ui-btn-ghost"
+                : needsCorrection
+                  ? "ui-closing-attention-btn rounded-[var(--radius-sm)]"
+                  : "ui-btn-primary",
             )}
           >
             {openLabel}
@@ -656,16 +682,56 @@ export function DeveloperClosingsYearView({
     developerCompensation,
   );
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Live closings by month — keeps grid badges/actions fresh without RSC remount. */
+  const [closingOverrides, setClosingOverrides] = useState<
+    Record<string, MonthlyClosing>
+  >(() => {
+    const seed: Record<string, MonthlyClosing> = {};
+    for (const row of rows) {
+      if (row.closing) {
+        seed[row.yearMonth] = row.closing;
+      }
+    }
+    return seed;
+  });
+
+  const mergeClosingOverrides = useCallback(
+    (incoming: MonthlyClosing[]) => {
+      setClosingOverrides((prev) => {
+        const next = { ...prev };
+        for (const closing of incoming) {
+          const current = next[closing.year_month];
+          if (!current || closing.updated_at >= current.updated_at) {
+            next[closing.year_month] = closing;
+          }
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const displayRows = useMemo(
+    () =>
+      rows.map((row) => {
+        const override = closingOverrides[row.yearMonth];
+        if (!override) {
+          return row;
+        }
+        return { ...row, closing: override };
+      }),
+    [rows, closingOverrides],
+  );
 
   const activeRow =
     panelMonth != null
-      ? (rows.find((row) => row.yearMonth === panelMonth) ?? null)
+      ? (displayRows.find((row) => row.yearMonth === panelMonth) ?? null)
       : null;
   const detailSynced = panelMonth != null && panelMonth === loadedMonth;
   const loadingDetail = panelMonth != null && !detailSynced;
 
-  const summary = summarizeYear(rows);
-  const trendPoints = rows.map((row) =>
+  const summary = summarizeYear(displayRows);
+  const trendPoints = displayRows.map((row) =>
     metricsToTrendPoint(row.yearMonth, row.metrics),
   );
 
@@ -710,12 +776,70 @@ export function DeveloperClosingsYearView({
     ],
   );
 
-  // Hydrate from SSR when the page already has this month (deep link / refresh).
+  // Hydrate from SSR only when the server-selected detail month changes (deep link).
   useEffect(() => {
     if (detailMonth && detailMonth === panelMonth) {
       applyServerDetail(detailMonth);
+      if (detailClosing) {
+        mergeClosingOverrides([detailClosing]);
+      }
     }
-  }, [detailMonth, panelMonth, applyServerDetail]);
+    // Intentionally not depending on applyServerDetail identity — avoids
+    // overwriting a fresh client fetch when unrelated RSC props churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailMonth]);
+
+  const panelMonthRef = useRef(panelMonth);
+  panelMonthRef.current = panelMonth;
+  const clientClosingRef = useRef(clientClosing);
+  clientClosingRef.current = clientClosing;
+
+  // Keep year-grid statuses in sync with DB (gestor reject/approve) without page flash.
+  useEffect(() => {
+    let cancelled = false;
+
+    function refreshYearClosings() {
+      void listDeveloperYearClosingsAction({ year: selectedYear }).then(
+        (result) => {
+          if (cancelled || !result.ok) {
+            return;
+          }
+          mergeClosingOverrides(result.closings);
+          const openClosing =
+            panelMonthRef.current != null
+              ? result.closings.find(
+                  (row) => row.year_month === panelMonthRef.current,
+                )
+              : null;
+          if (
+            openClosing &&
+            clientClosingRef.current?.status !== openClosing.status
+          ) {
+            setLoadedMonth(null);
+          }
+        },
+      );
+    }
+
+    refreshYearClosings();
+
+    function onFocus() {
+      refreshYearClosings();
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") {
+        refreshYearClosings();
+      }
+    }
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [selectedYear, mergeClosingOverrides]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -725,32 +849,20 @@ export function DeveloperClosingsYearView({
         next && /^\d{4}-\d{2}$/.test(next) ? next : null;
       setPanelMonth(yearMonth);
       if (!yearMonth) {
-        return;
+        setLoadedMonth(null);
       }
-      if (yearMonth === detailMonth) {
-        applyServerDetail(yearMonth);
-        return;
-      }
-      // Fetch handled below via panelMonthRef check in a dedicated effect.
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [detailMonth, applyServerDetail]);
-
-  const panelMonthRef = useRef(panelMonth);
-  panelMonthRef.current = panelMonth;
+  }, []);
 
   useEffect(() => {
     if (!panelMonth || panelMonth === loadedMonth) {
       return;
     }
-    if (panelMonth === detailMonth) {
-      applyServerDetail(panelMonth);
-      return;
-    }
     fetchMonthDetail(panelMonth);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelMonth]);
+  }, [panelMonth, loadedMonth]);
 
   function fetchMonthDetail(yearMonth: string) {
     setLoadError(null);
@@ -776,16 +888,22 @@ export function DeveloperClosingsYearView({
       setClientHolidays(result.detail.holidays);
       setClientMealPixBlock(result.detail.mealPixBlockReason);
       setClientCompensation(result.detail.compensation);
+      if (result.detail.closing) {
+        mergeClosingOverrides([result.detail.closing]);
+      }
     });
   }
 
   function openMonth(yearMonth: string) {
+    // Reload detail without RSC remount (no router.refresh — avoids black flash).
+    setLoadedMonth(null);
     setPanelMonth(yearMonth);
     syncUrl(yearMonth);
   }
 
   function closeMonth() {
     setPanelMonth(null);
+    setLoadedMonth(null);
     syncUrl(null);
   }
 
@@ -941,7 +1059,7 @@ export function DeveloperClosingsYearView({
         description="Os 12 meses em vista rápida. Clique em Abrir para ver o detalhe do fechamento."
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-          {rows.map((row) => (
+          {displayRows.map((row) => (
             <MonthGridCard
               key={row.yearMonth}
               row={row}
@@ -954,20 +1072,15 @@ export function DeveloperClosingsYearView({
 
       {/* Mobile detail below */}
       <section className="space-y-2 lg:hidden">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-base font-semibold tracking-tight">
-              {activeRow
-                ? `Fechamento · ${formatYearMonthLabel(activeRow.yearMonth)}`
-                : "Fechamento do mês"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Ações, auditoria e documentos do mês selecionado.
-            </p>
-          </div>
-          {activeRow ? (
-            <MonthlyClosingStatusBadge status={rowStatus(activeRow)} />
-          ) : null}
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            {activeRow
+              ? `Fechamento · ${formatYearMonthLabel(activeRow.yearMonth)}`
+              : "Fechamento do mês"}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Ações, auditoria e documentos do mês selecionado.
+          </p>
         </div>
         <MonthDetailContent
           {...detailProps}

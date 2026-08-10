@@ -286,87 +286,108 @@ export function ClosingSubmitValuesModal({
             />
           </div>
 
-          <div className="grid gap-2 rounded-[var(--radius-sm)] border border-border bg-muted/20 p-3 text-sm sm:grid-cols-2">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Deslocamento
-              </p>
-              <p className="font-medium tabular-nums">
-                {preview.travelPresencialDays} ×{" "}
-                {formatClosingMoney(compensation.daily_travel_amount)} ={" "}
-                {formatClosingMoney(preview.travelAmount)}
+          <section
+            aria-label="Previsão da nota fiscal"
+            className="ui-kpi-hero ui-kpi-card--brand overflow-hidden shadow-[var(--shadow-sm)]"
+          >
+            <div className="ui-kpi-hero__band">
+              <span className="ui-kpi-hero__band-label">
+                Previsão da nota fiscal
+              </span>
+            </div>
+            <div className="ui-kpi-hero__body space-y-4">
+              <div>
+                <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                  Total estimado
+                </p>
+                <p className="ui-kpi-hero__value text-brand-foreground dark:text-brand">
+                  {formatClosingMoney(preview.invoiceAmount)}
+                </p>
+              </div>
+
+              <div
+                className={cn(
+                  "grid gap-2",
+                  isVariable
+                    ? "sm:grid-cols-2 lg:grid-cols-4"
+                    : "sm:grid-cols-3",
+                )}
+              >
+                <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    {isVariable ? "Base" : "Compensação fixa (base)"}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                    {formatClosingMoney(compensation.base_amount)}
+                  </p>
+                </div>
+
+                {isVariable ? (
+                  <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      Diferencial
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                      {formatClosingMoney(preview.differentialAmount)}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                      {workedHours.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 1,
+                      })}{" "}
+                      h × valor/hora − base
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Deslocamento
+                  </p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground text-pretty">
+                    {preview.travelPresencialDays} ×{" "}
+                    {formatClosingMoney(compensation.daily_travel_amount)} ={" "}
+                    {formatClosingMoney(preview.travelAmount)}
+                  </p>
+                </div>
+
+                <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Refeição
+                  </p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground text-pretty">
+                    {preview.mealPresencialDays} ×{" "}
+                    {formatClosingMoney(compensation.daily_meal_amount)} ={" "}
+                    {formatClosingMoney(preview.mealAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs leading-snug text-muted-foreground text-pretty">
+                {isVariable
+                  ? "Compensação variável — mesmos critérios da Folha. O total soma base + diferencial + deslocamento + refeição."
+                  : "Compensação fixa: não há adicional por diferença de dias. O total soma base + deslocamento + refeição."}
               </p>
             </div>
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Refeição
-              </p>
-              <p className="font-medium tabular-nums">
-                {preview.mealPresencialDays} ×{" "}
-                {formatClosingMoney(compensation.daily_meal_amount)} ={" "}
-                {formatClosingMoney(preview.mealAmount)}
-              </p>
-            </div>
-          </div>
+          </section>
 
           {isVariable ? (
-            <div className="space-y-3 rounded-[var(--radius-sm)] border border-brand/30 bg-brand-soft/40 p-3 dark:bg-brand/10">
-              <p className="text-xs text-muted-foreground text-pretty">
-                Compensação variável — mesmos critérios da Folha. Diferencial
-                usa as horas realizadas do mês (
-                {workedHours.toLocaleString("pt-BR", {
-                  maximumFractionDigits: 1,
-                })}{" "}
-                h × valor/hora − base).
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div>
-                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                    Valor diferencial
-                  </p>
-                  <p className="text-lg font-semibold tabular-nums tracking-tight">
-                    {formatClosingMoney(preview.differentialAmount)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                    Valor total da Nota Fiscal
-                  </p>
-                  <p className="text-lg font-semibold tabular-nums tracking-tight">
-                    {formatClosingMoney(preview.invoiceAmount)}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Base {formatClosingMoney(compensation.base_amount)} +
-                    diferencial + deslocamento + refeição
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor={notesId} className="text-sm font-medium">
-                  Observação{" "}
-                  <span className="font-normal text-muted-foreground">
-                    (opcional)
-                  </span>
-                </label>
-                <textarea
-                  id={notesId}
-                  value={valuesNotes}
-                  onChange={(event) => setValuesNotes(event.target.value)}
-                  rows={3}
-                  placeholder="Algum detalhe sobre presença, valores ou exceções…"
-                  className="ui-textarea min-h-[4.5rem] text-sm"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <label htmlFor={notesId} className="text-sm font-medium">
+                Observação{" "}
+                <span className="font-normal text-muted-foreground">
+                  (opcional)
+                </span>
+              </label>
+              <textarea
+                id={notesId}
+                value={valuesNotes}
+                onChange={(event) => setValuesNotes(event.target.value)}
+                rows={3}
+                placeholder="Algum detalhe sobre presença, valores ou exceções…"
+                className="ui-textarea min-h-[4.5rem] text-sm"
+              />
             </div>
-          ) : (
-            <div className="rounded-[var(--radius-sm)] border border-border bg-muted/15 px-3 py-2.5 text-xs text-muted-foreground">
-              Compensação fixa — diferencial não se aplica. Total estimado da NF:{" "}
-              <span className="font-medium text-foreground tabular-nums">
-                {formatClosingMoney(preview.invoiceAmount)}
-              </span>{" "}
-              (base + deslocamento + refeição).
-            </div>
-          )}
+          ) : null}
 
           {requireResubmissionNotes ? (
             <div className="space-y-1.5">
@@ -404,10 +425,16 @@ export function ClosingSubmitValuesModal({
             type="button"
             onClick={confirm}
             disabled={pending}
-            className="ui-btn-primary"
+            className="ui-btn-primary min-w-[10.5rem] flex-col gap-0.5 sm:min-w-0 sm:flex-row sm:gap-1.5"
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {confirmLabel}
+            <span className="hidden sm:inline">
+              {confirmLabel} — {formatClosingMoney(preview.invoiceAmount)}
+            </span>
+            <span className="sm:hidden">{confirmLabel}</span>
+            <span className="text-[11px] font-semibold tabular-nums sm:hidden">
+              {formatClosingMoney(preview.invoiceAmount)}
+            </span>
           </button>
         </div>
       </div>
