@@ -17,7 +17,7 @@ import { computeDeveloperPeriodMetrics } from "@/lib/metrics/developer-period";
 import { buildMonthlyTrendFromCards } from "@/lib/metrics/monthly-trend";
 import { findUnlinkedDeveloperByEmail } from "@/services/developers";
 import { resolveCompiladoSnapshot } from "@/services/compilado/resolve-snapshot";
-import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
+import { listDelayJustificationsForDeveloperImports } from "@/services/delay-justifications";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import { getInvoiceIssuer } from "@/services/invoice-issuers";
@@ -25,6 +25,7 @@ import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays
 import {
   getMealPixClosingBlockReason,
   getMonthlyClosingForDeveloperMonth,
+  listClosingImportIdsForDeveloper,
   listMonthlyClosingAttachments,
   listMonthlyClosingItems,
   listMonthlyClosingsForDeveloperYear,
@@ -169,10 +170,15 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         })
       : [];
 
+  const closingImportIds =
+    selectedBatch != null
+      ? await listClosingImportIdsForDeveloper(developer.id)
+      : [];
+
   const justifications =
     selectedBatch != null
-      ? await listDelayJustificationsForDeveloperImport({
-          importId: selectedBatch.id,
+      ? await listDelayJustificationsForDeveloperImports({
+          importIds: [selectedBatch.id, ...closingImportIds],
           developerId: developer.id,
           kind: "all",
         })
@@ -347,6 +353,8 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         developerId: developer.id,
         importId: selectedImportId,
         yearMonth: closingYearMonth,
+        closingId: monthlyClosing.id,
+        closingImportId: monthlyClosing.import_id,
       });
       closingAuditRows = audit.auditRows;
       closingCanSubmit = audit.canSubmit;

@@ -54,11 +54,34 @@ export async function listDelayJustificationsForDeveloperImport(input: {
   developerId: string;
   kind?: DelayJustificationKind | "all";
 }): Promise<DelayJustificationRequest[]> {
+  return listDelayJustificationsForDeveloperImports({
+    importIds: [input.importId],
+    developerId: input.developerId,
+    kind: input.kind,
+  });
+}
+
+/**
+ * Latest request per (jira_key, kind) across one or more Compilado batches.
+ * Prefer accepted > pending > rejected (then newest requested_at).
+ */
+export async function listDelayJustificationsForDeveloperImports(input: {
+  importIds: string[];
+  developerId: string;
+  kind?: DelayJustificationKind | "all";
+}): Promise<DelayJustificationRequest[]> {
+  const importIds = [
+    ...new Set(input.importIds.map((id) => id.trim()).filter(Boolean)),
+  ];
+  if (importIds.length === 0) {
+    return [];
+  }
+
   const supabase = await createClient();
   let query = supabase
     .from("delay_justification_requests")
     .select("*")
-    .eq("import_id", input.importId)
+    .in("import_id", importIds)
     .eq("developer_id", input.developerId)
     .order("requested_at", { ascending: false });
 

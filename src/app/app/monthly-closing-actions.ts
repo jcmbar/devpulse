@@ -561,6 +561,8 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
           developerId: developer.id,
           importId: input.importId,
           yearMonth,
+          closingId: monthlyClosing.id,
+          closingImportId: monthlyClosing.import_id,
         });
         auditRows = audit.auditRows;
         canSubmit = audit.canSubmit;

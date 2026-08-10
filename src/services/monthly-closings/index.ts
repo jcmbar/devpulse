@@ -13,7 +13,7 @@ import {
 } from "@/lib/security/authorized-downloads";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
-import { listDelayJustificationsForDeveloperImport } from "@/services/delay-justifications";
+import { listDelayJustificationsForDeveloperImports } from "@/services/delay-justifications";
 import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
 import type { DelayJustificationRequest } from "@/types/delay-justification";
 import type { JiraCard } from "@/types/jira-card";
@@ -342,6 +342,34 @@ export async function listMonthlyClosingsForDeveloperYear(input: {
   return (data ?? []).map((row) => mapClosing(row as Record<string, unknown>));
 }
 
+/** Distinct Compilado import ids referenced by a developer's monthly closings. */
+export async function listClosingImportIdsForDeveloper(
+  developerId: string,
+): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .select("import_id")
+    .eq("developer_id", developerId)
+    .not("import_id", "is", null);
+
+  if (error) {
+    throw new Error(
+      `Falha ao listar lotes dos fechamentos: ${error.message}`,
+    );
+  }
+
+  return [
+    ...new Set(
+      (data ?? [])
+        .map((row) =>
+          row.import_id == null ? null : String(row.import_id),
+        )
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+}
+
 /** All monthly closings in a calendar year for the gestor status matrix. */
 export async function listMonthlyClosingsForGestorYear(input: {
   year: number;
@@ -614,10 +642,120 @@ export function buildMonthlyClosingAuditRows(input: {
   });
 }
 
+function justificationRank(
+  status: MonthlyClosingJustificationSnapshot["status"],
+): number {
+  if (status === "accepted") {
+    return 3;
+  }
+  if (status === "pending") {
+    return 2;
+  }
+  if (status === "rejected") {
+    return 1;
+  }
+  return 0;
+}
+
+function pickStrongerJustification(
+  live: MonthlyClosingJustificationSnapshot,
+  snapshot: MonthlyClosingJustificationSnapshot,
+): MonthlyClosingJustificationSnapshot {
+  return justificationRank(snapshot.status) > justificationRank(live.status)
+    ? snapshot
+    : live;
+}
+
+function recomputeAuditRowBlocks(
+  row: MonthlyClosingCardAuditRow,
+): MonthlyClosingCardAuditRow {
+  const blockReasons: string[] = [];
+  if (row.isDelayed && !isDecided(row.delayJustification.status)) {
+    blockReasons.push(
+      row.delayJustification.status === "pending"
+        ? "Justificativa de atraso pendente de decisão do gestor"
+        : "Justificativa de atraso ausente (precisa ser enviada e decidida)",
+    );
+  }
+  if (row.isRework && !isDecided(row.reworkJustification.status)) {
+    blockReasons.push(
+      row.reworkJustification.status === "pending"
+        ? "Justificativa de retrabalho pendente de decisão do gestor"
+        : "Justificativa de retrabalho ausente (precisa ser enviada e decidida)",
+    );
+  }
+  return {
+    ...row,
+    blocksSubmit: blockReasons.length > 0,
+    blockReasons,
+  };
+}
+
+/**
+ * After reject/reopen, live Compilado may miss justifications (new lote / incomplete
+ * carry-forward). Overlay stronger statuses from the frozen closing snapshot.
+ */
+export function mergeSnapshotJustificationsIntoAuditRows(
+  auditRows: MonthlyClosingCardAuditRow[],
+  snapshotItems: MonthlyClosingItem[],
+): MonthlyClosingCardAuditRow[] {
+  if (snapshotItems.length === 0) {
+    return auditRows;
+  }
+
+  const byKey = new Map<string, MonthlyClosingItem>();
+  for (const item of snapshotItems) {
+    byKey.set(item.jira_key.trim().toUpperCase(), item);
+  }
+
+  return auditRows.map((row) => {
+    const item = byKey.get(row.jiraKey.trim().toUpperCase());
+    if (!item) {
+      return row;
+    }
+
+    const delayJustification = pickStrongerJustification(
+      row.delayJustification,
+      {
+        status: item.delay_justification_status,
+        developerNote: item.delay_developer_note,
+        managerNote: item.delay_manager_note,
+      },
+    );
+    const reworkJustification = pickStrongerJustification(
+      row.reworkJustification,
+      {
+        status: item.rework_justification_status,
+        developerNote: item.rework_developer_note,
+        managerNote: item.rework_manager_note,
+      },
+    );
+
+    if (
+      delayJustification === row.delayJustification &&
+      reworkJustification === row.reworkJustification
+    ) {
+      return row;
+    }
+
+    return recomputeAuditRowBlocks({
+      ...row,
+      delayJustification,
+      reworkJustification,
+    });
+  });
+}
+
 export async function loadMonthlyClosingAuditForDeveloper(input: {
   developerId: string;
   importId: string;
   yearMonth: string;
+  /**
+   * When provided (rejected/open after submit), also load justifications from the
+   * closing’s original Compilado lote and overlay decided statuses from snapshot.
+   */
+  closingId?: string | null;
+  closingImportId?: string | null;
 }): Promise<{
   cards: JiraCard[];
   justifications: DelayJustificationRequest[];
@@ -627,27 +765,41 @@ export async function loadMonthlyClosingAuditForDeveloper(input: {
 }> {
   const periodStart = startOfMonth(input.yearMonth);
   const periodEnd = endOfMonth(input.yearMonth);
-  const [cards, justifications] = await Promise.all([
+  const justificationImportIds = [
+    input.importId,
+    ...(input.closingImportId ? [input.closingImportId] : []),
+  ];
+
+  const [cards, justifications, snapshotItems] = await Promise.all([
     listJiraCardsByDeveloperAndImport({
       developerId: input.developerId,
       importId: input.importId,
       rangeStart: periodStart,
       rangeEnd: periodEnd,
     }),
-    listDelayJustificationsForDeveloperImport({
-      importId: input.importId,
+    listDelayJustificationsForDeveloperImports({
+      importIds: justificationImportIds,
       developerId: input.developerId,
       kind: "all",
     }),
+    input.closingId
+      ? listMonthlyClosingItems(input.closingId)
+      : Promise.resolve([] as MonthlyClosingItem[]),
   ]);
 
-  const auditRows = buildMonthlyClosingAuditRows({ cards, justifications });
+  let auditRows = buildMonthlyClosingAuditRows({ cards, justifications });
+  if (snapshotItems.length > 0) {
+    auditRows = mergeSnapshotJustificationsIntoAuditRows(
+      auditRows,
+      snapshotItems,
+    );
+  }
   const blockingCount = auditRows.filter((row) => row.blocksSubmit).length;
   return {
     cards,
     justifications,
     auditRows,
-    /** Empty month (0 cards) is allowed — only pending justifications block. */
+    /** Empty month (0 cards) is allowed — absent/pending justifications block. */
     canSubmit: blockingCount === 0,
     blockingCount,
   };
@@ -778,6 +930,8 @@ export async function submitMonthlyClosingForReview(input: {
     developerId: input.developerId,
     importId: input.importId,
     yearMonth: closing.year_month,
+    closingId: closing.id,
+    closingImportId: closing.import_id,
   });
 
   if (!audit.canSubmit) {
