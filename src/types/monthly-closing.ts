@@ -151,6 +151,15 @@ export type MonthlyClosingAttachmentType =
   | "boleto_pdf"
   | "meal_pix_receipt";
 
+/** True when the closing has meal reimbursement that may need a PIX receipt. */
+export function closingHasMealReimbursement(
+  closing: Pick<MonthlyClosing, "meal_presencial_days" | "meal_amount">,
+): boolean {
+  return (
+    (closing.meal_presencial_days ?? 0) > 0 || (closing.meal_amount ?? 0) > 0
+  );
+}
+
 export type MonthlyClosingAttachment = {
   id: string;
   monthly_closing_id: string;

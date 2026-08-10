@@ -351,9 +351,12 @@ export function MonthlyClosingControls({
           </p>
         ) : null}
 
-        {status === "finalized" ? (
+        {status === "finalized" && closing ? (
           <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
-            Finalizado · somente leitura.
+            {(closing.meal_presencial_days ?? 0) > 0 ||
+            (closing.meal_amount ?? 0) > 0
+              ? "Finalizado · NF/boleto bloqueados; comprovante de refeição ainda pode ser enviado."
+              : "Finalizado · documentos somente leitura."}
           </p>
         ) : null}
 

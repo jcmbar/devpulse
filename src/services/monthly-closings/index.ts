@@ -1339,17 +1339,12 @@ export async function uploadMonthlyClosingAttachment(input: {
         "Comprovante PIX só pode ser enviado após a finalização do fechamento.",
       );
     }
-    if ((closing.meal_presencial_days ?? 0) <= 0) {
+    if (
+      (closing.meal_presencial_days ?? 0) <= 0 &&
+      (closing.meal_amount ?? 0) <= 0
+    ) {
       throw new Error(
-        "Este fechamento não tem dias de refeição presencial para reembolso.",
-      );
-    }
-    const compensation = await getCurrentDeveloperCompensation(
-      input.developerId,
-    );
-    if (!compensation?.require_meal_pix_receipt) {
-      throw new Error(
-        "Comprovante PIX de refeição não é exigido para este cadastro.",
+        "Este fechamento não tem reembolso de refeição para comprovante.",
       );
     }
     const existingDocs = await listMonthlyClosingAttachments(closing.id);

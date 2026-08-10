@@ -13,7 +13,10 @@ import type {
   MonthlyClosingAttachment,
   MonthlyClosingAttachmentType,
 } from "@/types/monthly-closing";
-import { monthlyClosingAttachmentTypeLabel } from "@/types/monthly-closing";
+import {
+  closingHasMealReimbursement,
+  monthlyClosingAttachmentTypeLabel,
+} from "@/types/monthly-closing";
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
@@ -288,9 +291,7 @@ export function MonthlyClosingAttachmentsPanel({
     attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
   const docsReadOnly = closing.status === "finalized";
   const showMealPix =
-    closing.status === "finalized" &&
-    requireMealPixReceipt &&
-    (closing.meal_presencial_days ?? 0) > 0;
+    closing.status === "finalized" && closingHasMealReimbursement(closing);
   const mealPixReadOnly = mealPix?.is_valid === true;
 
   return (
@@ -302,7 +303,7 @@ export function MonthlyClosingAttachmentsPanel({
         <p className="text-xs text-muted-foreground">
           {docsReadOnly
             ? showMealPix
-              ? "Fechamento finalizado — envie o comprovante PIX de refeição quando solicitado."
+              ? "Fechamento finalizado — NF e boleto ficam bloqueados; o comprovante PIX de refeição ainda pode ser enviado."
               : "Fechamento finalizado — documentos somente leitura."
             : "Envie a nota fiscal e o boleto em PDF para o gestor finalizar."}
         </p>
@@ -343,7 +344,11 @@ export function MonthlyClosingAttachmentsPanel({
             type="meal_pix_receipt"
             attachment={mealPix}
             readOnly={mealPixReadOnly}
-            hint="Obrigatório. Sem aceite do gestor, novos fechamentos ficam bloqueados."
+            hint={
+              requireMealPixReceipt
+                ? "Obrigatório. Sem aceite do gestor, novos fechamentos ficam bloqueados."
+                : "Comprovante PIX do reembolso de refeição (restaurante)."
+            }
           />
         ) : null}
       </div>

@@ -20,6 +20,7 @@ import type {
 } from "@/types/monthly-closing";
 import type { EmailDispatchStatus } from "@/types/operational-email";
 import {
+  closingHasMealReimbursement,
   monthlyClosingAttachmentTypeLabel,
   monthlyClosingRevertActionLabel,
   monthlyClosingRevertDescription,
@@ -94,8 +95,7 @@ export function GestorClosingDecisionPanel({
   const canFinalize = Boolean(invoice && boleto);
   const showMealPix =
     closing.status === "finalized" &&
-    requireMealPixReceipt &&
-    (closing.meal_presencial_days ?? 0) > 0;
+    (closingHasMealReimbursement(closing) || mealPix != null);
   const revertTarget = monthlyClosingRevertTarget(closing.status);
   const revertLabel = monthlyClosingRevertActionLabel(closing.status);
   const revertDescription = monthlyClosingRevertDescription(closing.status);
