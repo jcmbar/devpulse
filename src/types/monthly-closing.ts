@@ -167,6 +167,29 @@ export function closingAllowsMealPixUpload(
   return closing.status === "closed" || closing.status === "finalized";
 }
 
+/**
+ * Show the meal PIX slot when the closing has meal reimbursement, the
+ * cadastro requires PIX receipts, or a receipt was already uploaded.
+ * Aligns developer UI with the gestor ops board (`requireMealPix`).
+ */
+export function closingOffersMealPixSlot(input: {
+  closing: Pick<
+    MonthlyClosing,
+    "status" | "meal_presencial_days" | "meal_amount"
+  >;
+  requireMealPixReceipt?: boolean;
+  hasMealPixAttachment?: boolean;
+}): boolean {
+  if (!closingAllowsMealPixUpload(input.closing)) {
+    return false;
+  }
+  return (
+    Boolean(input.requireMealPixReceipt) ||
+    closingHasMealReimbursement(input.closing) ||
+    Boolean(input.hasMealPixAttachment)
+  );
+}
+
 export type MonthlyClosingAttachment = {
   id: string;
   monthly_closing_id: string;

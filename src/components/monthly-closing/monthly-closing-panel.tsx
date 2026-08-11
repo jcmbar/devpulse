@@ -348,7 +348,8 @@ export function MonthlyClosingControls({
         {status === "closed" ? (
           <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
             {(closing?.meal_presencial_days ?? 0) > 0 ||
-            (closing?.meal_amount ?? 0) > 0
+            (closing?.meal_amount ?? 0) > 0 ||
+            compensation?.require_meal_pix_receipt
               ? "Aprovado · envie NF, boleto e comprovante de refeição."
               : "Aprovado · envie NF e boleto em PDF."}
           </p>
@@ -357,7 +358,8 @@ export function MonthlyClosingControls({
         {status === "finalized" && closing ? (
           <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
             {(closing.meal_presencial_days ?? 0) > 0 ||
-            (closing.meal_amount ?? 0) > 0
+            (closing.meal_amount ?? 0) > 0 ||
+            compensation?.require_meal_pix_receipt
               ? "Finalizado · NF/boleto bloqueados; comprovante de refeição ainda pode ser enviado."
               : "Finalizado · documentos somente leitura."}
           </p>

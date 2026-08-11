@@ -20,8 +20,7 @@ import type {
 } from "@/types/monthly-closing";
 import type { EmailDispatchStatus } from "@/types/operational-email";
 import {
-  closingAllowsMealPixUpload,
-  closingHasMealReimbursement,
+  closingOffersMealPixSlot,
   monthlyClosingAttachmentTypeLabel,
   monthlyClosingRevertActionLabel,
   monthlyClosingRevertDescription,
@@ -94,9 +93,11 @@ export function GestorClosingDecisionPanel({
   const mealPix =
     attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
   const canFinalize = Boolean(invoice && boleto);
-  const showMealPix =
-    closingAllowsMealPixUpload(closing) &&
-    (closingHasMealReimbursement(closing) || mealPix != null);
+  const showMealPix = closingOffersMealPixSlot({
+    closing,
+    requireMealPixReceipt,
+    hasMealPixAttachment: mealPix != null,
+  });
   const revertTarget = monthlyClosingRevertTarget(closing.status);
   const revertLabel = monthlyClosingRevertActionLabel(closing.status);
   const revertDescription = monthlyClosingRevertDescription(closing.status);

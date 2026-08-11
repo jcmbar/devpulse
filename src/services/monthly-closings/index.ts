@@ -65,8 +65,8 @@ const MEAL_PIX_BLOCK_MESSAGE =
   "Há comprovante PIX de refeição pendente de envio ou aceite do gestor. Envie o comprovante e aguarde a aceitação antes de efetuar um novo fechamento.";
 
 /**
- * When compensation requires meal PIX receipts, every finalized closing with
- * meal reimbursement must have an accepted meal_pix_receipt before new closings.
+ * When compensation requires meal PIX receipts, every finalized closing
+ * must have an accepted meal_pix_receipt before new closings.
  */
 export async function getMealPixClosingBlockReason(
   developerId: string,
@@ -89,22 +89,14 @@ export async function getMealPixClosingBlockReason(
     );
   }
 
-  const withMeal = (closings ?? []).filter((row) =>
-    closingHasMealReimbursement({
-      meal_presencial_days:
-        row.meal_presencial_days == null
-          ? null
-          : Number(row.meal_presencial_days),
-      meal_amount:
-        row.meal_amount == null ? null : Number(row.meal_amount),
-    }),
-  );
-
-  if (withMeal.length === 0) {
+  // Cadastro exige PIX: todos os fechamentos finalizados entram na checagem
+  // (mesmo alinhamento do painel operacional do gestor).
+  const pendingClosings = closings ?? [];
+  if (pendingClosings.length === 0) {
     return null;
   }
 
-  const closingIds = withMeal.map((row) => String(row.id));
+  const closingIds = pendingClosings.map((row) => String(row.id));
   const { data: pixRows, error: pixError } = await supabase
     .from("monthly_closing_attachments")
     .select("monthly_closing_id, is_valid")
@@ -125,7 +117,7 @@ export async function getMealPixClosingBlockReason(
     );
   }
 
-  const pending = withMeal.filter(
+  const pending = pendingClosings.filter(
     (row) => acceptedByClosing.get(String(row.id)) !== true,
   );
   if (pending.length === 0) {
@@ -1584,7 +1576,12 @@ export async function uploadMonthlyClosingAttachment(input: {
     if (!closingHasMealReimbursement(closing)) {
       closing = await syncClosingMealFromFolhaIfMissing(closing);
     }
-    if (!closingHasMealReimbursement(closing)) {
+
+    const compensation = await getCurrentDeveloperCompensation(
+      closing.developer_id,
+    );
+    const requireMealPix = Boolean(compensation?.require_meal_pix_receipt);
+    if (!closingHasMealReimbursement(closing) && !requireMealPix) {
       throw new Error(
         "Este fechamento não tem reembolso de refeição para comprovante.",
       );

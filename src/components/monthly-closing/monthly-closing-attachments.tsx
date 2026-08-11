@@ -14,8 +14,7 @@ import type {
   MonthlyClosingAttachmentType,
 } from "@/types/monthly-closing";
 import {
-  closingAllowsMealPixUpload,
-  closingHasMealReimbursement,
+  closingOffersMealPixSlot,
   monthlyClosingAttachmentTypeLabel,
 } from "@/types/monthly-closing";
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
@@ -299,9 +298,11 @@ export function MonthlyClosingAttachmentsPanel({
   const mealPix =
     attachments.find((row) => row.type === "meal_pix_receipt") ?? null;
   const docsReadOnly = closing.status === "finalized";
-  const showMealPix =
-    closingAllowsMealPixUpload(closing) &&
-    (closingHasMealReimbursement(closing) || mealPix != null);
+  const showMealPix = closingOffersMealPixSlot({
+    closing,
+    requireMealPixReceipt,
+    hasMealPixAttachment: mealPix != null,
+  });
   const mealPixReadOnly = mealPix?.is_valid === true;
 
   return (
