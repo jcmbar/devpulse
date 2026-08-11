@@ -95,6 +95,9 @@ export async function saveJiraIntegrationAction(
       safetyOverlapMinutes: Number(formData.get("safetyOverlapMinutes") ?? 15),
       includeWorklogs: formData.get("includeWorklogs") === "on",
       includeChangelog: formData.get("includeChangelog") === "on",
+      autoSyncCooldownMinutes: Number(
+        formData.get("autoSyncCooldownMinutes") ?? 60,
+      ),
       // field_mappings managed by the de/para catalog panel — do not wipe here.
     });
   } catch (error) {

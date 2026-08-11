@@ -83,16 +83,46 @@ export const JIRA_SYNC_STALE_MINUTES = 45;
 /** Key inside jira_integrations.settings for full-pipeline lease. */
 export const JIRA_PIPELINE_LOCK_SETTINGS_KEY = "pipeline_lock";
 
-export function resolveJiraAutoSyncCooldownMinutes(): number {
+/** Key inside jira_integrations.settings for auto-sync cooldown (minutes). */
+export const JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY =
+  "auto_sync_cooldown_minutes";
+
+const COOLDOWN_MIN = 1;
+const COOLDOWN_MAX = 24 * 60;
+
+function parseCooldownMinutes(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < COOLDOWN_MIN) {
+    return null;
+  }
+  return Math.min(COOLDOWN_MAX, Math.floor(parsed));
+}
+
+/**
+ * Resolve auto-sync cooldown minutes:
+ * 1) integration settings.auto_sync_cooldown_minutes (painel Jira)
+ * 2) env JIRA_AUTO_SYNC_COOLDOWN_MINUTES
+ * 3) default 60
+ */
+export function resolveJiraAutoSyncCooldownMinutes(
+  settings?: Record<string, unknown> | null,
+): number {
+  const fromSettings = parseCooldownMinutes(
+    settings?.[JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY],
+  );
+  if (fromSettings != null) {
+    return fromSettings;
+  }
+
   const raw = process.env.JIRA_AUTO_SYNC_COOLDOWN_MINUTES;
   if (raw == null || raw.trim() === "") {
     return JIRA_AUTO_SYNC_COOLDOWN_MINUTES_DEFAULT;
   }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1) {
+  const fromEnv = parseCooldownMinutes(raw);
+  if (fromEnv == null) {
     return JIRA_AUTO_SYNC_COOLDOWN_MINUTES_DEFAULT;
   }
-  return Math.floor(parsed);
+  return fromEnv;
 }
 
 /** Default changelog field names when mappings use system fields. */

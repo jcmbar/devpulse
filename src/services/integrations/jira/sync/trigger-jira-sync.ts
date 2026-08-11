@@ -91,7 +91,7 @@ export async function triggerJiraSync(
       integration,
       hasActiveRun: active != null,
       pipelineLocked: hasPipelineLock(integration),
-      cooldownMinutes: resolveJiraAutoSyncCooldownMinutes(),
+      cooldownMinutes: resolveJiraAutoSyncCooldownMinutes(integration.settings),
     });
     if (!gate.ok) {
       return {

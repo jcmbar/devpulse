@@ -2,7 +2,11 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { asJiraFieldMappings } from "@/lib/jira/field-mappings";
-import { JIRA_SYNC_STALE_MINUTES } from "@/services/integrations/jira/constants";
+import {
+  JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY,
+  JIRA_SYNC_STALE_MINUTES,
+  resolveJiraAutoSyncCooldownMinutes,
+} from "@/services/integrations/jira/constants";
 import type {
   JiraIntegration,
   JiraIntegrationWriteInput,
@@ -168,6 +172,26 @@ export async function upsertJiraIntegration(
   input: JiraIntegrationWriteInput,
 ): Promise<JiraIntegration> {
   const supabase = await createClient();
+
+  const { data: existingRow } = await supabase
+    .from("jira_integrations")
+    .select("id, settings")
+    .eq("team_id", input.teamId)
+    .maybeSingle();
+
+  const existingSettings =
+    existingRow?.settings && typeof existingRow.settings === "object"
+      ? (existingRow.settings as Record<string, unknown>)
+      : {};
+
+  const settings: Record<string, unknown> = { ...existingSettings };
+  if (input.autoSyncCooldownMinutes != null) {
+    const parsed = Number(input.autoSyncCooldownMinutes);
+    settings[JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY] = Number.isFinite(parsed)
+      ? Math.min(24 * 60, Math.max(1, Math.floor(parsed)))
+      : resolveJiraAutoSyncCooldownMinutes(existingSettings);
+  }
+
   const payload: Record<string, unknown> = {
     team_id: input.teamId,
     name: input.name.trim(),
@@ -181,6 +205,7 @@ export async function upsertJiraIntegration(
     safety_overlap_minutes: input.safetyOverlapMinutes ?? 15,
     include_worklogs: input.includeWorklogs ?? true,
     include_changelog: input.includeChangelog ?? true,
+    settings,
   };
   // Preserve existing mappings when the connection form does not send them.
   if (input.fieldMappings !== undefined) {
@@ -326,6 +351,24 @@ export async function listRecentJiraSyncRuns(
     .from("jira_sync_runs")
     .select("*")
     .eq("integration_id", integrationId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Falha ao listar sync runs: ${error.message}`);
+  }
+
+  return (data ?? []).map((row) => mapSyncRun(row as Record<string, unknown>));
+}
+
+/** Recent runs across all integrations (for admin history with team labels). */
+export async function listRecentJiraSyncRunsGlobal(
+  limit = 50,
+): Promise<JiraSyncRun[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jira_sync_runs")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
 

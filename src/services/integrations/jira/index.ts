@@ -17,6 +17,7 @@ export {
 export {
   resolveJiraAutoSyncCooldownMinutes,
   JIRA_AUTO_SYNC_COOLDOWN_MINUTES_DEFAULT,
+  JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY,
   JIRA_SYNC_TRIGGER_SOURCES,
 } from "@/services/integrations/jira/constants";
 export type { JiraSyncTriggerSource } from "@/services/integrations/jira/constants";
@@ -27,6 +28,7 @@ export {
   upsertJiraIntegration,
   updateJiraIntegrationFieldMappings,
   listRecentJiraSyncRuns,
+  listRecentJiraSyncRunsGlobal,
   listJiraProjects,
   countJiraIssues,
   listSampleJiraIssues,

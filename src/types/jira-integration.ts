@@ -51,6 +51,8 @@ export type JiraIntegrationWriteInput = {
   includeWorklogs?: boolean;
   includeChangelog?: boolean;
   fieldMappings?: JiraFieldMappings;
+  /** Minutes between automatic syncs; stored in settings. */
+  autoSyncCooldownMinutes?: number;
 };
 
 export type JiraSyncRun = {

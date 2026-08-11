@@ -236,7 +236,8 @@ Ao abrir `/app/gestor` (admin/gestor), o app agenda em background a pipeline
 Regras:
 - Só dispara se integração habilitada, de/para completo, sem run `pending`/`running`,
   sem lease de pipeline ativo, e `last_successful_sync_at` mais antigo que o cooldown
-  (`JIRA_AUTO_SYNC_COOLDOWN_MINUTES`, default 60).
+  (painel Jira → `settings.auto_sync_cooldown_minutes`; senão
+  `JIRA_AUTO_SYNC_COOLDOWN_MINUTES`; senão 60).
 - Botão **Rodar Sync Agora** ignora cooldown (`force`) e ainda respeita o lock.
 - Lock: índice único parcial em `jira_sync_runs` (um ativo por integração) +
   lease em `jira_integrations.settings.pipeline_lock` cobrindo a pipeline inteira.

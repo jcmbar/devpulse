@@ -6,6 +6,11 @@ import { JiraTeamContextSelect } from "@/app/app/jira/jira-team-context-select";
 import { JiraSyncPipelinePanel } from "@/app/app/jira/jira-sync-pipeline-panel";
 import { JiraFieldMappingCatalogPanel } from "@/app/app/jira/jira-field-mapping-catalog";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
+import {
+  ClientListPagination,
+  useClientPagedItems,
+} from "@/components/ui/client-list-pagination";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import {
   FormActions,
@@ -19,6 +24,7 @@ import {
   type JiraMappingReadiness,
 } from "@/lib/jira/field-mappings";
 import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
+import { resolveJiraAutoSyncCooldownMinutes } from "@/services/integrations/jira/constants";
 import { useActionState, useCallback, useMemo, useState } from "react";
 import {
   saveJiraIntegrationAction,
@@ -35,6 +41,7 @@ import type { JiraIssueFlowMetrics } from "@/types/jira-flow-analytics";
 import type { Team } from "@/types/team";
 
 const initialState: JiraFormState = { error: null, success: null };
+const TABLE_PAGE_SIZE = 8;
 
 function formatDurationMs(ms: number | null): string {
   if (ms == null) {
@@ -165,9 +172,10 @@ export function JiraAdminPanel({
         </div>
       ) : null}
 
-      <SectionShell
+      <CollapsibleSection
         title="Resumo do contexto"
         description="Indicadores locais do time selecionado (já sincronizados)."
+        defaultOpen
       >
         <div className="ui-kpi-grid--hero">
           <KpiMetricCard
@@ -223,7 +231,7 @@ export function JiraAdminPanel({
             tone={lastOkSync ? "success" : "neutral"}
           />
         </div>
-      </SectionShell>
+      </CollapsibleSection>
 
       <SectionShell
         title={
@@ -338,6 +346,23 @@ export function JiraAdminPanel({
                 />
               </FormField>
               <FormField
+                label="Intervalo entre syncs automáticas (min)"
+                htmlFor="autoSyncCooldownMinutes"
+                hint="Gestor e cron só disparam de novo após este intervalo. “Rodar Sync Agora” ignora. Padrão 60."
+              >
+                <input
+                  id="autoSyncCooldownMinutes"
+                  name="autoSyncCooldownMinutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  defaultValue={resolveJiraAutoSyncCooldownMinutes(
+                    selected?.settings ?? null,
+                  )}
+                  className="ui-input"
+                />
+              </FormField>
+              <FormField
                 label="JQL extra (AND) — opcional"
                 htmlFor="jqlExtra"
                 className="sm:col-span-2"
@@ -407,9 +432,10 @@ export function JiraAdminPanel({
       </SectionShell>
 
       {selected && selectedTeam ? (
-        <SectionShell
+        <CollapsibleSection
           title="Mapeamento de campos"
           description="Campos custom do Jira usados no Compilado e no fluxo."
+          defaultOpen
         >
           <JiraFieldMappingCatalogPanel
             key={`catalog:${selected.id}:${selectedTeam.id}`}
@@ -420,16 +446,17 @@ export function JiraAdminPanel({
             projects={projects}
             onReadinessChange={onReadinessChange}
           />
-        </SectionShell>
+        </CollapsibleSection>
       ) : null}
 
-      <SectionShell
+      <CollapsibleSection
         title="Operações"
         description={
           selected
             ? "Teste de conexão e pipeline de sync orquestrado."
             : `Salve primeiro a integração de ${selectedTeam.name}.`
         }
+        defaultOpen
       >
         {selected ? (
           <div className="ui-dashboard-panel space-y-5">
@@ -465,224 +492,353 @@ export function JiraAdminPanel({
             orquestrado.
           </div>
         )}
-      </SectionShell>
+      </CollapsibleSection>
 
       {integrations.length > 0 ? (
-        <SectionShell
+        <CollapsibleSection
           title="Integrações cadastradas"
           description={`${integrations.length} configurada(s) · troque o time no filtro acima para editar outra.`}
+          defaultOpen={integrations.length <= TABLE_PAGE_SIZE}
         >
-          <DataTable minWidthClassName="min-w-[720px]" stickyFirstColumn>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Nome</th>
-                <th className="hidden sm:table-cell">Projetos</th>
-                <th>Status</th>
-                <th className="hidden md:table-cell">Último sync OK</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {integrations.map((row) => {
-                const team = teams.find((item) => item.id === row.team_id);
-                const isCurrent = row.id === selected?.id;
-                return (
-                  <tr
-                    key={row.id}
-                    className={isCurrent ? "bg-brand-soft/50" : undefined}
-                    aria-current={isCurrent ? "true" : undefined}
-                  >
-                    <td className="font-medium">
-                      {team?.name ?? row.team_id.slice(0, 8)}
-                    </td>
-                    <td>{row.name}</td>
-                    <td className="hidden text-muted-foreground sm:table-cell">
-                      {row.project_keys.length
-                        ? row.project_keys.join(", ")
-                        : "todos"}
-                    </td>
-                    <td>{row.is_enabled ? "Habilitada" : "Off"}</td>
-                    <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
-                      {row.last_successful_sync_at ?? "—"}
-                    </td>
-                    <td className="text-right">
-                      <Link
-                        href={`/app/jira?teamId=${row.team_id}`}
-                        className="ui-btn-ghost"
-                      >
-                        {isCurrent ? "Em edição" : "Abrir"}
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
-        </SectionShell>
+          <IntegrationsTable
+            integrations={integrations}
+            teams={teams}
+            selectedId={selected?.id ?? null}
+          />
+        </CollapsibleSection>
       ) : null}
 
       {recentRuns.length > 0 ? (
-        <SectionShell
+        <CollapsibleSection
           title="Últimas execuções"
-          description="Histórico recente de sync do time em contexto."
+          description="Histórico recente de sync em todos os times/Jiras."
+          defaultOpen
         >
-          <DataTable minWidthClassName="min-w-[800px]">
-            <thead>
-              <tr>
-                <th>Quando</th>
-                <th>Modo</th>
-                <th>Status</th>
-                <th>Issues</th>
-                <th className="hidden sm:table-cell">Reproc.</th>
-                <th className="hidden md:table-cell">Worklogs</th>
-                <th className="hidden lg:table-cell">Stop</th>
-                <th className="hidden md:table-cell">API</th>
-                <th>Erro</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRuns.map((run) => {
-                const stopReason =
-                  typeof run.metrics?.stop_reason === "string"
-                    ? run.metrics.stop_reason
-                    : "—";
-                const reprocessed =
-                  typeof run.metrics?.issues_reprocessed === "number"
-                    ? run.metrics.issues_reprocessed
-                    : "—";
-                const worklogsFetched =
-                  typeof run.metrics?.worklogs_fetched === "number"
-                    ? run.metrics.worklogs_fetched
-                    : run.worklogs_upserted;
-                const changelogReqs =
-                  typeof run.metrics?.changelog_issue_requests === "number"
-                    ? run.metrics.changelog_issue_requests
-                    : "—";
-                return (
-                  <tr key={run.id}>
-                    <td className="whitespace-nowrap text-muted-foreground">
-                      {run.created_at}
-                    </td>
-                    <td>{run.mode}</td>
-                    <td>{run.status}</td>
-                    <td className="tabular-nums">
-                      {run.issues_upserted}/{run.issues_fetched}
-                    </td>
-                    <td className="hidden tabular-nums sm:table-cell">
-                      {reprocessed}
-                    </td>
-                    <td className="hidden tabular-nums md:table-cell">
-                      {worklogsFetched}
-                      <span className="text-muted-foreground">
-                        {" "}
-                        / chg {changelogReqs}
-                      </span>
-                    </td>
-                    <td className="hidden max-w-[10rem] truncate text-muted-foreground lg:table-cell">
-                      {stopReason}
-                    </td>
-                    <td className="hidden tabular-nums md:table-cell">
-                      {run.api_requests}
-                    </td>
-                    <td className="max-w-xs truncate text-muted-foreground">
-                      {run.error_message ?? "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
-        </SectionShell>
+          <RecentRunsTable
+            recentRuns={recentRuns}
+            integrations={integrations}
+            teams={teams}
+          />
+        </CollapsibleSection>
       ) : null}
 
       {sampleIssues.length > 0 || sampleFlowMetrics.length > 0 ? (
         <div className="grid gap-5 xl:grid-cols-2">
           {sampleIssues.length > 0 ? (
-            <SectionShell
+            <CollapsibleSection
               title="Amostra de issues"
               description="Ordenadas por updated_at_jira (local)."
+              defaultOpen
             >
-              <DataTable minWidthClassName="min-w-[520px]">
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Resumo</th>
-                    <th className="hidden sm:table-cell">Status</th>
-                    <th className="hidden md:table-cell">Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sampleIssues.slice(0, 12).map((issue) => (
-                    <tr key={issue.id}>
-                      <td className="font-medium whitespace-nowrap">
-                        {issue.jira_key}
-                      </td>
-                      <td className="max-w-[12rem] truncate">
-                        {issue.summary ?? "—"}
-                      </td>
-                      <td className="hidden sm:table-cell">
-                        {issue.status ?? "—"}
-                      </td>
-                      <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
-                        {issue.updated_at_jira ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            </SectionShell>
+              <SampleIssuesTable sampleIssues={sampleIssues} />
+            </CollapsibleSection>
           ) : null}
 
           {sampleFlowMetrics.length > 0 ? (
-            <SectionShell
+            <CollapsibleSection
               title="Amostra de fluxo"
               description="Snapshots flow_v1 · lead / aging / reopens."
+              defaultOpen
             >
-              <DataTable minWidthClassName="min-w-[520px]">
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Lead</th>
-                    <th>Aging</th>
-                    <th className="hidden sm:table-cell">Reopen</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sampleFlowMetrics.slice(0, 12).map((row) => (
-                    <tr key={row.id}>
-                      <td className="font-medium whitespace-nowrap">
-                        {issueKeyById[row.issue_id] ??
-                          row.issue_id.slice(0, 8)}
-                      </td>
-                      <td className="tabular-nums">
-                        {formatDurationMs(row.lead_time_ms)}
-                      </td>
-                      <td className="tabular-nums">
-                        {formatDurationMs(row.aging_ms)}
-                      </td>
-                      <td className="hidden tabular-nums sm:table-cell">
-                        {row.reopen_count}
-                      </td>
-                      <td className="text-right">
-                        {selected ? (
-                          <Link
-                            href={`/app/jira/analytics/issues/${row.issue_id}?integrationId=${selected.id}`}
-                            className="ui-btn-ghost"
-                          >
-                            Auditar
-                          </Link>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            </SectionShell>
+              <SampleFlowTable
+                sampleFlowMetrics={sampleFlowMetrics}
+                issueKeyById={issueKeyById}
+                selectedId={selected?.id ?? null}
+              />
+            </CollapsibleSection>
           ) : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function IntegrationsTable({
+  integrations,
+  teams,
+  selectedId,
+}: {
+  integrations: JiraIntegration[];
+  teams: Team[];
+  selectedId: string | null;
+}) {
+  const page = useClientPagedItems(integrations, TABLE_PAGE_SIZE);
+
+  return (
+    <>
+      <DataTable minWidthClassName="min-w-[720px]" stickyFirstColumn>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Nome</th>
+            <th className="hidden sm:table-cell">Projetos</th>
+            <th>Status</th>
+            <th className="hidden md:table-cell">Último sync OK</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {page.items.map((row) => {
+            const team = teams.find((item) => item.id === row.team_id);
+            const isCurrent = row.id === selectedId;
+            return (
+              <tr
+                key={row.id}
+                className={isCurrent ? "bg-brand-soft/50" : undefined}
+                aria-current={isCurrent ? "true" : undefined}
+              >
+                <td className="font-medium">
+                  {team?.name ?? row.team_id.slice(0, 8)}
+                </td>
+                <td>{row.name}</td>
+                <td className="hidden text-muted-foreground sm:table-cell">
+                  {row.project_keys.length
+                    ? row.project_keys.join(", ")
+                    : "todos"}
+                </td>
+                <td>{row.is_enabled ? "Habilitada" : "Off"}</td>
+                <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
+                  {row.last_successful_sync_at ?? "—"}
+                </td>
+                <td className="text-right">
+                  <Link
+                    href={`/app/jira?teamId=${row.team_id}`}
+                    className="ui-btn-ghost"
+                  >
+                    {isCurrent ? "Em edição" : "Abrir"}
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
+      <ClientListPagination
+        page={page.page}
+        totalPages={page.totalPages}
+        total={page.total}
+        pageSize={page.pageSize}
+        onPageChange={page.setPage}
+      />
+    </>
+  );
+}
+
+function RecentRunsTable({
+  recentRuns,
+  integrations,
+  teams,
+}: {
+  recentRuns: JiraSyncRun[];
+  integrations: JiraIntegration[];
+  teams: Team[];
+}) {
+  const page = useClientPagedItems(recentRuns, TABLE_PAGE_SIZE);
+  const integrationById = useMemo(
+    () => new Map(integrations.map((row) => [row.id, row])),
+    [integrations],
+  );
+  const teamById = useMemo(
+    () => new Map(teams.map((row) => [row.id, row])),
+    [teams],
+  );
+
+  return (
+    <>
+      <DataTable minWidthClassName="min-w-[920px]">
+        <thead>
+          <tr>
+            <th>Time / Jira</th>
+            <th>Quando</th>
+            <th>Modo</th>
+            <th>Status</th>
+            <th>Issues</th>
+            <th className="hidden sm:table-cell">Reproc.</th>
+            <th className="hidden md:table-cell">Worklogs</th>
+            <th className="hidden lg:table-cell">Stop</th>
+            <th className="hidden md:table-cell">API</th>
+            <th>Erro</th>
+          </tr>
+        </thead>
+        <tbody>
+          {page.items.map((run) => {
+            const integration = integrationById.get(run.integration_id);
+            const team = integration
+              ? teamById.get(integration.team_id)
+              : undefined;
+            const stopReason =
+              typeof run.metrics?.stop_reason === "string"
+                ? run.metrics.stop_reason
+                : "—";
+            const reprocessed =
+              typeof run.metrics?.issues_reprocessed === "number"
+                ? run.metrics.issues_reprocessed
+                : "—";
+            const worklogsFetched =
+              typeof run.metrics?.worklogs_fetched === "number"
+                ? run.metrics.worklogs_fetched
+                : run.worklogs_upserted;
+            const changelogReqs =
+              typeof run.metrics?.changelog_issue_requests === "number"
+                ? run.metrics.changelog_issue_requests
+                : "—";
+            return (
+              <tr key={run.id}>
+                <td className="min-w-[10rem]">
+                  <div className="font-medium">
+                    {team?.name ?? "Time removido"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {integration?.name ?? run.integration_id.slice(0, 8)}
+                    {integration?.project_keys?.length
+                      ? ` · ${integration.project_keys.join(", ")}`
+                      : ""}
+                  </div>
+                </td>
+                <td className="whitespace-nowrap text-muted-foreground">
+                  {run.created_at}
+                </td>
+                <td>{run.mode}</td>
+                <td>{run.status}</td>
+                <td className="tabular-nums">
+                  {run.issues_upserted}/{run.issues_fetched}
+                </td>
+                <td className="hidden tabular-nums sm:table-cell">
+                  {reprocessed}
+                </td>
+                <td className="hidden tabular-nums md:table-cell">
+                  {worklogsFetched}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    / chg {changelogReqs}
+                  </span>
+                </td>
+                <td className="hidden max-w-[10rem] truncate text-muted-foreground lg:table-cell">
+                  {stopReason}
+                </td>
+                <td className="hidden tabular-nums md:table-cell">
+                  {run.api_requests}
+                </td>
+                <td className="max-w-xs truncate text-muted-foreground">
+                  {run.error_message ?? "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
+      <ClientListPagination
+        page={page.page}
+        totalPages={page.totalPages}
+        total={page.total}
+        pageSize={page.pageSize}
+        onPageChange={page.setPage}
+      />
+    </>
+  );
+}
+
+function SampleIssuesTable({ sampleIssues }: { sampleIssues: JiraIssue[] }) {
+  const page = useClientPagedItems(sampleIssues, TABLE_PAGE_SIZE);
+
+  return (
+    <>
+      <DataTable minWidthClassName="min-w-[520px]">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Resumo</th>
+            <th className="hidden sm:table-cell">Status</th>
+            <th className="hidden md:table-cell">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {page.items.map((issue) => (
+            <tr key={issue.id}>
+              <td className="font-medium whitespace-nowrap">
+                {issue.jira_key}
+              </td>
+              <td className="max-w-[12rem] truncate">
+                {issue.summary ?? "—"}
+              </td>
+              <td className="hidden sm:table-cell">{issue.status ?? "—"}</td>
+              <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
+                {issue.updated_at_jira ?? "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
+      <ClientListPagination
+        page={page.page}
+        totalPages={page.totalPages}
+        total={page.total}
+        pageSize={page.pageSize}
+        onPageChange={page.setPage}
+      />
+    </>
+  );
+}
+
+function SampleFlowTable({
+  sampleFlowMetrics,
+  issueKeyById,
+  selectedId,
+}: {
+  sampleFlowMetrics: JiraIssueFlowMetrics[];
+  issueKeyById: Record<string, string>;
+  selectedId: string | null;
+}) {
+  const page = useClientPagedItems(sampleFlowMetrics, TABLE_PAGE_SIZE);
+
+  return (
+    <>
+      <DataTable minWidthClassName="min-w-[520px]">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Lead</th>
+            <th>Aging</th>
+            <th className="hidden sm:table-cell">Reopen</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {page.items.map((row) => (
+            <tr key={row.id}>
+              <td className="font-medium whitespace-nowrap">
+                {issueKeyById[row.issue_id] ?? row.issue_id.slice(0, 8)}
+              </td>
+              <td className="tabular-nums">
+                {formatDurationMs(row.lead_time_ms)}
+              </td>
+              <td className="tabular-nums">
+                {formatDurationMs(row.aging_ms)}
+              </td>
+              <td className="hidden tabular-nums sm:table-cell">
+                {row.reopen_count}
+              </td>
+              <td className="text-right">
+                {selectedId ? (
+                  <Link
+                    href={`/app/jira/analytics/issues/${row.issue_id}?integrationId=${selectedId}`}
+                    className="ui-btn-ghost"
+                  >
+                    Auditar
+                  </Link>
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
+      <ClientListPagination
+        page={page.page}
+        totalPages={page.totalPages}
+        total={page.total}
+        pageSize={page.pageSize}
+        onPageChange={page.setPage}
+      />
+    </>
   );
 }

@@ -27,7 +27,8 @@ export function shouldAutoSyncJiraIntegration(input: {
 }): ShouldAutoSyncResult {
   const now = input.now ?? new Date();
   const cooldownMinutes =
-    input.cooldownMinutes ?? resolveJiraAutoSyncCooldownMinutes();
+    input.cooldownMinutes ??
+    resolveJiraAutoSyncCooldownMinutes(input.integration.settings);
 
   if (!input.integration.is_enabled) {
     return { ok: false, reason: "disabled" };

@@ -13,7 +13,7 @@ import {
   countJiraIssues,
   listJiraIntegrations,
   listJiraProjects,
-  listRecentJiraSyncRuns,
+  listRecentJiraSyncRunsGlobal,
   listSampleJiraIssues,
 } from "@/services/integrations/jira";
 import { listTeamsAdmin } from "@/services/teams";
@@ -56,6 +56,7 @@ export default async function JiraIntegrationsPage({ searchParams }: PageProps) 
   // choose deterministically and surface a warning instead of mixing contexts.
   const selected = integrationsForTeam[0] ?? null;
 
+  const recentRunsPromise = listRecentJiraSyncRunsGlobal(60);
   const [
     projects,
     issueCount,
@@ -67,12 +68,12 @@ export default async function JiraIntegrationsPage({ searchParams }: PageProps) 
     ? await Promise.all([
         listJiraProjects(selected.id),
         countJiraIssues(selected.id),
-        listSampleJiraIssues(selected.id, 25),
-        listRecentJiraSyncRuns(selected.id, 12),
+        listSampleJiraIssues(selected.id, 40),
+        recentRunsPromise,
         countIssueFlowMetrics(selected.id),
-        listIssueFlowMetricsWithKeys(selected.id, 20),
+        listIssueFlowMetricsWithKeys(selected.id, 40),
       ])
-    : [[], 0, [], [], 0, []];
+    : [[], 0, [], await recentRunsPromise, 0, []];
 
   const sampleFlowMetrics = flowRows.map((row) => row.metrics);
   const issueKeyById = Object.fromEntries(
