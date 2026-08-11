@@ -7,6 +7,8 @@ export { runJiraSync } from "@/services/integrations/jira/sync/run-jira-sync";
 export { runJiraPipelineForIntegration } from "@/services/integrations/jira/sync/run-jira-pipeline";
 export { triggerJiraSync } from "@/services/integrations/jira/sync/trigger-jira-sync";
 export { shouldAutoSyncJiraIntegration } from "@/services/integrations/jira/sync/should-auto-sync";
+export { scheduleEligibleJiraAutoSyncs } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
+export type { ScheduleEligibleJiraAutoSyncsResult } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
 export { collectChangelogForIssue } from "@/services/integrations/jira/collectors/changelog";
 export {
   JiraPaginationError,

@@ -1,6 +1,5 @@
 "use server";
 
-import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import {
@@ -11,14 +10,11 @@ import { materializeJiraCompiladoSnapshot } from "@/services/compilado/materiali
 import {
   getJiraIntegration,
   getJiraSyncStatusSummary,
-  listJiraIntegrations,
   runJiraSync,
   triggerJiraSync,
 } from "@/services/integrations/jira";
 import type { JiraSyncStatusSummary } from "@/types/jira-sync-status";
-import { findActiveJiraSyncRun } from "@/services/integrations/jira/repositories/integrations";
-import { hasPipelineLock } from "@/services/integrations/jira/sync/pipeline-lock";
-import { shouldAutoSyncJiraIntegration } from "@/services/integrations/jira/sync/should-auto-sync";
+import { scheduleEligibleJiraAutoSyncs } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
 import type {
   JiraPipelineStepId,
   JiraPipelineStepResult,
@@ -264,56 +260,11 @@ export async function requestGestorAutoSyncAction(input: {
   teamId: string | null;
 }): Promise<RequestGestorAutoSyncResult> {
   const context = await requireTeamAccess();
-  const all = await listJiraIntegrations();
-  const scoped = input.teamId
-    ? all.filter((row) => row.team_id === input.teamId && row.is_enabled)
-    : all.filter((row) => row.is_enabled);
-
-  const eligibleIds: string[] = [];
-  let skipped = 0;
-
-  for (const integration of scoped) {
-    const active = await findActiveJiraSyncRun(integration.id);
-    const gate = shouldAutoSyncJiraIntegration({
-      integration,
-      hasActiveRun: active != null,
-      pipelineLocked: hasPipelineLock(integration),
-    });
-    if (!gate.ok) {
-      skipped += 1;
-      continue;
-    }
-    eligibleIds.push(integration.id);
-  }
-
-  if (eligibleIds.length > 0) {
-    const actorUserId = context.profile.id;
-    after(async () => {
-      for (const integrationId of eligibleIds) {
-        try {
-          await triggerJiraSync({
-            integrationId,
-            force: false,
-            trigger: "auto_gestor_load",
-            actorUserId,
-            forceFull: false,
-          });
-        } catch (error) {
-          console.error(
-            "[requestGestorAutoSyncAction] pipeline failed",
-            integrationId,
-            error,
-          );
-        }
-      }
-    });
-  }
-
-  return {
-    scheduled: eligibleIds.length,
-    skipped,
-    integrationIds: eligibleIds,
-  };
+  return scheduleEligibleJiraAutoSyncs({
+    teamId: input.teamId,
+    trigger: "auto_gestor_load",
+    actorUserId: context.profile.id,
+  });
 }
 
 export async function getGestorSyncStatusAction(input: {

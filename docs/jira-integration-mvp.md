@@ -226,7 +226,6 @@ Estratégia: **verify → remove from code → drop columns**.
 - Webhooks
 - Dashboard visual de lead time/rework (ver `docs/jira-flow-analytics.md` para camada derivada)
 - Mapeamento completo de custom fields
-- Cron externo / polling agressivo (há auto-sync no Gestor; ver abaixo)
 
 ## Auto-sync no Gestor (V1)
 
@@ -241,9 +240,21 @@ Regras:
 - Botão **Rodar Sync Agora** ignora cooldown (`force`) e ainda respeita o lock.
 - Lock: índice único parcial em `jira_sync_runs` (um ativo por integração) +
   lease em `jira_integrations.settings.pipeline_lock` cobrindo a pipeline inteira.
-- `trigger_source`: `manual` | `auto_gestor_load`.
+- `trigger_source`: `manual` | `auto_gestor_load` | `auto_cron`.
 - A página não espera a pipeline; status mínimo (“Sincronizando…”, “há X min”,
   última falha) aparece ao lado do botão.
+
+## Sync agendada (cron)
+
+Além do Gestor, `GET|POST /api/cron/jira-auto-sync` agenda as mesmas integrações
+elegíveis com `trigger_source = auto_cron` (sem sessão de usuário).
+
+- Auth: `Authorization: Bearer $CRON_SECRET` ou header `x-cron-secret`.
+- Agendamento Vercel: `vercel.json` → `0 * * * *` (toda hora, UTC).
+- Em host sem Vercel Cron, aponte um cron externo para a mesma URL com o secret.
+- Respeita o mesmo cooldown/locks do auto-sync do Gestor.
+- Sem sessão de usuário: o caminho `auto_cron` usa `SUPABASE_SERVICE_ROLE_KEY`
+  (via `runWithServiceRole`) para atravessar RLS.
 
 ## Riscos que permanecem
 

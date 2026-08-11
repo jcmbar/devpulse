@@ -65,6 +65,7 @@ export const JIRA_SYNC_MODES = ["full", "incremental"] as const;
 export const JIRA_SYNC_TRIGGER_SOURCES = [
   "manual",
   "auto_gestor_load",
+  "auto_cron",
 ] as const;
 
 export type JiraSyncTriggerSource =

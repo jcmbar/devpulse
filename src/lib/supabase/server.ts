@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isServiceRoleContext } from "@/lib/supabase/service-role-context";
 
 type DebugFetchOptions = {
   label: string;
@@ -10,6 +12,11 @@ export async function createClient(options?: {
   /** Temporary server-side HTTP diagnostics; never logs headers/cookies. */
   debugFetch?: DebugFetchOptions;
 }) {
+  // Cron / background jobs: no user session — use service role (bypasses RLS).
+  if (isServiceRoleContext()) {
+    return createAdminClient();
+  }
+
   const cookieStore = await cookies();
   const debug = options?.debugFetch;
   const diagnosticFetch: typeof fetch = async (input, init) => {
