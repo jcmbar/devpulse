@@ -277,6 +277,11 @@ export async function upsertDeveloperCompensationAction(
       timeBankEnabled:
         String(formData.get("timeBankEnabled") ?? "") === "on" ||
         String(formData.get("timeBankEnabled") ?? "") === "true",
+      considerJiraHours:
+        baseTypeRaw === "variable"
+          ? true
+          : String(formData.get("considerJiraHours") ?? "") === "on" ||
+            String(formData.get("considerJiraHours") ?? "") === "true",
       effectiveFrom,
       notes: readOptionalString(formData, "notes"),
     });

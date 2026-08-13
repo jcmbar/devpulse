@@ -28,6 +28,7 @@ import {
   listClosingImportIdsForDeveloper,
   listMonthlyClosingAttachments,
   listMonthlyClosingItems,
+  listMonthlyClosingPresenceDays,
   listMonthlyClosingsForDeveloperYear,
   loadMonthlyClosingAuditForDeveloper,
   syncClosingMealFromFolhaIfMissing,
@@ -37,6 +38,7 @@ import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
   MonthlyClosingAttachment,
   MonthlyClosingCardAuditRow,
+  MonthlyClosingPresenceDay,
 } from "@/types/monthly-closing";
 
 type AppPageProps = {
@@ -314,6 +316,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   let closingCanSubmit = false;
   let closingBlockingCount = 0;
   let closingAttachments: MonthlyClosingAttachment[] = [];
+  let closingPresenceDays: MonthlyClosingPresenceDay[] = [];
 
   if (
     closingYearMonth != null &&
@@ -326,11 +329,13 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       monthlyClosing.status === "closed" ||
       monthlyClosing.status === "finalized"
     ) {
-      const [items, attachments] = await Promise.all([
+      const [items, attachments, presenceDays] = await Promise.all([
         listMonthlyClosingItems(monthlyClosing.id),
         listMonthlyClosingAttachments(monthlyClosing.id),
+        listMonthlyClosingPresenceDays(monthlyClosing.id),
       ]);
       closingAttachments = attachments;
+      closingPresenceDays = presenceDays;
       closingAuditRows = items.map((item) => ({
         cardId: item.jira_card_id ?? item.id,
         jiraKey: item.jira_key,
@@ -358,16 +363,20 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         blockReasons: [],
       }));
     } else {
-      const audit = await loadMonthlyClosingAuditForDeveloper({
-        developerId: developer.id,
-        importId: selectedImportId,
-        yearMonth: closingYearMonth,
-        closingId: monthlyClosing.id,
-        closingImportId: monthlyClosing.import_id,
-      });
+      const [audit, presenceDays] = await Promise.all([
+        loadMonthlyClosingAuditForDeveloper({
+          developerId: developer.id,
+          importId: selectedImportId,
+          yearMonth: closingYearMonth,
+          closingId: monthlyClosing.id,
+          closingImportId: monthlyClosing.import_id,
+        }),
+        listMonthlyClosingPresenceDays(monthlyClosing.id),
+      ]);
       closingAuditRows = audit.auditRows;
       closingCanSubmit = audit.canSubmit;
       closingBlockingCount = audit.blockingCount;
+      closingPresenceDays = presenceDays;
     }
   } else if (
     closingYearMonth != null &&
@@ -383,6 +392,11 @@ export default async function AppPage({ searchParams }: AppPageProps) {
     closingAuditRows = audit.auditRows;
     closingCanSubmit = audit.canSubmit;
     closingBlockingCount = audit.blockingCount;
+  } else if (
+    monthlyClosing != null &&
+    monthlyClosing.started_at != null
+  ) {
+    closingPresenceDays = await listMonthlyClosingPresenceDays(monthlyClosing.id);
   }
 
   const developerCompensation: DeveloperCompensation | null =
@@ -461,6 +475,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         developerCompensation={developerCompensation}
         closingInvoiceIssuer={closingInvoiceIssuer}
         closingHolidays={closingHolidayEntries}
+        closingPresenceDays={closingPresenceDays}
         mealPixBlockReason={mealPixBlockReason}
       />
     </>

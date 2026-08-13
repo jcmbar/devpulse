@@ -39,6 +39,9 @@ export function DeveloperCompensationForm({
   const [baseAmount, setBaseAmount] = useState(
     compensation ? String(compensation.base_amount) : "0",
   );
+  const [baseType, setBaseType] = useState(
+    compensation?.base_type ?? "fixed",
+  );
   const [hoursMonth, setHoursMonth] = useState(
     compensation ? String(compensation.contracted_hours_per_month) : "168",
   );
@@ -46,6 +49,9 @@ export function DeveloperCompensationForm({
     compensation?.hourly_rate != null
       ? String(compensation.hourly_rate)
       : "",
+  );
+  const [considerJiraHours, setConsiderJiraHours] = useState(
+    compensation?.consider_jira_hours ?? true,
   );
 
   function suggestFromBase() {
@@ -84,7 +90,14 @@ export function DeveloperCompensationForm({
             id="baseType"
             name="baseType"
             className="ui-select"
-            defaultValue={compensation?.base_type ?? "fixed"}
+            value={baseType}
+            onChange={(event) => {
+              const next = event.target.value === "variable" ? "variable" : "fixed";
+              setBaseType(next);
+              if (next === "variable") {
+                setConsiderJiraHours(true);
+              }
+            }}
             required
           >
             {COMPENSATION_BASE_TYPES.map((type) => (
@@ -220,7 +233,7 @@ export function DeveloperCompensationForm({
         <FormField
           label="Banco de horas"
           htmlFor="timeBankEnabled"
-          hint="Se habilitado, a diferença entre horas Jira e o contratado/mês vai ao banco (crédito ou débito) e não altera o valor da NF. Fechamentos já finalizados não são afetados."
+          hint="Se habilitado, a diferença entre horas Jira e o contratado/mês vai ao banco (crédito ou débito) e não altera o valor da NF. Só se aplica quando horas Jira entram no cálculo. Fechamentos já finalizados não são afetados."
         >
           <label
             htmlFor="timeBankEnabled"
@@ -232,6 +245,7 @@ export function DeveloperCompensationForm({
               type="checkbox"
               value="true"
               defaultChecked={compensation?.time_bank_enabled ?? false}
+              disabled={baseType === "fixed" && !considerJiraHours}
               className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
             />
             <span className="text-pretty">
@@ -239,6 +253,34 @@ export function DeveloperCompensationForm({
             </span>
           </label>
         </FormField>
+
+        {baseType === "fixed" ? (
+          <FormField
+            label="Horas Jira"
+            htmlFor="considerJiraHours"
+            hint="Ligado: NF usa déficit/banco via horas Jira. Desligado: ignora Jira e desconta faltas (dias × horas/dia × R$/h) — típico para analista sem tarefas no Jira."
+          >
+            <label
+              htmlFor="considerJiraHours"
+              className="flex min-h-10 cursor-pointer items-start gap-2 rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-2.5 text-sm"
+            >
+              <input
+                id="considerJiraHours"
+                name="considerJiraHours"
+                type="checkbox"
+                value="true"
+                checked={considerJiraHours}
+                onChange={(event) => setConsiderJiraHours(event.target.checked)}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
+              />
+              <span className="text-pretty">
+                Considerar horas Jira no cálculo da NF
+              </span>
+            </label>
+          </FormField>
+        ) : (
+          <input type="hidden" name="considerJiraHours" value="true" />
+        )}
 
         <FormField
           label="Vigência a partir de"

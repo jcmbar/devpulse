@@ -276,6 +276,9 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   const mealDayList = attendance
     .filter((day) => day.charges_meal)
     .map((day) => day.day_on);
+  const absenceDays = attendance
+    .filter((day) => day.day_kind === "off")
+    .map((day) => day.day_on);
 
   const supabase = await createClient();
   const { data: closingRow } = await supabase
@@ -298,6 +301,10 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   );
 
   const compensation = await getCurrentDeveloperCompensation(item.developer_id);
+  const considerJiraHours =
+    item.base_type === "variable"
+      ? true
+      : (compensation?.consider_jira_hours ?? true);
   const jiraMapForMonth = await mapJiraDeliveryHoursByDeveloperForMonth({
     yearMonth,
     developers: [{ id: item.developer_id, teamId: item.team_id }],
@@ -316,7 +323,9 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
     workedHours: jiraHours,
     travelDays,
     mealDays: mealDayList,
+    absenceDays,
     timeBankEnabled: compensation?.time_bank_enabled ?? false,
+    considerJiraHours,
   });
 
   return {
@@ -660,6 +669,17 @@ export async function listPayrollMealDaysForItem(
   const days = await listAttendanceForItem(itemId);
   return days
     .filter((day) => day.charges_meal)
+    .map((day) => day.day_on)
+    .sort();
+}
+
+/** Folga/off days — used as Folha side of absence compare (Fixo sem Jira). */
+export async function listPayrollOffDaysForItem(
+  itemId: string,
+): Promise<string[]> {
+  const days = await listAttendanceForItem(itemId);
+  return days
+    .filter((day) => day.day_kind === "off")
     .map((day) => day.day_on)
     .sort();
 }

@@ -15,6 +15,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 export type ClosingSubmitValuesPayload = {
   travelDays: string[];
   mealDays: string[];
+  absenceDays: string[];
   valuesNotes: string | null;
 };
 
@@ -22,18 +23,28 @@ type ClosingSubmitValuesModalProps = {
   open: boolean;
   onClose: () => void;
   onConfirm: (payload: ClosingSubmitValuesPayload) => void;
+  /** Persist D/R without sending for review. */
+  onSave: (payload: ClosingSubmitValuesPayload) => void;
   pending: boolean;
   yearMonth: string;
   compensation: DeveloperCompensation;
   workedHours: number;
   /** Applicable holidays for this developer/month (date → name). */
   holidays?: ReadonlyArray<{ date: string; name: string }>;
+  initialTravelDays?: ReadonlyArray<string>;
+  initialMealDays?: ReadonlyArray<string>;
+  initialAbsenceDays?: ReadonlyArray<string>;
+  initialValuesNotes?: string | null;
+  /** When false, Confirmar is disabled (e.g. pending justifications). */
+  canConfirm?: boolean;
+  confirmBlockedReason?: string | null;
   /** When resubmitting after rejection. */
   requireResubmissionNotes?: boolean;
   resubmissionNotes?: string;
   onResubmissionNotesChange?: (value: string) => void;
   title?: string;
   confirmLabel?: string;
+  saveLabel?: string;
 };
 
 function weekdayShort(isoDate: string): string {
@@ -140,16 +151,24 @@ export function ClosingSubmitValuesModal({
   open,
   onClose,
   onConfirm,
+  onSave,
   pending,
   yearMonth,
   compensation,
   workedHours,
   holidays = [],
+  initialTravelDays = [],
+  initialMealDays = [],
+  initialAbsenceDays = [],
+  initialValuesNotes = null,
+  canConfirm = true,
+  confirmBlockedReason = null,
   requireResubmissionNotes = false,
   resubmissionNotes = "",
   onResubmissionNotesChange,
   title = "Informar valores do fechamento",
   confirmLabel = "Confirmar e enviar",
+  saveLabel = "Salvar",
 }: ClosingSubmitValuesModalProps) {
   const titleId = useId();
   const notesId = useId();
@@ -158,6 +177,9 @@ export function ClosingSubmitValuesModal({
     () => new Set(),
   );
   const [mealSelected, setMealSelected] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [absenceSelected, setAbsenceSelected] = useState<Set<string>>(
     () => new Set(),
   );
   const [valuesNotes, setValuesNotes] = useState("");
@@ -171,15 +193,33 @@ export function ClosingSubmitValuesModal({
     return map;
   }, [holidays]);
 
+  const showAbsenceCalendar =
+    compensation.base_type === "fixed" && !compensation.consider_jira_hours;
+  const considerJiraHours =
+    compensation.base_type === "variable" || compensation.consider_jira_hours;
+
+  const initialTravelKey = initialTravelDays.join(",");
+  const initialMealKey = initialMealDays.join(",");
+  const initialAbsenceKey = initialAbsenceDays.join(",");
+
   useEffect(() => {
     if (!open) {
       return;
     }
-    setTravelSelected(new Set());
-    setMealSelected(new Set());
-    setValuesNotes("");
+    setTravelSelected(new Set(initialTravelDays));
+    setMealSelected(new Set(initialMealDays));
+    setAbsenceSelected(new Set(initialAbsenceDays));
+    setValuesNotes(initialValuesNotes ?? "");
     setLocalError(null);
-  }, [open, yearMonth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate from keys when modal opens
+  }, [
+    open,
+    yearMonth,
+    initialTravelKey,
+    initialMealKey,
+    initialAbsenceKey,
+    initialValuesNotes,
+  ]);
 
   const preview = useMemo(
     () =>
@@ -194,9 +234,18 @@ export function ClosingSubmitValuesModal({
         workedHours,
         travelDays: [...travelSelected],
         mealDays: [...mealSelected],
+        absenceDays: showAbsenceCalendar ? [...absenceSelected] : [],
         timeBankEnabled: compensation.time_bank_enabled,
+        considerJiraHours: compensation.consider_jira_hours,
       }),
-    [compensation, workedHours, travelSelected, mealSelected],
+    [
+      compensation,
+      workedHours,
+      travelSelected,
+      mealSelected,
+      absenceSelected,
+      showAbsenceCalendar,
+    ],
   );
 
   const isVariable = compensation.base_type === "variable";
@@ -205,7 +254,28 @@ export function ClosingSubmitValuesModal({
     return null;
   }
 
+  function buildPayload(): ClosingSubmitValuesPayload {
+    return {
+      travelDays: [...travelSelected].sort(),
+      mealDays: [...mealSelected].sort(),
+      absenceDays: showAbsenceCalendar ? [...absenceSelected].sort() : [],
+      valuesNotes: isVariable ? valuesNotes.trim() || null : null,
+    };
+  }
+
+  function saveDraft() {
+    setLocalError(null);
+    onSave(buildPayload());
+  }
+
   function confirm() {
+    if (!canConfirm) {
+      setLocalError(
+        confirmBlockedReason ??
+          "Ainda há justificativas pendentes. Você pode salvar o rascunho e enviar depois.",
+      );
+      return;
+    }
     if (
       requireResubmissionNotes &&
       !(resubmissionNotes ?? "").trim()
@@ -214,11 +284,7 @@ export function ClosingSubmitValuesModal({
       return;
     }
     setLocalError(null);
-    onConfirm({
-      travelDays: [...travelSelected].sort(),
-      mealDays: [...mealSelected].sort(),
-      valuesNotes: isVariable ? valuesNotes.trim() || null : null,
-    });
+    onConfirm(buildPayload());
   }
 
   return (
@@ -245,8 +311,9 @@ export function ClosingSubmitValuesModal({
               {title}
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Selecione os dias presenciais. Compensação:{" "}
-              {COMPENSATION_BASE_TYPE_LABELS[compensation.base_type]}.
+              {showAbsenceCalendar
+                ? "Marque deslocamento, refeição e faltas. Compensação: Fixo (sem horas Jira)."
+                : `Selecione os dias presenciais. Compensação: ${COMPENSATION_BASE_TYPE_LABELS[compensation.base_type]}.`}
             </p>
           </div>
           <button
@@ -266,7 +333,12 @@ export function ClosingSubmitValuesModal({
               ainda pode marcá-los como presenciais se necessário.
             </p>
           ) : null}
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div
+            className={cn(
+              "grid gap-5",
+              showAbsenceCalendar ? "sm:grid-cols-3" : "sm:grid-cols-2",
+            )}
+          >
             <MonthDayPicker
               yearMonth={yearMonth}
               selected={travelSelected}
@@ -295,6 +367,16 @@ export function ClosingSubmitValuesModal({
               accentClass="border-sky-500/50 bg-sky-500/20 font-semibold text-sky-950 dark:text-sky-100"
               holidayNameByDate={holidayNameByDate}
             />
+            {showAbsenceCalendar ? (
+              <MonthDayPicker
+                yearMonth={yearMonth}
+                selected={absenceSelected}
+                onChange={setAbsenceSelected}
+                label="Faltas"
+                accentClass="border-amber-500/50 bg-amber-500/20 font-semibold text-amber-950 dark:text-amber-100"
+                holidayNameByDate={holidayNameByDate}
+              />
+            ) : null}
           </div>
 
           <section
@@ -315,7 +397,9 @@ export function ClosingSubmitValuesModal({
                   {formatClosingMoney(preview.invoiceAmount)}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground text-pretty">
-                  Estimativa com base no cadastro e nas horas Jira do mês.
+                  {considerJiraHours
+                    ? "Estimativa com base no cadastro e nas horas Jira do mês."
+                    : "Estimativa com base no cadastro e nas faltas marcadas (sem horas Jira)."}{" "}
                   Fechamentos já finalizados/pagos não são recalculados.
                 </p>
               </div>
@@ -330,31 +414,51 @@ export function ClosingSubmitValuesModal({
                   </p>
                 </div>
 
-                <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
-                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                    Horas Jira
-                  </p>
-                  <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
-                    {workedHours.toLocaleString("pt-BR", {
-                      maximumFractionDigits: 1,
-                    })}{" "}
-                    /{" "}
-                    {compensation.contracted_hours_per_month.toLocaleString(
-                      "pt-BR",
-                      { maximumFractionDigits: 1 },
-                    )}{" "}
-                    h
-                  </p>
-                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
-                    {compensation.time_bank_enabled
-                      ? preview.timeBankHoursDelta === 0
-                        ? "Banco de horas ativo · sem movimento"
-                        : `Banco de horas · ${preview.timeBankHoursDelta > 0 ? "+" : ""}${preview.timeBankHoursDelta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`
-                      : preview.jiraDeficitAmount > 0
-                        ? `Déficit −${formatClosingMoney(preview.jiraDeficitAmount)}`
-                        : "Sem déficit"}
-                  </p>
-                </div>
+                {considerJiraHours ? (
+                  <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      Horas Jira
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                      {workedHours.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 1,
+                      })}{" "}
+                      /{" "}
+                      {compensation.contracted_hours_per_month.toLocaleString(
+                        "pt-BR",
+                        { maximumFractionDigits: 1 },
+                      )}{" "}
+                      h
+                    </p>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                      {compensation.time_bank_enabled
+                        ? preview.timeBankHoursDelta === 0
+                          ? "Banco de horas ativo · sem movimento"
+                          : `Banco de horas · ${preview.timeBankHoursDelta > 0 ? "+" : ""}${preview.timeBankHoursDelta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`
+                        : preview.jiraDeficitAmount > 0
+                          ? `Déficit −${formatClosingMoney(preview.jiraDeficitAmount)}`
+                          : "Sem déficit"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      Faltas
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                      {preview.absenceDaysCount} ×{" "}
+                      {compensation.contracted_hours_per_day.toLocaleString(
+                        "pt-BR",
+                      )}{" "}
+                      h × {formatClosingMoney(compensation.hourly_rate)}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                      {preview.absenceAmount > 0
+                        ? `Desconto −${formatClosingMoney(preview.absenceAmount)}`
+                        : "Sem desconto por falta"}
+                    </p>
+                  </div>
+                )}
 
                 {preview.presencialExtraAmount > 0 ? (
                   <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
@@ -446,30 +550,65 @@ export function ClosingSubmitValuesModal({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3 sm:px-5">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={pending}
-            className="ui-btn-secondary"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={pending}
-            className="ui-btn-primary min-w-[10.5rem] flex-col gap-0.5 sm:min-w-0 sm:flex-row sm:gap-1.5"
-          >
-            {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            <span className="hidden sm:inline">
-              {confirmLabel} — {formatClosingMoney(preview.invoiceAmount)}
-            </span>
-            <span className="sm:hidden">{confirmLabel}</span>
-            <span className="text-[11px] font-semibold tabular-nums sm:hidden">
-              {formatClosingMoney(preview.invoiceAmount)}
-            </span>
-          </button>
+        <div className="flex shrink-0 flex-col gap-3 border-t border-border px-4 py-3 sm:px-5">
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              onClick={saveDraft}
+              disabled={pending}
+              className="ui-btn-secondary w-full justify-center"
+            >
+              {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {saveLabel}
+            </button>
+            <p className="text-center text-[11px] leading-snug text-muted-foreground text-pretty">
+              Guarda deslocamento e refeição sem enviar ao gestor.
+            </p>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={pending}
+              className="ui-btn-secondary w-full justify-center sm:w-auto"
+            >
+              Cancelar
+            </button>
+            <div className="flex w-full flex-col gap-1 sm:w-auto sm:items-end">
+              <p className="text-[11px] text-muted-foreground text-pretty sm:text-right">
+                Envia para revisão do gestor.
+              </p>
+              <button
+                type="button"
+                onClick={confirm}
+                disabled={pending || !canConfirm}
+                title={
+                  !canConfirm
+                    ? (confirmBlockedReason ??
+                      "Justificativas pendentes — salve o rascunho e envie depois.")
+                    : undefined
+                }
+                className="ui-btn-primary w-full min-w-[10.5rem] flex-col gap-0.5 justify-center sm:w-auto sm:min-w-0 sm:flex-row sm:gap-1.5"
+              >
+                {pending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : null}
+                <span className="hidden sm:inline">
+                  {confirmLabel} — {formatClosingMoney(preview.invoiceAmount)}
+                </span>
+                <span className="sm:hidden">{confirmLabel}</span>
+                <span className="text-[11px] font-semibold tabular-nums sm:hidden">
+                  {formatClosingMoney(preview.invoiceAmount)}
+                </span>
+              </button>
+              {!canConfirm && confirmBlockedReason ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-200 text-pretty sm:text-right">
+                  {confirmBlockedReason}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </div>

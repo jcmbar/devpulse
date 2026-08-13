@@ -9,6 +9,7 @@ export type ClosingValuesSide = {
   dailyMealAmount: number | null;
   travelDays: string[];
   mealDays: string[];
+  absenceDays: string[];
 };
 
 export type ClosingFolhaCompareField =
@@ -18,7 +19,8 @@ export type ClosingFolhaCompareField =
   | "invoiceAmount"
   | "dailyRates"
   | "travelDays"
-  | "mealDays";
+  | "mealDays"
+  | "absenceDays";
 
 export const CLOSING_FOLHA_COMPARE_FIELD_LABELS: Record<
   ClosingFolhaCompareField,
@@ -31,6 +33,7 @@ export const CLOSING_FOLHA_COMPARE_FIELD_LABELS: Record<
   dailyRates: "Diárias",
   travelDays: "Dias — Deslocamento",
   mealDays: "Dias — Refeição",
+  absenceDays: "Dias — Faltas",
 };
 
 export type ClosingFolhaCompareResult = {
@@ -70,9 +73,12 @@ export function compareClosingToFolha(input: {
   folha: ClosingValuesSide | null;
   /** Closing has values_submitted_at (or equivalent). */
   hasClosingValues: boolean;
+  /** When false (Fixo sem Jira), also compare absence day sets. */
+  compareAbsences?: boolean;
 }): ClosingFolhaCompareResult {
   const hasFolha = input.folha != null;
   const hasClosingValues = input.hasClosingValues && input.closing != null;
+  const compareAbsences = Boolean(input.compareAbsences);
 
   if (!hasClosingValues) {
     return {
@@ -84,19 +90,24 @@ export function compareClosingToFolha(input: {
     };
   }
 
+  const baseMissing: ClosingFolhaCompareField[] = [
+    "travelAmount",
+    "mealAmount",
+    "differentialAmount",
+    "invoiceAmount",
+    "dailyRates",
+    "travelDays",
+    "mealDays",
+  ];
+  if (compareAbsences) {
+    baseMissing.push("absenceDays");
+  }
+
   if (!hasFolha || !input.closing || !input.folha) {
     return {
       hasFolha: false,
       hasClosingValues: true,
-      mismatches: [
-        "travelAmount",
-        "mealAmount",
-        "differentialAmount",
-        "invoiceAmount",
-        "dailyRates",
-        "travelDays",
-        "mealDays",
-      ],
+      mismatches: baseMissing,
       hasMismatch: true,
       blocksDecision: true,
     };
@@ -129,6 +140,9 @@ export function compareClosingToFolha(input: {
   }
   if (!sameDaySet(user.mealDays, folha.mealDays)) {
     mismatches.push("mealDays");
+  }
+  if (compareAbsences && !sameDaySet(user.absenceDays, folha.absenceDays)) {
+    mismatches.push("absenceDays");
   }
 
   return {

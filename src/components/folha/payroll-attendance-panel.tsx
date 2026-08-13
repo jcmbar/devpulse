@@ -236,8 +236,13 @@ export function PayrollAttendancePanel({
             Horas padrão:{" "}
             {item.contracted_hours_per_day.toLocaleString("pt-BR")} h/dia.
             Presencial gera deslocamento; marque “Refeição” no dia quando
-            aplicável. Carga mensal e banco de horas usam horas Jira no
-            cálculo da NF.
+            aplicável. Use{" "}
+            <span className="font-medium text-foreground">
+              Falta / folga
+            </span>{" "}
+            para dias não trabalhados (Fixo sem Jira — entra no compare com o
+            fechamento). Com horas Jira ativas, a carga mensal usa Jira/banco na
+            NF.
           </p>
           {finalizedClosingId ? (
             <p className="text-sm text-amber-800 dark:text-amber-200">

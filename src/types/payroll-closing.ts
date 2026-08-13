@@ -34,7 +34,7 @@ export const PAYROLL_ATTENDANCE_KIND_LABELS: Record<
 > = {
   presencial: "Presencial",
   home: "Home office",
-  off: "Folga",
+  off: "Falta / folga",
   holiday: "Feriado",
   weekend: "Fim de semana",
 };

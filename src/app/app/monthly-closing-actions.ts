@@ -17,6 +17,7 @@ import {
   getMonthlyClosingForDeveloperMonth,
   listMonthlyClosingAttachments,
   listMonthlyClosingItems,
+  listMonthlyClosingPresenceDays,
   loadMonthlyClosingAuditForDeveloper,
   listMonthlyClosingsForDeveloperYear,
   rejectMonthlyClosing,
@@ -25,6 +26,7 @@ import {
   reviewMealPixReceipt,
   startMonthlyClosing,
   submitMonthlyClosingForReview,
+  saveMonthlyClosingValuesDraft,
   syncClosingMealFromFolhaIfMissing,
   uploadMonthlyClosingAttachment,
 } from "@/services/monthly-closings";
@@ -35,6 +37,7 @@ import type {
   MonthlyClosingAttachment,
   MonthlyClosingAttachmentType,
   MonthlyClosingCardAuditRow,
+  MonthlyClosingPresenceDay,
 } from "@/types/monthly-closing";
 
 export type MonthlyClosingActionResult =
@@ -88,6 +91,7 @@ export async function submitMonthlyClosingAction(input: {
   developerResubmissionNotes?: string | null;
   travelDays: string[];
   mealDays: string[];
+  absenceDays?: string[];
   valuesNotes?: string | null;
   workedHours: number;
 }): Promise<MonthlyClosingActionResult> {
@@ -119,6 +123,7 @@ export async function submitMonthlyClosingAction(input: {
       values: {
         travelDays: input.travelDays,
         mealDays: input.mealDays,
+        absenceDays: input.absenceDays,
         valuesNotes: input.valuesNotes,
         workedHours: input.workedHours,
         compensation: {
@@ -130,6 +135,7 @@ export async function submitMonthlyClosingAction(input: {
           dailyTravelAmount: compensation.daily_travel_amount,
           dailyMealAmount: compensation.daily_meal_amount,
           timeBankEnabled: compensation.time_bank_enabled,
+          considerJiraHours: compensation.consider_jira_hours,
         },
       },
     });
@@ -145,6 +151,67 @@ export async function submitMonthlyClosingAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível enviar o fechamento.",
+    };
+  }
+}
+
+export async function saveMonthlyClosingDraftAction(input: {
+  closingId: string;
+  travelDays: string[];
+  mealDays: string[];
+  absenceDays?: string[];
+  valuesNotes?: string | null;
+  workedHours: number;
+}): Promise<MonthlyClosingActionResult> {
+  try {
+    const { profile, developer } = await getAppContext();
+    if (!developer) {
+      return { ok: false, error: "Developer não vinculado ao perfil." };
+    }
+    if (!input.closingId.trim()) {
+      return { ok: false, error: "Fechamento inválido." };
+    }
+
+    const compensation = await getCurrentDeveloperCompensation(developer.id);
+    if (!compensation) {
+      return {
+        ok: false,
+        error:
+          "Cadastro de valores (compensação) não encontrado. Peça ao gestor para configurar em Developers.",
+      };
+    }
+
+    const closing = await saveMonthlyClosingValuesDraft({
+      closingId: input.closingId,
+      developerId: developer.id,
+      actorUserId: profile.id,
+      travelDays: input.travelDays,
+      mealDays: input.mealDays,
+      absenceDays: input.absenceDays,
+      valuesNotes: input.valuesNotes,
+      workedHours: input.workedHours,
+      compensation: {
+        baseAmount: compensation.base_amount,
+        baseType: compensation.base_type,
+        hourlyRate: compensation.hourly_rate,
+        contractedHoursPerDay: compensation.contracted_hours_per_day,
+        contractedHoursPerMonth: compensation.contracted_hours_per_month,
+        dailyTravelAmount: compensation.daily_travel_amount,
+        dailyMealAmount: compensation.daily_meal_amount,
+        timeBankEnabled: compensation.time_bank_enabled,
+        considerJiraHours: compensation.consider_jira_hours,
+      },
+    });
+
+    revalidatePath("/app");
+    return { ok: true, closingId: closing.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o rascunho.",
     };
   }
 }
@@ -489,6 +556,7 @@ export type DeveloperClosingMonthDetailPayload = {
   holidays: Array<{ date: string; name: string }>;
   mealPixBlockReason: string | null;
   compensation: DeveloperCompensation | null;
+  presenceDays: MonthlyClosingPresenceDay[];
 };
 
 export type LoadDeveloperClosingMonthDetailResult =
@@ -636,7 +704,7 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
       attachments = await listMonthlyClosingAttachments(monthlyClosing.id);
     }
 
-    const [compensation, mealPixBlockReason, invoiceIssuer, holidayMap] =
+    const [compensation, mealPixBlockReason, invoiceIssuer, holidayMap, presenceDays] =
       await Promise.all([
         getCurrentDeveloperCompensation(developer.id),
         getMealPixClosingBlockReason(developer.id),
@@ -647,6 +715,9 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
           developerId: developer.id,
           yearMonth,
         }),
+        monthlyClosing != null && monthlyClosing.started_at != null
+          ? listMonthlyClosingPresenceDays(monthlyClosing.id)
+          : Promise.resolve([] as MonthlyClosingPresenceDay[]),
       ]);
 
     return {
@@ -664,6 +735,7 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
         ),
         mealPixBlockReason,
         compensation,
+        presenceDays,
       },
     };
   } catch (error) {

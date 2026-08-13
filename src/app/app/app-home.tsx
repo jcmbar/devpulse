@@ -48,6 +48,7 @@ import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
   MonthlyClosingCardAuditRow,
+  MonthlyClosingPresenceDay,
 } from "@/types/monthly-closing";
 import type { Profile } from "@/types/profile";
 
@@ -80,6 +81,7 @@ type AppHomeProps = {
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
+  closingPresenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   mealPixBlockReason?: string | null;
 };
 
@@ -161,6 +163,7 @@ export function AppHome({
   developerCompensation,
   closingInvoiceIssuer = null,
   closingHolidays = [],
+  closingPresenceDays = [],
   mealPixBlockReason = null,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
@@ -630,6 +633,7 @@ export function AppHome({
           developerCompensation={developerCompensation}
           closingInvoiceIssuer={closingInvoiceIssuer}
           closingHolidays={closingHolidays}
+          closingPresenceDays={closingPresenceDays}
           mealPixBlockReason={mealPixBlockReason}
         />
       )}

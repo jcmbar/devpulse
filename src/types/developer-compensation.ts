@@ -54,6 +54,11 @@ export type DeveloperCompensation = {
    * (sem ajuste monetário na NF).
    */
   time_bank_enabled: boolean;
+  /**
+   * Fixo only: when true, NF uses Jira deficit/time bank; when false,
+   * uses absence days × h/day × rate (ignores Jira). Variable always uses Jira.
+   */
+  consider_jira_hours: boolean;
   currency: string;
   effective_from: string;
   effective_to: string | null;
@@ -74,6 +79,8 @@ export type UpsertCurrentCompensationInput = {
   dailyMealAmount: number;
   requireMealPixReceipt?: boolean;
   timeBankEnabled?: boolean;
+  /** Fixo only; variable always treats Jira as on. Default true. */
+  considerJiraHours?: boolean;
   currency?: string;
   effectiveFrom?: string;
   notes?: string | null;

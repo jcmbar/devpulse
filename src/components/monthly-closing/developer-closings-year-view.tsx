@@ -28,6 +28,7 @@ import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
   MonthlyClosingCardAuditRow,
+  MonthlyClosingPresenceDay,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
 import { X } from "lucide-react";
@@ -63,6 +64,7 @@ type DeveloperClosingsYearViewProps = {
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
+  closingPresenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   mealPixBlockReason?: string | null;
 };
 
@@ -78,6 +80,7 @@ type DetailPanelProps = {
   developerCompensation: DeveloperCompensation | null;
   closingInvoiceIssuer?: InvoiceIssuer | null;
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
+  closingPresenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   mealPixBlockReason?: string | null;
   empty?: boolean;
   /** Compact header when rendered inside the desktop drawer. */
@@ -237,6 +240,7 @@ function MonthDetailContent({
   developerCompensation,
   closingInvoiceIssuer = null,
   closingHolidays = [],
+  closingPresenceDays = [],
   mealPixBlockReason = null,
   empty,
   embedded = false,
@@ -304,6 +308,7 @@ function MonthDetailContent({
               compensation={developerCompensation}
               workedHours={detailRow.metrics.totalTimeSpentHours}
               holidays={closingHolidays}
+              presenceDays={closingPresenceDays}
               mealPixBlockReason={mealPixBlockReason}
             />
           ) : (
@@ -655,6 +660,7 @@ export function DeveloperClosingsYearView({
   developerCompensation,
   closingInvoiceIssuer = null,
   closingHolidays = [],
+  closingPresenceDays = [],
   mealPixBlockReason = null,
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
@@ -675,6 +681,9 @@ export function DeveloperClosingsYearView({
     closingInvoiceIssuer,
   );
   const [clientHolidays, setClientHolidays] = useState(closingHolidays);
+  const [clientPresenceDays, setClientPresenceDays] = useState(
+    closingPresenceDays,
+  );
   const [clientMealPixBlock, setClientMealPixBlock] = useState(
     mealPixBlockReason,
   );
@@ -759,6 +768,7 @@ export function DeveloperClosingsYearView({
       setClientAttachments(detailAttachments);
       setClientIssuer(closingInvoiceIssuer);
       setClientHolidays(closingHolidays);
+      setClientPresenceDays(closingPresenceDays);
       setClientMealPixBlock(mealPixBlockReason);
       setClientCompensation(developerCompensation);
       setLoadError(null);
@@ -771,6 +781,7 @@ export function DeveloperClosingsYearView({
       detailAttachments,
       closingInvoiceIssuer,
       closingHolidays,
+      closingPresenceDays,
       mealPixBlockReason,
       developerCompensation,
     ],
@@ -886,6 +897,7 @@ export function DeveloperClosingsYearView({
       setClientAttachments(result.detail.attachments);
       setClientIssuer(result.detail.invoiceIssuer);
       setClientHolidays(result.detail.holidays);
+      setClientPresenceDays(result.detail.presenceDays);
       setClientMealPixBlock(result.detail.mealPixBlockReason);
       setClientCompensation(result.detail.compensation);
       if (result.detail.closing) {
@@ -927,6 +939,7 @@ export function DeveloperClosingsYearView({
     developerCompensation: clientCompensation,
     closingInvoiceIssuer: detailSynced ? clientIssuer : null,
     closingHolidays: detailSynced ? clientHolidays : [],
+    closingPresenceDays: detailSynced ? clientPresenceDays : [],
     mealPixBlockReason: detailSynced ? clientMealPixBlock : null,
   };
 

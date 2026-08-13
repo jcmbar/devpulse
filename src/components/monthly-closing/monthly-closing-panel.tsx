@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  saveMonthlyClosingDraftAction,
   startMonthlyClosingAction,
   submitMonthlyClosingAction,
 } from "@/app/app/monthly-closing-actions";
@@ -17,12 +18,13 @@ import type { DeveloperCompensation } from "@/types/developer-compensation";
 import type {
   MonthlyClosing,
   MonthlyClosingCardAuditRow,
+  MonthlyClosingPresenceDay,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
 import { monthlyClosingStatusLabel } from "@/types/monthly-closing";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 export function MonthlyClosingStatusBadge({
   status,
@@ -140,6 +142,7 @@ type MonthlyClosingControlsProps = {
   compensation: DeveloperCompensation | null;
   workedHours: number;
   holidays?: ReadonlyArray<{ date: string; name: string }>;
+  presenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   /** Bloqueia iniciar/enviar até comprovante PIX aceito. */
   mealPixBlockReason?: string | null;
 };
@@ -154,19 +157,74 @@ export function MonthlyClosingControls({
   compensation,
   workedHours,
   holidays = [],
+  presenceDays = [],
   mealPixBlockReason = null,
 }: MonthlyClosingControlsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [resubmissionNotes, setResubmissionNotes] = useState("");
   const [valuesModalOpen, setValuesModalOpen] = useState(false);
   const [valuesModalMode, setValuesModalMode] = useState<"submit" | "resubmit">(
     "submit",
   );
   const [pending, startTransition] = useTransition();
+  const [draftTravelDays, setDraftTravelDays] = useState<string[] | null>(null);
+  const [draftMealDays, setDraftMealDays] = useState<string[] | null>(null);
+  const [draftAbsenceDays, setDraftAbsenceDays] = useState<string[] | null>(
+    null,
+  );
+  const [draftValuesNotes, setDraftValuesNotes] = useState<string | null>(null);
   const status: MonthlyClosingStatus = closing?.status ?? "open";
   const started = closing != null && closing.started_at != null;
   const mealPixBlocked = Boolean(mealPixBlockReason);
+
+  const presenceTravelDays = useMemo(
+    () =>
+      presenceDays
+        .filter((row) => row.kind === "travel")
+        .map((row) => row.day_on),
+    [presenceDays],
+  );
+  const presenceMealDays = useMemo(
+    () =>
+      presenceDays
+        .filter((row) => row.kind === "meal")
+        .map((row) => row.day_on),
+    [presenceDays],
+  );
+  const presenceAbsenceDays = useMemo(
+    () =>
+      presenceDays
+        .filter((row) => row.kind === "absence")
+        .map((row) => row.day_on),
+    [presenceDays],
+  );
+
+  const initialTravelDays = draftTravelDays ?? presenceTravelDays;
+  const initialMealDays = draftMealDays ?? presenceMealDays;
+  const initialAbsenceDays = draftAbsenceDays ?? presenceAbsenceDays;
+  const initialValuesNotes =
+    draftValuesNotes ?? closing?.developer_values_notes ?? null;
+
+  useEffect(() => {
+    setDraftTravelDays(null);
+    setDraftMealDays(null);
+    setDraftAbsenceDays(null);
+    setDraftValuesNotes(null);
+  }, [closing?.id]);
+
+  const confirmBlockedReason = mealPixBlocked
+    ? mealPixBlockReason
+    : !canSubmit
+      ? blockingCount > 0
+        ? `Ainda há ${blockingCount} card(s) com justificativa pendente. Você pode salvar o rascunho e enviar depois.`
+        : "Aguarde as justificativas antes de enviar ao gestor. Você pode salvar o rascunho."
+      : !importId
+        ? "É necessário um lote Compilado resolvido."
+        : null;
+
+  const canConfirmSubmit = canSubmit && Boolean(importId) && !mealPixBlocked;
 
   if (!yearMonth) {
     return (
@@ -181,6 +239,7 @@ export function MonthlyClosingControls({
 
   function startClosing() {
     setError(null);
+    setInfo(null);
     startTransition(async () => {
       const result = await startMonthlyClosingAction({
         yearMonth: yearMonth!,
@@ -203,6 +262,7 @@ export function MonthlyClosingControls({
       return;
     }
     setError(null);
+    setInfo(null);
     setValuesModalMode(mode);
     setValuesModalOpen(true);
   }
@@ -212,6 +272,7 @@ export function MonthlyClosingControls({
       return;
     }
     setError(null);
+    setInfo(null);
     startTransition(async () => {
       const result = await submitMonthlyClosingAction({
         closingId: closing.id,
@@ -221,6 +282,7 @@ export function MonthlyClosingControls({
           valuesModalMode === "resubmit" ? resubmissionNotes : undefined,
         travelDays: payload.travelDays,
         mealDays: payload.mealDays,
+        absenceDays: payload.absenceDays,
         valuesNotes: payload.valuesNotes,
         workedHours,
       });
@@ -229,6 +291,35 @@ export function MonthlyClosingControls({
         return;
       }
       setResubmissionNotes("");
+      setValuesModalOpen(false);
+      router.refresh();
+    });
+  }
+
+  function saveDraftValues(payload: ClosingSubmitValuesPayload) {
+    if (!closing || !compensation) {
+      return;
+    }
+    setError(null);
+    setInfo(null);
+    startTransition(async () => {
+      const result = await saveMonthlyClosingDraftAction({
+        closingId: closing.id,
+        travelDays: payload.travelDays,
+        mealDays: payload.mealDays,
+        absenceDays: payload.absenceDays,
+        valuesNotes: payload.valuesNotes,
+        workedHours,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setDraftTravelDays(payload.travelDays);
+      setDraftMealDays(payload.mealDays);
+      setDraftAbsenceDays(payload.absenceDays);
+      setDraftValuesNotes(payload.valuesNotes);
+      setInfo("Rascunho salvo. Você pode continuar depois.");
       setValuesModalOpen(false);
       router.refresh();
     });
@@ -273,18 +364,18 @@ export function MonthlyClosingControls({
           <button
             type="button"
             onClick={() => openValuesModal("submit")}
-            disabled={pending || !canSubmit || !importId || mealPixBlocked}
+            disabled={pending || mealPixBlocked || !compensation}
             className="ui-btn-primary"
             title={
               mealPixBlocked
                 ? mealPixBlockReason ?? undefined
                 : !canSubmit
-                  ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
+                  ? "Você pode marcar deslocamento/refeição e salvar. O envio libera quando as justificativas estiverem ok."
                   : undefined
             }
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Enviar para aprovação
+            Continuar preenchimento
           </button>
         ) : null}
 
@@ -315,18 +406,18 @@ export function MonthlyClosingControls({
             <button
               type="button"
               onClick={() => openValuesModal("resubmit")}
-              disabled={pending || !canSubmit || !importId || mealPixBlocked}
+              disabled={pending || mealPixBlocked || !compensation}
               className="ui-btn-primary w-full sm:w-auto"
               title={
                 mealPixBlocked
                   ? mealPixBlockReason ?? undefined
                   : !canSubmit
-                    ? "Todas as justificativas de atraso/retrabalho precisam estar aceitas ou recusadas"
+                    ? "Você pode salvar o rascunho. O reenvio libera quando as justificativas estiverem ok."
                     : undefined
               }
             >
               {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              Reenviar para análise
+              Continuar correção
             </button>
           </div>
         ) : null}
@@ -370,6 +461,12 @@ export function MonthlyClosingControls({
             {error}
           </p>
         ) : null}
+
+        {info ? (
+          <p className="max-w-[18rem] text-xs text-emerald-800 dark:text-emerald-200 text-pretty sm:text-right">
+            {info}
+          </p>
+        ) : null}
       </div>
 
       {compensation ? (
@@ -381,11 +478,18 @@ export function MonthlyClosingControls({
             }
           }}
           onConfirm={submitWithValues}
+          onSave={saveDraftValues}
           pending={pending}
           yearMonth={yearMonth}
           compensation={compensation}
           workedHours={workedHours}
           holidays={holidays}
+          initialTravelDays={initialTravelDays}
+          initialMealDays={initialMealDays}
+          initialAbsenceDays={initialAbsenceDays}
+          initialValuesNotes={initialValuesNotes}
+          canConfirm={canConfirmSubmit}
+          confirmBlockedReason={confirmBlockedReason}
           requireResubmissionNotes={valuesModalMode === "resubmit"}
           resubmissionNotes={resubmissionNotes}
           onResubmissionNotesChange={setResubmissionNotes}

@@ -12,6 +12,7 @@ export type MonthlyClosingEventType =
   | "manager_approved"
   | "manager_rejected"
   | "developer_resubmitted"
+  | "values_draft_saved"
   | "invoice_note_updated"
   | "invoice_uploaded"
   | "boleto_uploaded"
@@ -70,6 +71,9 @@ export type MonthlyClosing = {
   time_bank_hours_delta: number | null;
   jira_deficit_amount: number | null;
   presencial_extra_amount: number | null;
+  consider_jira_hours_snapshot: boolean | null;
+  absence_days_count: number | null;
+  absence_amount: number | null;
   time_bank_posted_at: string | null;
   developer_values_notes: string | null;
   values_submitted_at: string | null;
@@ -79,7 +83,7 @@ export type MonthlyClosing = {
   updated_at: string;
 };
 
-export type MonthlyClosingPresenceKind = "travel" | "meal";
+export type MonthlyClosingPresenceKind = "travel" | "meal" | "absence";
 
 export type MonthlyClosingPresenceDay = {
   id: string;

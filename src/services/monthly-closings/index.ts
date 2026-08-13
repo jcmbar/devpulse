@@ -323,6 +323,16 @@ function mapClosing(row: Record<string, unknown>): MonthlyClosing {
       row.presencial_extra_amount == null
         ? null
         : Number(row.presencial_extra_amount),
+    consider_jira_hours_snapshot:
+      row.consider_jira_hours_snapshot == null
+        ? null
+        : Boolean(row.consider_jira_hours_snapshot),
+    absence_days_count:
+      row.absence_days_count == null
+        ? null
+        : Number(row.absence_days_count),
+    absence_amount:
+      row.absence_amount == null ? null : Number(row.absence_amount),
     time_bank_posted_at: (row.time_bank_posted_at as string | null) ?? null,
     developer_values_notes:
       (row.developer_values_notes as string | null) ?? null,
@@ -970,6 +980,168 @@ export async function startMonthlyClosing(input: {
   return closing;
 }
 
+/**
+ * Persists deslocamento/refeição (+ prévia de valores) without submitting
+ * for review. Status stays open/rejected; values_submitted_at is not set.
+ */
+export async function saveMonthlyClosingValuesDraft(input: {
+  closingId: string;
+  developerId: string;
+  actorUserId: string;
+  travelDays: string[];
+  mealDays: string[];
+  absenceDays?: string[];
+  valuesNotes?: string | null;
+  workedHours: number;
+  compensation: {
+    baseAmount: number;
+    baseType: "fixed" | "variable";
+    hourlyRate: number | null;
+    contractedHoursPerDay: number;
+    contractedHoursPerMonth: number;
+    dailyTravelAmount: number;
+    dailyMealAmount: number;
+    timeBankEnabled: boolean;
+    considerJiraHours: boolean;
+  };
+}): Promise<MonthlyClosing> {
+  const closing = await getMonthlyClosingById(input.closingId);
+  if (!closing) {
+    throw new Error("Fechamento não encontrado.");
+  }
+  if (closing.developer_id !== input.developerId) {
+    throw new Error("Você só pode salvar o próprio fechamento.");
+  }
+  if (closing.status !== "open" && closing.status !== "rejected") {
+    throw new Error(
+      "Só é possível salvar rascunho em fechamentos Abertos ou com ajuste necessário.",
+    );
+  }
+  assertEditableClosing(closing);
+
+  const absenceDays = input.absenceDays ?? [];
+  const computed = computeClosingSubmitValues({
+    baseType: input.compensation.baseType,
+    baseAmount: input.compensation.baseAmount,
+    hourlyRate: input.compensation.hourlyRate,
+    contractedHoursPerDay: input.compensation.contractedHoursPerDay,
+    contractedHoursPerMonth: input.compensation.contractedHoursPerMonth,
+    dailyTravelAmount: input.compensation.dailyTravelAmount,
+    dailyMealAmount: input.compensation.dailyMealAmount,
+    workedHours: input.workedHours,
+    travelDays: input.travelDays,
+    mealDays: input.mealDays,
+    absenceDays,
+    timeBankEnabled: input.compensation.timeBankEnabled,
+    considerJiraHours: input.compensation.considerJiraHours,
+  });
+
+  const supabase = await createClient();
+  const fromStatus = closing.status;
+
+  const { error: deletePresenceError } = await supabase
+    .from("monthly_closing_presence_days")
+    .delete()
+    .eq("monthly_closing_id", closing.id);
+  if (deletePresenceError) {
+    throw new Error(
+      `Falha ao limpar dias de presença anteriores: ${deletePresenceError.message}`,
+    );
+  }
+
+  const presenceRows: Array<{
+    monthly_closing_id: string;
+    kind: MonthlyClosingPresenceKind;
+    day_on: string;
+  }> = [
+    ...uniqueSortedDates(input.travelDays).map((day_on) => ({
+      monthly_closing_id: closing.id,
+      kind: "travel" as const,
+      day_on,
+    })),
+    ...uniqueSortedDates(input.mealDays).map((day_on) => ({
+      monthly_closing_id: closing.id,
+      kind: "meal" as const,
+      day_on,
+    })),
+    ...(computed.considerJiraHours
+      ? []
+      : uniqueSortedDates(absenceDays).map((day_on) => ({
+          monthly_closing_id: closing.id,
+          kind: "absence" as const,
+          day_on,
+        }))),
+  ];
+
+  if (presenceRows.length > 0) {
+    const { error: insertPresenceError } = await supabase
+      .from("monthly_closing_presence_days")
+      .insert(presenceRows);
+    if (insertPresenceError) {
+      throw new Error(
+        `Falha ao gravar dias de presença: ${insertPresenceError.message}`,
+      );
+    }
+  }
+
+  const valuesNotes =
+    computed.compensationBaseType === "variable"
+      ? (input.valuesNotes ?? "").trim() || null
+      : null;
+
+  const { data, error } = await supabase
+    .from("monthly_closings")
+    .update({
+      travel_presencial_days: computed.travelPresencialDays,
+      meal_presencial_days: computed.mealPresencialDays,
+      travel_amount: computed.travelAmount,
+      meal_amount: computed.mealAmount,
+      differential_amount: computed.differentialAmount,
+      invoice_amount: computed.invoiceAmount,
+      compensation_base_amount: computed.compensationBaseAmount,
+      compensation_base_type: computed.compensationBaseType,
+      compensation_hourly_rate: computed.compensationHourlyRate,
+      compensation_daily_travel_amount: computed.compensationDailyTravelAmount,
+      compensation_daily_meal_amount: computed.compensationDailyMealAmount,
+      worked_hours_snapshot: computed.workedHoursSnapshot,
+      contracted_hours_month_snapshot: computed.contractedHoursMonthSnapshot,
+      time_bank_enabled_snapshot: computed.timeBankEnabled,
+      time_bank_hours_delta: computed.timeBankHoursDelta,
+      jira_deficit_amount: computed.jiraDeficitAmount,
+      presencial_extra_amount: computed.presencialExtraAmount,
+      consider_jira_hours_snapshot: computed.considerJiraHours,
+      absence_days_count: computed.absenceDaysCount,
+      absence_amount: computed.absenceAmount,
+      developer_values_notes: valuesNotes,
+    })
+    .eq("id", closing.id)
+    .eq("status", fromStatus)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao salvar rascunho do fechamento: ${error.message}`);
+  }
+
+  const updated = mapClosing(data as Record<string, unknown>);
+  await appendEvent({
+    closingId: closing.id,
+    eventType: "values_draft_saved",
+    fromStatus,
+    toStatus: fromStatus,
+    actorUserId: input.actorUserId,
+    payload: {
+      travelDays: computed.travelPresencialDays,
+      mealDays: computed.mealPresencialDays,
+      absenceDays: computed.absenceDaysCount,
+      considerJiraHours: computed.considerJiraHours,
+      invoiceAmount: computed.invoiceAmount,
+    },
+  });
+
+  return updated;
+}
+
 export async function submitMonthlyClosingForReview(input: {
   closingId: string;
   developerId: string;
@@ -981,6 +1153,7 @@ export async function submitMonthlyClosingForReview(input: {
   values: {
     travelDays: string[];
     mealDays: string[];
+    absenceDays?: string[];
     valuesNotes?: string | null;
     workedHours: number;
     compensation: {
@@ -992,6 +1165,7 @@ export async function submitMonthlyClosingForReview(input: {
       dailyTravelAmount: number;
       dailyMealAmount: number;
       timeBankEnabled: boolean;
+      considerJiraHours: boolean;
     };
   };
 }): Promise<MonthlyClosing> {
@@ -1018,6 +1192,7 @@ export async function submitMonthlyClosingForReview(input: {
     );
   }
 
+  const absenceDays = input.values.absenceDays ?? [];
   const computed = computeClosingSubmitValues({
     baseType: input.values.compensation.baseType,
     baseAmount: input.values.compensation.baseAmount,
@@ -1029,7 +1204,9 @@ export async function submitMonthlyClosingForReview(input: {
     workedHours: input.values.workedHours,
     travelDays: input.values.travelDays,
     mealDays: input.values.mealDays,
+    absenceDays,
     timeBankEnabled: input.values.compensation.timeBankEnabled,
+    considerJiraHours: input.values.compensation.considerJiraHours,
   });
 
   const audit = await loadMonthlyClosingAuditForDeveloper({
@@ -1127,6 +1304,13 @@ export async function submitMonthlyClosingForReview(input: {
       kind: "meal" as const,
       day_on,
     })),
+    ...(computed.considerJiraHours
+      ? []
+      : uniqueSortedDates(absenceDays).map((day_on) => ({
+          monthly_closing_id: closing.id,
+          kind: "absence" as const,
+          day_on,
+        }))),
   ];
 
   if (presenceRows.length > 0) {
@@ -1182,6 +1366,9 @@ export async function submitMonthlyClosingForReview(input: {
     time_bank_hours_delta: computed.timeBankHoursDelta,
     jira_deficit_amount: computed.jiraDeficitAmount,
     presencial_extra_amount: computed.presencialExtraAmount,
+    consider_jira_hours_snapshot: computed.considerJiraHours,
+    absence_days_count: computed.absenceDaysCount,
+    absence_amount: computed.absenceAmount,
     developer_values_notes: valuesNotes,
     values_submitted_at: now,
   };

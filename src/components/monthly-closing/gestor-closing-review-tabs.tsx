@@ -113,6 +113,14 @@ export function GestorClosingReviewTabs({
       presenceDays.filter((row) => row.kind === "meal").map((row) => row.day_on),
     [presenceDays],
   );
+  const absenceDays = useMemo(
+    () =>
+      presenceDays
+        .filter((row) => row.kind === "absence")
+        .map((row) => row.day_on),
+    [presenceDays],
+  );
+  const showAbsenceCompare = closing.consider_jira_hours_snapshot === false;
 
   const hasValues = closing.values_submitted_at != null;
   const blocksDecision = folhaCompare.blocksDecision;
@@ -320,6 +328,18 @@ export function GestorClosingReviewTabs({
                     mismatch={fieldMismatched(folhaCompare, "mealDays")}
                   />
                 </div>
+                {showAbsenceCompare ? (
+                  <div className="space-y-2 sm:col-span-2">
+                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      Dias — Faltas (usuário)
+                    </p>
+                    <DayChips
+                      days={absenceDays}
+                      emptyLabel="Nenhuma falta selecionada."
+                      mismatch={fieldMismatched(folhaCompare, "absenceDays")}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               {closing.developer_values_notes ? (
@@ -413,7 +433,21 @@ function CompareTable({
       user: userSide ? formatCompareDays(userSide.mealDays) : "—",
       folha: folhaSide ? formatCompareDays(folhaSide.mealDays) : "Sem Folha",
     },
+    {
+      field: "absenceDays",
+      user: userSide ? formatCompareDays(userSide.absenceDays) : "—",
+      folha: folhaSide
+        ? formatCompareDays(folhaSide.absenceDays)
+        : "Sem Folha",
+    },
   ];
+
+  const visibleRows =
+    compare.mismatches.includes("absenceDays") ||
+    (userSide?.absenceDays.length ?? 0) > 0 ||
+    (folhaSide?.absenceDays.length ?? 0) > 0
+      ? rows
+      : rows.filter((row) => row.field !== "absenceDays");
 
   return (
     <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-border">
@@ -427,7 +461,7 @@ function CompareTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {visibleRows.map((row) => {
             const mismatch = fieldMismatched(compare, row.field);
             return (
               <tr

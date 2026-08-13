@@ -25,6 +25,8 @@ function mapRow(row: Record<string, unknown>): DeveloperCompensation {
     daily_meal_amount: Number(row.daily_meal_amount ?? 0),
     require_meal_pix_receipt: Boolean(row.require_meal_pix_receipt),
     time_bank_enabled: Boolean(row.time_bank_enabled),
+    consider_jira_hours:
+      row.consider_jira_hours == null ? true : Boolean(row.consider_jira_hours),
     currency: String(row.currency ?? "BRL"),
     effective_from: String(row.effective_from),
     effective_to: (row.effective_to as string | null) ?? null,
@@ -102,6 +104,10 @@ export async function upsertCurrentDeveloperCompensation(
     daily_meal_amount: input.dailyMealAmount,
     require_meal_pix_receipt: Boolean(input.requireMealPixReceipt),
     time_bank_enabled: Boolean(input.timeBankEnabled),
+    consider_jira_hours:
+      input.baseType === "variable"
+        ? true
+        : input.considerJiraHours !== false,
     currency: input.currency ?? "BRL",
     effective_from:
       input.effectiveFrom ??
