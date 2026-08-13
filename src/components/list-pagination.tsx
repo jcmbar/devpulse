@@ -3,6 +3,7 @@ import {
   adminListHref,
   type ActiveListFilter,
   type JiraAccountListFilter,
+  type JobTitleListFilter,
 } from "@/lib/admin-list-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -16,6 +17,7 @@ type ListPaginationProps = {
   q?: string | null;
   active?: ActiveListFilter | null;
   jiraId?: JiraAccountListFilter | null;
+  jobTitle?: JobTitleListFilter | null;
 };
 
 export function ListPagination({
@@ -28,6 +30,7 @@ export function ListPagination({
   q,
   active,
   jiraId,
+  jobTitle,
 }: ListPaginationProps) {
   if (total === 0) {
     return null;
@@ -35,7 +38,7 @@ export function ListPagination({
 
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
-  const hrefInput = { teamId, q, active, jiraId };
+  const hrefInput = { teamId, q, active, jiraId, jobTitle };
   const prevHref =
     page > 1
       ? adminListHref(pathname, { ...hrefInput, page: page - 1 })

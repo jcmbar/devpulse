@@ -52,6 +52,8 @@ export type ListDevelopersAdminInput = {
   isActive?: boolean | null;
   /** Jira Account ID presence: true = with, false = without (omit = all). */
   hasJiraAccountId?: boolean | null;
+  /** Cargo / job_title (omit = all). */
+  jobTitle?: DeveloperJobTitle | null;
 };
 
 export type ListDevelopersAdminPagedInput = ListDevelopersAdminInput & {
@@ -182,6 +184,10 @@ function applyDeveloperFilters(
     next = next.not("jira_account_id", "is", null);
   } else if (input?.hasJiraAccountId === false) {
     next = next.is("jira_account_id", null);
+  }
+
+  if (input?.jobTitle) {
+    next = next.eq("job_title", input.jobTitle);
   }
 
   const q = sanitizeSearchTerm(input?.q ?? "");

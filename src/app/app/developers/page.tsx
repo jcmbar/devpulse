@@ -15,6 +15,7 @@ import {
   parseAdminListQuery,
   type ActiveListFilter,
   type JiraAccountListFilter,
+  type JobTitleListFilter,
 } from "@/lib/admin-list-query";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
@@ -24,7 +25,11 @@ import {
 } from "@/services/auth/developer-access";
 import { listDevelopersAdminPaged } from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
-import { getJobTitleLabel } from "@/types/developer-compensation";
+import {
+  getJobTitleLabel,
+  isDeveloperJobTitle,
+  type DeveloperJobTitle,
+} from "@/types/developer-compensation";
 import { Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -46,6 +51,7 @@ type DevelopersAdminPageProps = {
     page?: string;
     active?: string;
     jiraId?: string;
+    jobTitle?: string;
   }>;
 };
 
@@ -71,14 +77,22 @@ function toHasJiraAccountFilter(
   return null;
 }
 
+function toJobTitleFilter(filter: JobTitleListFilter): DeveloperJobTitle | null {
+  return isDeveloperJobTitle(filter) ? filter : null;
+}
+
 function filterSummaryLabel(input: {
   teamName: string | null;
   activeFilter: ActiveListFilter;
   jiraAccountFilter: JiraAccountListFilter;
+  jobTitleFilter: JobTitleListFilter;
   q: string;
 }): string {
   const parts: string[] = [];
   parts.push(input.teamName ? `Time ${input.teamName}` : "Todos os times");
+  if (input.jobTitleFilter !== "all") {
+    parts.push(getJobTitleLabel(input.jobTitleFilter));
+  }
   if (input.activeFilter === "active") {
     parts.push("ativos");
   } else if (input.activeFilter === "inactive") {
@@ -112,6 +126,7 @@ export default async function DevelopersAdminPage({
     q: query.q || null,
     active: query.activeFilter,
     jiraId: query.jiraAccountFilter,
+    jobTitle: query.jobTitleFilter,
   };
 
   if (query.teamIdNeedsCanonicalize) {
@@ -130,6 +145,7 @@ export default async function DevelopersAdminPage({
       q: query.q || null,
       isActive: toIsActiveFilter(query.activeFilter),
       hasJiraAccountId: toHasJiraAccountFilter(query.jiraAccountFilter),
+      jobTitle: toJobTitleFilter(query.jobTitleFilter),
       page: query.page,
       pageSize: query.pageSize,
     }),
@@ -178,6 +194,7 @@ export default async function DevelopersAdminPage({
     teamName: selectedTeamName,
     activeFilter: query.activeFilter,
     jiraAccountFilter: query.jiraAccountFilter,
+    jobTitleFilter: query.jobTitleFilter,
     q: query.q,
   });
 
@@ -193,6 +210,8 @@ export default async function DevelopersAdminPage({
             query.jiraAccountFilter !== "all"
               ? query.jiraAccountFilter
               : undefined,
+          jobTitle:
+            query.jobTitleFilter !== "all" ? query.jobTitleFilter : undefined,
         }}
       />
       <PageHeader
@@ -255,6 +274,7 @@ export default async function DevelopersAdminPage({
               <DeveloperListColumnFilters
                 activeFilter={query.activeFilter}
                 jiraAccountFilter={query.jiraAccountFilter}
+                jobTitleFilter={query.jobTitleFilter}
                 embedded
               />
             </Suspense>
@@ -280,6 +300,7 @@ export default async function DevelopersAdminPage({
             q: query.q,
             activeFilter: query.activeFilter,
             jiraAccountFilter: query.jiraAccountFilter,
+            jobTitleFilter: query.jobTitleFilter,
           })}
           description="Ajuste filtros, limpe a busca ou cadastre uma nova pessoa."
           action={
@@ -425,6 +446,7 @@ export default async function DevelopersAdminPage({
               q={query.q || null}
               active={query.activeFilter}
               jiraId={query.jiraAccountFilter}
+              jobTitle={query.jobTitleFilter}
             />
           </div>
         </SectionShell>
