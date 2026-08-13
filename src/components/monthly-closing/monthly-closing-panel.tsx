@@ -174,6 +174,7 @@ export function MonthlyClosingControls({
   const [draftAbsenceDays, setDraftAbsenceDays] = useState<string[] | null>(
     null,
   );
+  const [draftMakeupDays, setDraftMakeupDays] = useState<string[] | null>(null);
   const [draftValuesNotes, setDraftValuesNotes] = useState<string | null>(null);
   const status: MonthlyClosingStatus = closing?.status ?? "open";
   const started = closing != null && closing.started_at != null;
@@ -200,10 +201,18 @@ export function MonthlyClosingControls({
         .map((row) => row.day_on),
     [presenceDays],
   );
+  const presenceMakeupDays = useMemo(
+    () =>
+      presenceDays
+        .filter((row) => row.kind === "makeup")
+        .map((row) => row.day_on),
+    [presenceDays],
+  );
 
   const initialTravelDays = draftTravelDays ?? presenceTravelDays;
   const initialMealDays = draftMealDays ?? presenceMealDays;
   const initialAbsenceDays = draftAbsenceDays ?? presenceAbsenceDays;
+  const initialMakeupDays = draftMakeupDays ?? presenceMakeupDays;
   const initialValuesNotes =
     draftValuesNotes ?? closing?.developer_values_notes ?? null;
 
@@ -211,6 +220,7 @@ export function MonthlyClosingControls({
     setDraftTravelDays(null);
     setDraftMealDays(null);
     setDraftAbsenceDays(null);
+    setDraftMakeupDays(null);
     setDraftValuesNotes(null);
   }, [closing?.id]);
 
@@ -283,6 +293,7 @@ export function MonthlyClosingControls({
         travelDays: payload.travelDays,
         mealDays: payload.mealDays,
         absenceDays: payload.absenceDays,
+        makeupDays: payload.makeupDays,
         valuesNotes: payload.valuesNotes,
         workedHours,
       });
@@ -308,6 +319,7 @@ export function MonthlyClosingControls({
         travelDays: payload.travelDays,
         mealDays: payload.mealDays,
         absenceDays: payload.absenceDays,
+        makeupDays: payload.makeupDays,
         valuesNotes: payload.valuesNotes,
         workedHours,
       });
@@ -318,6 +330,7 @@ export function MonthlyClosingControls({
       setDraftTravelDays(payload.travelDays);
       setDraftMealDays(payload.mealDays);
       setDraftAbsenceDays(payload.absenceDays);
+      setDraftMakeupDays(payload.makeupDays);
       setDraftValuesNotes(payload.valuesNotes);
       setInfo("Rascunho salvo. Você pode continuar depois.");
       setValuesModalOpen(false);
@@ -487,6 +500,7 @@ export function MonthlyClosingControls({
           initialTravelDays={initialTravelDays}
           initialMealDays={initialMealDays}
           initialAbsenceDays={initialAbsenceDays}
+          initialMakeupDays={initialMakeupDays}
           initialValuesNotes={initialValuesNotes}
           canConfirm={canConfirmSubmit}
           confirmBlockedReason={confirmBlockedReason}

@@ -13,6 +13,7 @@ import {
   getPayrollItemForDeveloperMonth,
   listPayrollMealDaysForItem,
   listPayrollOffDaysForItem,
+  listPayrollMakeupDaysForItem,
   listPayrollPresencialDaysForItem,
 } from "@/services/payroll";
 import type { MonthlyClosing } from "@/types/monthly-closing";
@@ -30,6 +31,7 @@ function closingToSide(
   travelDays: string[],
   mealDays: string[],
   absenceDays: string[],
+  makeupDays: string[],
 ): ClosingValuesSide {
   return {
     travelAmount: closing.travel_amount,
@@ -41,6 +43,7 @@ function closingToSide(
     travelDays,
     mealDays,
     absenceDays,
+    makeupDays,
   };
 }
 
@@ -49,6 +52,7 @@ function folhaToSide(
   travelDays: string[],
   mealDays: string[],
   absenceDays: string[],
+  makeupDays: string[],
 ): ClosingValuesSide {
   return {
     travelAmount: item.travel_amount,
@@ -60,6 +64,7 @@ function folhaToSide(
     travelDays,
     mealDays,
     absenceDays,
+    makeupDays,
   };
 }
 
@@ -88,19 +93,30 @@ export async function loadClosingFolhaCompare(
   const absenceDays = presenceDays
     .filter((row) => row.kind === "absence")
     .map((row) => row.day_on);
+  const makeupDays = presenceDays
+    .filter((row) => row.kind === "makeup")
+    .map((row) => row.day_on);
 
   const userSide = hasClosingValues
-    ? closingToSide(closing, travelDays, mealDays, absenceDays)
+    ? closingToSide(closing, travelDays, mealDays, absenceDays, makeupDays)
     : null;
 
   let folhaSide: ClosingValuesSide | null = null;
   if (folhaItem) {
-    const [folhaTravel, folhaMeal, folhaAbsence] = await Promise.all([
-      listPayrollPresencialDaysForItem(folhaItem.id),
-      listPayrollMealDaysForItem(folhaItem.id),
-      listPayrollOffDaysForItem(folhaItem.id),
-    ]);
-    folhaSide = folhaToSide(folhaItem, folhaTravel, folhaMeal, folhaAbsence);
+    const [folhaTravel, folhaMeal, folhaAbsence, folhaMakeup] =
+      await Promise.all([
+        listPayrollPresencialDaysForItem(folhaItem.id),
+        listPayrollMealDaysForItem(folhaItem.id),
+        listPayrollOffDaysForItem(folhaItem.id),
+        listPayrollMakeupDaysForItem(folhaItem.id),
+      ]);
+    folhaSide = folhaToSide(
+      folhaItem,
+      folhaTravel,
+      folhaMeal,
+      folhaAbsence,
+      folhaMakeup,
+    );
   }
 
   const compare = compareClosingToFolha({

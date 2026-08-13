@@ -10,6 +10,7 @@ export type ClosingValuesSide = {
   travelDays: string[];
   mealDays: string[];
   absenceDays: string[];
+  makeupDays: string[];
 };
 
 export type ClosingFolhaCompareField =
@@ -20,7 +21,8 @@ export type ClosingFolhaCompareField =
   | "dailyRates"
   | "travelDays"
   | "mealDays"
-  | "absenceDays";
+  | "absenceDays"
+  | "makeupDays";
 
 export const CLOSING_FOLHA_COMPARE_FIELD_LABELS: Record<
   ClosingFolhaCompareField,
@@ -34,6 +36,7 @@ export const CLOSING_FOLHA_COMPARE_FIELD_LABELS: Record<
   travelDays: "Dias — Deslocamento",
   mealDays: "Dias — Refeição",
   absenceDays: "Dias — Faltas",
+  makeupDays: "Dias — Compensação",
 };
 
 export type ClosingFolhaCompareResult = {
@@ -100,7 +103,7 @@ export function compareClosingToFolha(input: {
     "mealDays",
   ];
   if (compareAbsences) {
-    baseMissing.push("absenceDays");
+    baseMissing.push("absenceDays", "makeupDays");
   }
 
   if (!hasFolha || !input.closing || !input.folha) {
@@ -143,6 +146,9 @@ export function compareClosingToFolha(input: {
   }
   if (compareAbsences && !sameDaySet(user.absenceDays, folha.absenceDays)) {
     mismatches.push("absenceDays");
+  }
+  if (compareAbsences && !sameDaySet(user.makeupDays, folha.makeupDays)) {
+    mismatches.push("makeupDays");
   }
 
   return {

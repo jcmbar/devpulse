@@ -120,6 +120,13 @@ export function GestorClosingReviewTabs({
         .map((row) => row.day_on),
     [presenceDays],
   );
+  const makeupDays = useMemo(
+    () =>
+      presenceDays
+        .filter((row) => row.kind === "makeup")
+        .map((row) => row.day_on),
+    [presenceDays],
+  );
   const showAbsenceCompare = closing.consider_jira_hours_snapshot === false;
 
   const hasValues = closing.values_submitted_at != null;
@@ -329,16 +336,28 @@ export function GestorClosingReviewTabs({
                   />
                 </div>
                 {showAbsenceCompare ? (
-                  <div className="space-y-2 sm:col-span-2">
-                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                      Dias — Faltas (usuário)
-                    </p>
-                    <DayChips
-                      days={absenceDays}
-                      emptyLabel="Nenhuma falta selecionada."
-                      mismatch={fieldMismatched(folhaCompare, "absenceDays")}
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                        Dias — Faltas (usuário)
+                      </p>
+                      <DayChips
+                        days={absenceDays}
+                        emptyLabel="Nenhuma falta selecionada."
+                        mismatch={fieldMismatched(folhaCompare, "absenceDays")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                        Dias — Compensação (usuário)
+                      </p>
+                      <DayChips
+                        days={makeupDays}
+                        emptyLabel="Nenhuma compensação selecionada."
+                        mismatch={fieldMismatched(folhaCompare, "makeupDays")}
+                      />
+                    </div>
+                  </>
                 ) : null}
               </div>
 
@@ -440,14 +459,28 @@ function CompareTable({
         ? formatCompareDays(folhaSide.absenceDays)
         : "Sem Folha",
     },
+    {
+      field: "makeupDays",
+      user: userSide ? formatCompareDays(userSide.makeupDays) : "—",
+      folha: folhaSide
+        ? formatCompareDays(folhaSide.makeupDays)
+        : "Sem Folha",
+    },
   ];
 
-  const visibleRows =
+  const showAbsenceRows =
     compare.mismatches.includes("absenceDays") ||
+    compare.mismatches.includes("makeupDays") ||
     (userSide?.absenceDays.length ?? 0) > 0 ||
-    (folhaSide?.absenceDays.length ?? 0) > 0
-      ? rows
-      : rows.filter((row) => row.field !== "absenceDays");
+    (folhaSide?.absenceDays.length ?? 0) > 0 ||
+    (userSide?.makeupDays.length ?? 0) > 0 ||
+    (folhaSide?.makeupDays.length ?? 0) > 0;
+
+  const visibleRows = showAbsenceRows
+    ? rows
+    : rows.filter(
+        (row) => row.field !== "absenceDays" && row.field !== "makeupDays",
+      );
 
   return (
     <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-border">

@@ -23,6 +23,7 @@ export const PAYROLL_ATTENDANCE_KINDS = [
   "off",
   "holiday",
   "weekend",
+  "makeup",
 ] as const;
 
 export type PayrollAttendanceKind =
@@ -37,6 +38,7 @@ export const PAYROLL_ATTENDANCE_KIND_LABELS: Record<
   off: "Falta / folga",
   holiday: "Feriado",
   weekend: "Fim de semana",
+  makeup: "Compensação",
 };
 
 export const PAYROLL_WORKFLOW_STATUSES = [

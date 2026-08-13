@@ -14,7 +14,7 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     workedHours: 160,
   };
 
-  it("fixo + Jira ON sem banco: base − déficit + desloc + refeição", () => {
+  it("Fixo + Jira ON sem banco: base − déficit + desloc + refeição", () => {
     const result = computeClosingSubmitValues({
       ...base,
       baseType: "fixed",
@@ -34,7 +34,7 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     assert.equal(result.considerJiraHours, true);
   });
 
-  it("fixo + Jira ON com banco: sem desconto monetário; Δ vai ao banco", () => {
+  it("Fixo + Jira ON com banco: sem desconto monetário; Δ vai ao banco", () => {
     const result = computeClosingSubmitValues({
       ...base,
       baseType: "fixed",
@@ -49,7 +49,7 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     assert.equal(result.invoiceAmount, 3120 + 60 + 28);
   });
 
-  it("fixo + Jira OFF: desconto por faltas × h/dia × R$/h; ignora Jira", () => {
+  it("Fixo + Jira OFF: desconto por faltas × h/dia × R$/h; ignora Jira", () => {
     const result = computeClosingSubmitValues({
       ...base,
       baseType: "fixed",
@@ -61,6 +61,8 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     });
     assert.equal(result.jiraDeficitAmount, 0);
     assert.equal(result.timeBankHoursDelta, 0);
+    assert.equal(result.absenceDeclaredCount, 2);
+    assert.equal(result.makeupDaysCount, 0);
     assert.equal(result.absenceDaysCount, 2);
     assert.equal(result.absenceAmount, 600); // 2 × 6 × 50
     assert.equal(result.differentialAmount, -600);
@@ -68,7 +70,55 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     assert.equal(result.considerJiraHours, false);
   });
 
-  it("fixo + Jira OFF sem faltas: base + desloc + refeição", () => {
+  it("Fixo + Jira OFF: compensação quita falta 1:1 (saldo líquido)", () => {
+    const result = computeClosingSubmitValues({
+      ...base,
+      baseType: "fixed",
+      baseAmount: 3120,
+      workedHours: 0,
+      considerJiraHours: false,
+      absenceDays: ["2026-08-03", "2026-08-04"],
+      makeupDays: ["2026-08-08"],
+    });
+    assert.equal(result.absenceDeclaredCount, 2);
+    assert.equal(result.makeupDaysCount, 1);
+    assert.equal(result.absenceDaysCount, 1);
+    assert.equal(result.absenceAmount, 300); // 1 × 6 × 50
+    assert.equal(result.invoiceAmount, 3120 - 300 + 60 + 28);
+  });
+
+  it("Fixo + Jira OFF: compensações ≥ faltas zeram desconto", () => {
+    const result = computeClosingSubmitValues({
+      ...base,
+      baseType: "fixed",
+      baseAmount: 3120,
+      workedHours: 0,
+      considerJiraHours: false,
+      absenceDays: ["2026-08-03"],
+      makeupDays: ["2026-08-08", "2026-08-09"],
+    });
+    assert.equal(result.absenceDaysCount, 0);
+    assert.equal(result.absenceAmount, 0);
+    assert.equal(result.invoiceAmount, 3120 + 60 + 28);
+  });
+
+  it("Fixo + Jira OFF: dia em falta e compensação conta só como falta", () => {
+    const result = computeClosingSubmitValues({
+      ...base,
+      baseType: "fixed",
+      baseAmount: 3120,
+      workedHours: 0,
+      considerJiraHours: false,
+      absenceDays: ["2026-08-03"],
+      makeupDays: ["2026-08-03"],
+    });
+    assert.equal(result.absenceDeclaredCount, 1);
+    assert.equal(result.makeupDaysCount, 0);
+    assert.equal(result.absenceDaysCount, 1);
+    assert.equal(result.absenceAmount, 300);
+  });
+
+  it("Fixo + Jira OFF sem faltas: base + desloc + refeição", () => {
     const result = computeClosingSubmitValues({
       ...base,
       baseType: "fixed",

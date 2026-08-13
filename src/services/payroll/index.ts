@@ -94,7 +94,8 @@ function mapAttendance(row: Record<string, unknown>): PayrollAttendanceDay {
     kindRaw === "presencial" ||
     kindRaw === "off" ||
     kindRaw === "holiday" ||
-    kindRaw === "weekend"
+    kindRaw === "weekend" ||
+    kindRaw === "makeup"
       ? kindRaw
       : "home";
 
@@ -279,6 +280,9 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   const absenceDays = attendance
     .filter((day) => day.day_kind === "off")
     .map((day) => day.day_on);
+  const makeupDays = attendance
+    .filter((day) => day.day_kind === "makeup")
+    .map((day) => day.day_on);
 
   const supabase = await createClient();
   const { data: closingRow } = await supabase
@@ -324,6 +328,7 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
     travelDays,
     mealDays: mealDayList,
     absenceDays,
+    makeupDays,
     timeBankEnabled: compensation?.time_bank_enabled ?? false,
     considerJiraHours,
   });
@@ -680,6 +685,17 @@ export async function listPayrollOffDaysForItem(
   const days = await listAttendanceForItem(itemId);
   return days
     .filter((day) => day.day_kind === "off")
+    .map((day) => day.day_on)
+    .sort();
+}
+
+/** Compensação days — Folha side of makeup compare (Fixo sem Jira). */
+export async function listPayrollMakeupDaysForItem(
+  itemId: string,
+): Promise<string[]> {
+  const days = await listAttendanceForItem(itemId);
+  return days
+    .filter((day) => day.day_kind === "makeup")
     .map((day) => day.day_on)
     .sort();
 }

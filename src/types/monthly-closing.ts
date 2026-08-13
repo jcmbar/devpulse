@@ -83,7 +83,11 @@ export type MonthlyClosing = {
   updated_at: string;
 };
 
-export type MonthlyClosingPresenceKind = "travel" | "meal" | "absence";
+export type MonthlyClosingPresenceKind =
+  | "travel"
+  | "meal"
+  | "absence"
+  | "makeup";
 
 export type MonthlyClosingPresenceDay = {
   id: string;

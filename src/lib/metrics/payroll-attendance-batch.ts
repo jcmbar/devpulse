@@ -21,7 +21,8 @@ export type BatchAttendanceKind =
   | "home"
   | "off"
   | "holiday"
-  | "weekend";
+  | "weekend"
+  | "makeup";
 
 export type AttendanceDaySnapshot = {
   day_on: string;

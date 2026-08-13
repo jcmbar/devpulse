@@ -92,6 +92,7 @@ export async function submitMonthlyClosingAction(input: {
   travelDays: string[];
   mealDays: string[];
   absenceDays?: string[];
+  makeupDays?: string[];
   valuesNotes?: string | null;
   workedHours: number;
 }): Promise<MonthlyClosingActionResult> {
@@ -124,6 +125,7 @@ export async function submitMonthlyClosingAction(input: {
         travelDays: input.travelDays,
         mealDays: input.mealDays,
         absenceDays: input.absenceDays,
+        makeupDays: input.makeupDays,
         valuesNotes: input.valuesNotes,
         workedHours: input.workedHours,
         compensation: {
@@ -160,6 +162,7 @@ export async function saveMonthlyClosingDraftAction(input: {
   travelDays: string[];
   mealDays: string[];
   absenceDays?: string[];
+  makeupDays?: string[];
   valuesNotes?: string | null;
   workedHours: number;
 }): Promise<MonthlyClosingActionResult> {
@@ -188,6 +191,7 @@ export async function saveMonthlyClosingDraftAction(input: {
       travelDays: input.travelDays,
       mealDays: input.mealDays,
       absenceDays: input.absenceDays,
+      makeupDays: input.makeupDays,
       valuesNotes: input.valuesNotes,
       workedHours: input.workedHours,
       compensation: {

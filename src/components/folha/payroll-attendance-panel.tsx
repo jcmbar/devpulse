@@ -40,6 +40,7 @@ const EDITABLE_ATTENDANCE_KINDS = [
   "presencial",
   "home",
   "off",
+  "makeup",
   "weekend",
 ] as const satisfies ReadonlyArray<PayrollAttendanceKind>;
 
@@ -49,17 +50,20 @@ const KIND_CARD_CLASS: Record<PayrollAttendanceKind, string> = {
   presencial:
     "border-emerald-500/35 bg-emerald-500/10 dark:border-emerald-400/30 dark:bg-emerald-400/10",
   home: "border-sky-500/35 bg-sky-500/10 dark:border-sky-400/30 dark:bg-sky-400/10",
-  off: "border-border bg-muted/60 text-muted-foreground",
+  off: "border-amber-500/40 bg-amber-500/10 dark:border-amber-400/30 dark:bg-amber-400/10",
   holiday:
     "border-rose-500/40 bg-rose-500/10 dark:border-rose-400/35 dark:bg-rose-400/10",
   weekend:
     "border-violet-500/30 bg-violet-500/10 dark:border-violet-400/25 dark:bg-violet-400/10",
+  makeup:
+    "border-indigo-500/40 bg-indigo-500/10 dark:border-indigo-400/30 dark:bg-indigo-400/10",
 };
 
 const LEGEND: Array<{ kind: EditableAttendanceKind; swatch: string }> = [
   { kind: "presencial", swatch: "bg-emerald-500/70" },
   { kind: "home", swatch: "bg-sky-500/70" },
-  { kind: "off", swatch: "bg-muted-foreground/40" },
+  { kind: "off", swatch: "bg-amber-500/70" },
+  { kind: "makeup", swatch: "bg-indigo-500/70" },
   { kind: "weekend", swatch: "bg-violet-500/70" },
 ];
 

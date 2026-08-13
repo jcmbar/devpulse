@@ -16,6 +16,7 @@ export type ClosingSubmitValuesPayload = {
   travelDays: string[];
   mealDays: string[];
   absenceDays: string[];
+  makeupDays: string[];
   valuesNotes: string | null;
 };
 
@@ -34,6 +35,7 @@ type ClosingSubmitValuesModalProps = {
   initialTravelDays?: ReadonlyArray<string>;
   initialMealDays?: ReadonlyArray<string>;
   initialAbsenceDays?: ReadonlyArray<string>;
+  initialMakeupDays?: ReadonlyArray<string>;
   initialValuesNotes?: string | null;
   /** When false, Confirmar is disabled (e.g. pending justifications). */
   canConfirm?: boolean;
@@ -147,6 +149,145 @@ function MonthDayPicker({
   );
 }
 
+type AbsenceMakeupMark = "none" | "absence" | "makeup";
+
+const ABSENCE_ACCENT =
+  "border-amber-500/50 bg-amber-500/20 font-semibold text-amber-950 dark:text-amber-100";
+const MAKEUP_ACCENT =
+  "border-indigo-500/50 bg-indigo-500/20 font-semibold text-indigo-950 dark:text-indigo-100";
+
+/** Single calendar: click cycles none → falta → compensação → none. */
+function AbsenceMakeupDayPicker({
+  yearMonth,
+  absenceSelected,
+  makeupSelected,
+  onChange,
+  holidayNameByDate,
+}: {
+  yearMonth: string;
+  absenceSelected: Set<string>;
+  makeupSelected: Set<string>;
+  onChange: (next: {
+    absence: Set<string>;
+    makeup: Set<string>;
+  }) => void;
+  holidayNameByDate: Map<string, string>;
+}) {
+  const days = useMemo(() => listDaysInYearMonth(yearMonth), [yearMonth]);
+  const firstWeekday = days[0]
+    ? new Date(`${days[0]}T12:00:00.000Z`).getUTCDay()
+    : 0;
+  const leadingEmpty = firstWeekday;
+  const billed = Math.max(0, absenceSelected.size - makeupSelected.size);
+
+  function markFor(day: string): AbsenceMakeupMark {
+    if (absenceSelected.has(day)) {
+      return "absence";
+    }
+    if (makeupSelected.has(day)) {
+      return "makeup";
+    }
+    return "none";
+  }
+
+  function cycle(day: string) {
+    const mark = markFor(day);
+    const nextAbsence = new Set(absenceSelected);
+    const nextMakeup = new Set(makeupSelected);
+    nextAbsence.delete(day);
+    nextMakeup.delete(day);
+    if (mark === "none") {
+      nextAbsence.add(day);
+    } else if (mark === "absence") {
+      nextMakeup.add(day);
+    }
+    onChange({ absence: nextAbsence, makeup: nextMakeup });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-medium">Faltas / compensação</p>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {absenceSelected.size}F · {makeupSelected.size}C · saldo {billed}
+        </p>
+      </div>
+      <p className="text-[11px] leading-snug text-muted-foreground text-pretty">
+        Clique cicla: sem marca → falta → compensação → limpar. Cada
+        compensação quita uma falta no desconto.
+      </p>
+      <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className={cn("size-2.5 rounded-sm border", ABSENCE_ACCENT)} />
+          Falta
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className={cn("size-2.5 rounded-sm border", MAKEUP_ACCENT)} />
+          Compensação
+        </span>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+        {["D", "S", "T", "Q", "Q", "S", "S"].map((letter, index) => (
+          <span key={`${letter}-${index}`}>{letter}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: leadingEmpty }).map((_, index) => (
+          <span key={`empty-${index}`} />
+        ))}
+        {days.map((day) => {
+          const mark = markFor(day);
+          const weekend = isWeekend(day);
+          const holidayName = holidayNameByDate.get(day) ?? null;
+          const isHoliday = holidayName != null;
+          const active = mark !== "none";
+          const accent = mark === "absence" ? ABSENCE_ACCENT : MAKEUP_ACCENT;
+          const markLabel =
+            mark === "absence"
+              ? "Falta"
+              : mark === "makeup"
+                ? "Compensação"
+                : null;
+          return (
+            <button
+              key={day}
+              type="button"
+              onClick={() => cycle(day)}
+              title={
+                [
+                  holidayName ? `Feriado: ${holidayName}` : null,
+                  markLabel,
+                  `${weekdayShort(day)} ${day}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              }
+              aria-label={
+                markLabel
+                  ? `${dayNumber(day)}, ${markLabel}`
+                  : `${dayNumber(day)}`
+              }
+              className={cn(
+                "flex h-8 flex-col items-center justify-center rounded-md border text-xs tabular-nums transition",
+                isHoliday && !active
+                  ? HOLIDAY_OVERLAY_CELL_CLASS
+                  : active
+                    ? accent
+                    : weekend
+                      ? "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted/40"
+                      : "border-border bg-card hover:bg-muted/50",
+                isHoliday && active ? accent : null,
+              )}
+            >
+              {dayNumber(day)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function ClosingSubmitValuesModal({
   open,
   onClose,
@@ -160,6 +301,7 @@ export function ClosingSubmitValuesModal({
   initialTravelDays = [],
   initialMealDays = [],
   initialAbsenceDays = [],
+  initialMakeupDays = [],
   initialValuesNotes = null,
   canConfirm = true,
   confirmBlockedReason = null,
@@ -182,6 +324,9 @@ export function ClosingSubmitValuesModal({
   const [absenceSelected, setAbsenceSelected] = useState<Set<string>>(
     () => new Set(),
   );
+  const [makeupSelected, setMakeupSelected] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [valuesNotes, setValuesNotes] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -201,6 +346,7 @@ export function ClosingSubmitValuesModal({
   const initialTravelKey = initialTravelDays.join(",");
   const initialMealKey = initialMealDays.join(",");
   const initialAbsenceKey = initialAbsenceDays.join(",");
+  const initialMakeupKey = initialMakeupDays.join(",");
 
   useEffect(() => {
     if (!open) {
@@ -209,6 +355,7 @@ export function ClosingSubmitValuesModal({
     setTravelSelected(new Set(initialTravelDays));
     setMealSelected(new Set(initialMealDays));
     setAbsenceSelected(new Set(initialAbsenceDays));
+    setMakeupSelected(new Set(initialMakeupDays));
     setValuesNotes(initialValuesNotes ?? "");
     setLocalError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate from keys when modal opens
@@ -218,6 +365,7 @@ export function ClosingSubmitValuesModal({
     initialTravelKey,
     initialMealKey,
     initialAbsenceKey,
+    initialMakeupKey,
     initialValuesNotes,
   ]);
 
@@ -235,6 +383,7 @@ export function ClosingSubmitValuesModal({
         travelDays: [...travelSelected],
         mealDays: [...mealSelected],
         absenceDays: showAbsenceCalendar ? [...absenceSelected] : [],
+        makeupDays: showAbsenceCalendar ? [...makeupSelected] : [],
         timeBankEnabled: compensation.time_bank_enabled,
         considerJiraHours: compensation.consider_jira_hours,
       }),
@@ -244,6 +393,7 @@ export function ClosingSubmitValuesModal({
       travelSelected,
       mealSelected,
       absenceSelected,
+      makeupSelected,
       showAbsenceCalendar,
     ],
   );
@@ -259,6 +409,7 @@ export function ClosingSubmitValuesModal({
       travelDays: [...travelSelected].sort(),
       mealDays: [...mealSelected].sort(),
       absenceDays: showAbsenceCalendar ? [...absenceSelected].sort() : [],
+      makeupDays: showAbsenceCalendar ? [...makeupSelected].sort() : [],
       valuesNotes: isVariable ? valuesNotes.trim() || null : null,
     };
   }
@@ -312,7 +463,7 @@ export function ClosingSubmitValuesModal({
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {showAbsenceCalendar
-                ? "Marque deslocamento, refeição e faltas. Compensação: Fixo (sem horas Jira)."
+                ? "Marque deslocamento, refeição e faltas/compensação. Compensação: Fixo (sem horas Jira)."
                 : `Selecione os dias presenciais. Compensação: ${COMPENSATION_BASE_TYPE_LABELS[compensation.base_type]}.`}
             </p>
           </div>
@@ -368,12 +519,14 @@ export function ClosingSubmitValuesModal({
               holidayNameByDate={holidayNameByDate}
             />
             {showAbsenceCalendar ? (
-              <MonthDayPicker
+              <AbsenceMakeupDayPicker
                 yearMonth={yearMonth}
-                selected={absenceSelected}
-                onChange={setAbsenceSelected}
-                label="Faltas"
-                accentClass="border-amber-500/50 bg-amber-500/20 font-semibold text-amber-950 dark:text-amber-100"
+                absenceSelected={absenceSelected}
+                makeupSelected={makeupSelected}
+                onChange={({ absence, makeup }) => {
+                  setAbsenceSelected(absence);
+                  setMakeupSelected(makeup);
+                }}
                 holidayNameByDate={holidayNameByDate}
               />
             ) : null}
@@ -399,7 +552,7 @@ export function ClosingSubmitValuesModal({
                 <p className="mt-1 text-[11px] text-muted-foreground text-pretty">
                   {considerJiraHours
                     ? "Estimativa com base no cadastro e nas horas Jira do mês."
-                    : "Estimativa com base no cadastro e nas faltas marcadas (sem horas Jira)."}{" "}
+                    : "Estimativa com base no cadastro, faltas e compensações (sem horas Jira)."}{" "}
                   Fechamentos já finalizados/pagos não são recalculados.
                 </p>
               </div>
@@ -453,9 +606,18 @@ export function ClosingSubmitValuesModal({
                       h × {formatClosingMoney(compensation.hourly_rate)}
                     </p>
                     <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                      {preview.absenceDeclaredCount} falta
+                      {preview.absenceDeclaredCount === 1 ? "" : "s"}
+                      {" · "}
+                      {preview.makeupDaysCount}{" "}
+                      {preview.makeupDaysCount === 1
+                        ? "compensação"
+                        : "compensações"}
+                      {" · saldo "}
+                      {preview.absenceDaysCount}
                       {preview.absenceAmount > 0
-                        ? `Desconto −${formatClosingMoney(preview.absenceAmount)}`
-                        : "Sem desconto por falta"}
+                        ? ` · desconto −${formatClosingMoney(preview.absenceAmount)}`
+                        : " · sem desconto"}
                     </p>
                   </div>
                 )}
@@ -503,7 +665,9 @@ export function ClosingSubmitValuesModal({
                   ? compensation.contracted_hours_per_day === 6
                     ? "Variável 6h/dia: dias de deslocamento incluem 2h extras. Carga mínima mensal via Jira."
                     : "Variável: carga mínima mensal via Jira; deslocamento e refeição pelos dias marcados."
-                  : "Fixo: base contratual ± déficit Jira (ou banco) + deslocamento + refeição."}
+                  : showAbsenceCalendar
+                    ? "Fixo sem Jira: base − saldo de faltas + deslocamento + refeição."
+                    : "Fixo: base contratual ± déficit Jira (ou banco) + deslocamento + refeição."}
               </p>
             </div>
           </section>

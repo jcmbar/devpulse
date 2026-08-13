@@ -991,6 +991,7 @@ export async function saveMonthlyClosingValuesDraft(input: {
   travelDays: string[];
   mealDays: string[];
   absenceDays?: string[];
+  makeupDays?: string[];
   valuesNotes?: string | null;
   workedHours: number;
   compensation: {
@@ -1020,6 +1021,7 @@ export async function saveMonthlyClosingValuesDraft(input: {
   assertEditableClosing(closing);
 
   const absenceDays = input.absenceDays ?? [];
+  const makeupDays = input.makeupDays ?? [];
   const computed = computeClosingSubmitValues({
     baseType: input.compensation.baseType,
     baseAmount: input.compensation.baseAmount,
@@ -1032,6 +1034,7 @@ export async function saveMonthlyClosingValuesDraft(input: {
     travelDays: input.travelDays,
     mealDays: input.mealDays,
     absenceDays,
+    makeupDays,
     timeBankEnabled: input.compensation.timeBankEnabled,
     considerJiraHours: input.compensation.considerJiraHours,
   });
@@ -1066,11 +1069,20 @@ export async function saveMonthlyClosingValuesDraft(input: {
     })),
     ...(computed.considerJiraHours
       ? []
-      : uniqueSortedDates(absenceDays).map((day_on) => ({
-          monthly_closing_id: closing.id,
-          kind: "absence" as const,
-          day_on,
-        }))),
+      : [
+          ...uniqueSortedDates(absenceDays).map((day_on) => ({
+            monthly_closing_id: closing.id,
+            kind: "absence" as const,
+            day_on,
+          })),
+          ...uniqueSortedDates(makeupDays)
+            .filter((day) => !uniqueSortedDates(absenceDays).includes(day))
+            .map((day_on) => ({
+              monthly_closing_id: closing.id,
+              kind: "makeup" as const,
+              day_on,
+            })),
+        ]),
   ];
 
   if (presenceRows.length > 0) {
@@ -1154,6 +1166,7 @@ export async function submitMonthlyClosingForReview(input: {
     travelDays: string[];
     mealDays: string[];
     absenceDays?: string[];
+    makeupDays?: string[];
     valuesNotes?: string | null;
     workedHours: number;
     compensation: {
@@ -1193,6 +1206,7 @@ export async function submitMonthlyClosingForReview(input: {
   }
 
   const absenceDays = input.values.absenceDays ?? [];
+  const makeupDays = input.values.makeupDays ?? [];
   const computed = computeClosingSubmitValues({
     baseType: input.values.compensation.baseType,
     baseAmount: input.values.compensation.baseAmount,
@@ -1205,6 +1219,7 @@ export async function submitMonthlyClosingForReview(input: {
     travelDays: input.values.travelDays,
     mealDays: input.values.mealDays,
     absenceDays,
+    makeupDays,
     timeBankEnabled: input.values.compensation.timeBankEnabled,
     considerJiraHours: input.values.compensation.considerJiraHours,
   });
@@ -1306,11 +1321,20 @@ export async function submitMonthlyClosingForReview(input: {
     })),
     ...(computed.considerJiraHours
       ? []
-      : uniqueSortedDates(absenceDays).map((day_on) => ({
-          monthly_closing_id: closing.id,
-          kind: "absence" as const,
-          day_on,
-        }))),
+      : [
+          ...uniqueSortedDates(absenceDays).map((day_on) => ({
+            monthly_closing_id: closing.id,
+            kind: "absence" as const,
+            day_on,
+          })),
+          ...uniqueSortedDates(makeupDays)
+            .filter((day) => !uniqueSortedDates(absenceDays).includes(day))
+            .map((day_on) => ({
+              monthly_closing_id: closing.id,
+              kind: "makeup" as const,
+              day_on,
+            })),
+        ]),
   ];
 
   if (presenceRows.length > 0) {

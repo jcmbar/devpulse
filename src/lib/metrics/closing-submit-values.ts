@@ -55,6 +55,8 @@ export type ClosingSubmitValuesInput = {
   mealDays: string[];
   /** Absence days (Fixo + considerJiraHours false). */
   absenceDays?: string[];
+  /** Makeup / compensação days that offset absences 1:1. */
+  makeupDays?: string[];
   /** When true, Jira Δ goes to time bank — no money adjustment on NF. */
   timeBankEnabled?: boolean;
   /**
@@ -67,6 +69,11 @@ export type ClosingSubmitValuesInput = {
 export type ClosingSubmitValuesResult = {
   travelPresencialDays: number;
   mealPresencialDays: number;
+  /** Raw absence days marked (before makeup offset). */
+  absenceDeclaredCount: number;
+  /** Makeup days marked. */
+  makeupDaysCount: number;
+  /** Billed absences: max(0, declared − makeup). */
   absenceDaysCount: number;
   travelAmount: number;
   mealAmount: number;
@@ -81,7 +88,7 @@ export type ClosingSubmitValuesResult = {
   timeBankHoursDelta: number;
   /** Money discount for Jira shortfall when bank OFF and Jira considered; else 0. */
   jiraDeficitAmount: number;
-  /** Money discount for absence days when Jira not considered; else 0. */
+  /** Money discount for billed absences when Jira not considered; else 0. */
   absenceAmount: number;
   /** Variable + ~6h/day: travelDays × 2h × rate. */
   presencialExtraAmount: number;
@@ -96,7 +103,7 @@ export type ClosingSubmitValuesResult = {
  * NF amounts frozen on monthly closing submit.
  *
  * Variável / Fixo+Jira ON: base − déficit Jira + extras + desloc. + refeição
- * Fixo+Jira OFF:           base − faltas×h/dia×R$/h + desloc. + refeição
+ * Fixo+Jira OFF:           base − max(0, faltas−compensações)×h/dia×R$/h + desloc. + refeição
  *
  * Does not rewrite historical closings; only used on new submit/draft.
  */
@@ -106,9 +113,14 @@ export function computeClosingSubmitValues(
   const travelDays = uniqueIsoDates(input.travelDays);
   const mealDays = uniqueIsoDates(input.mealDays);
   const absenceDays = uniqueIsoDates(input.absenceDays ?? []);
+  const makeupDays = uniqueIsoDates(input.makeupDays ?? []).filter(
+    (day) => !absenceDays.includes(day),
+  );
   const travelPresencialDays = travelDays.length;
   const mealPresencialDays = mealDays.length;
-  const absenceDaysCount = absenceDays.length;
+  const absenceDeclaredCount = absenceDays.length;
+  const makeupDaysCount = makeupDays.length;
+  const absenceDaysCount = Math.max(0, absenceDeclaredCount - makeupDaysCount);
   const dailyTravel = Math.max(0, input.dailyTravelAmount);
   const dailyMeal = Math.max(0, input.dailyMealAmount);
   const baseAmount = Number.isFinite(input.baseAmount) ? input.baseAmount : 0;
@@ -190,6 +202,8 @@ export function computeClosingSubmitValues(
   return {
     travelPresencialDays,
     mealPresencialDays,
+    absenceDeclaredCount,
+    makeupDaysCount,
     absenceDaysCount,
     travelAmount,
     mealAmount,
