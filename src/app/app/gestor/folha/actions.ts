@@ -135,7 +135,8 @@ export async function upsertAttendanceDayAction(input: {
   itemId: string;
   dayOn: string;
   dayKind: string;
-  hours: number;
+  /** Optional — server derives contracted hours (or 0) from day kind. */
+  hours?: number;
   chargesMeal?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireTeamAccess();
@@ -146,17 +147,36 @@ export async function upsertAttendanceDayAction(input: {
     return { ok: false, error: "Tipo de dia inválido." };
   }
 
+  if (input.dayKind === "holiday") {
+    return {
+      ok: false,
+      error:
+        "Feriado é só referência visual. Use Presencial, Home, Falta ou Fim de semana.",
+    };
+  }
+
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dayOn)) {
     return { ok: false, error: "Data inválida." };
   }
 
   try {
     await assertPayrollItemEditable(input.itemId);
+    const payrollItem = await getPayrollItem(input.itemId);
+    if (!payrollItem) {
+      return { ok: false, error: "Item da folha não encontrado." };
+    }
+    const dayKind = input.dayKind as PayrollAttendanceKind;
+    const hours =
+      input.hours != null && Number.isFinite(input.hours)
+        ? Math.max(0, input.hours)
+        : dayKind === "presencial" || dayKind === "home"
+          ? Math.max(0, payrollItem.contracted_hours_per_day)
+          : 0;
     await upsertPayrollAttendanceDay({
       itemId: input.itemId,
       dayOn: input.dayOn,
-      dayKind: input.dayKind as PayrollAttendanceKind,
-      hours: input.hours,
+      dayKind,
+      hours,
       chargesMeal: input.chargesMeal,
     });
   } catch (error) {
@@ -253,9 +273,18 @@ export async function batchApplyAttendanceAction(input: {
         ) {
           return { ok: false, error: "Tipo de dia inválido." };
         }
+        if (dayKind === "holiday") {
+          return {
+            ok: false,
+            error:
+              "Feriado é só referência visual. Use Presencial, Home, Falta ou Fim de semana.",
+          };
+        }
         const hours =
           input.hours == null || !Number.isFinite(input.hours)
-            ? contracted
+            ? dayKind === "presencial" || dayKind === "home"
+              ? contracted
+              : 0
             : input.hours;
         if (hours < 0) {
           return { ok: false, error: "Horas inválidas." };

@@ -17,7 +17,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   PAYROLL_ATTENDANCE_KIND_LABELS,
-  PAYROLL_ATTENDANCE_KINDS,
   type PayrollAttendanceDay,
   type PayrollAttendanceKind,
   type PayrollClosingItem,
@@ -36,6 +35,16 @@ type PayrollAttendancePanelProps = {
   holidays?: ReadonlyArray<HolidayOverlayEntry>;
 };
 
+/** Kinds editable in Folha UI — holiday is overlay-only, not selectable. */
+const EDITABLE_ATTENDANCE_KINDS = [
+  "presencial",
+  "home",
+  "off",
+  "weekend",
+] as const satisfies ReadonlyArray<PayrollAttendanceKind>;
+
+type EditableAttendanceKind = (typeof EDITABLE_ATTENDANCE_KINDS)[number];
+
 const KIND_CARD_CLASS: Record<PayrollAttendanceKind, string> = {
   presencial:
     "border-emerald-500/35 bg-emerald-500/10 dark:border-emerald-400/30 dark:bg-emerald-400/10",
@@ -47,11 +56,10 @@ const KIND_CARD_CLASS: Record<PayrollAttendanceKind, string> = {
     "border-violet-500/30 bg-violet-500/10 dark:border-violet-400/25 dark:bg-violet-400/10",
 };
 
-const LEGEND: Array<{ kind: PayrollAttendanceKind; swatch: string }> = [
+const LEGEND: Array<{ kind: EditableAttendanceKind; swatch: string }> = [
   { kind: "presencial", swatch: "bg-emerald-500/70" },
   { kind: "home", swatch: "bg-sky-500/70" },
   { kind: "off", swatch: "bg-muted-foreground/40" },
-  { kind: "holiday", swatch: "bg-rose-500/70" },
   { kind: "weekend", swatch: "bg-violet-500/70" },
 ];
 
@@ -77,6 +85,16 @@ function monthBounds(days: PayrollAttendanceDay[]): {
   };
 }
 
+function defaultHoursForKind(
+  kind: PayrollAttendanceKind,
+  contractedHoursPerDay: number,
+): number {
+  if (kind === "presencial" || kind === "home") {
+    return Math.max(0, contractedHoursPerDay);
+  }
+  return 0;
+}
+
 export function PayrollAttendancePanel({
   item,
   days,
@@ -95,11 +113,9 @@ export function PayrollAttendancePanel({
 
   const bounds = useMemo(() => monthBounds(days), [days]);
   const monthKey = bounds ? `${bounds.start}:${bounds.end}` : "";
-  const defaultHours = String(item.contracted_hours_per_day);
 
   const [batchKind, setBatchKind] =
-    useState<PayrollAttendanceKind>("presencial");
-  const [batchHours, setBatchHours] = useState(defaultHours);
+    useState<EditableAttendanceKind>("presencial");
   const [batchWeekdays, setBatchWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [rangeStart, setRangeStart] = useState(bounds?.start ?? "");
   const [rangeEnd, setRangeEnd] = useState(bounds?.end ?? "");
@@ -147,12 +163,15 @@ export function PayrollAttendancePanel({
   function saveDay(input: {
     dayOn: string;
     dayKind: PayrollAttendanceKind;
-    hours: number;
     chargesMeal?: boolean;
   }) {
     if (readOnly) {
       return;
     }
+    const hours = defaultHoursForKind(
+      input.dayKind,
+      item.contracted_hours_per_day,
+    );
     setError(null);
     setInfo(null);
     startTransition(async () => {
@@ -160,7 +179,6 @@ export function PayrollAttendancePanel({
         itemId: item.id,
         dayOn: input.dayOn,
         dayKind: input.dayKind,
-        hours: input.hours,
         chargesMeal: input.chargesMeal,
       });
       if (!result.ok) {
@@ -171,10 +189,7 @@ export function PayrollAttendancePanel({
         {
           dayOn: input.dayOn,
           dayKind: input.dayKind,
-          hours:
-            input.dayKind === "presencial" || input.dayKind === "home"
-              ? input.hours
-              : 0,
+          hours,
           chargesMeal:
             input.chargesMeal ?? input.dayKind === "presencial",
         },
@@ -223,8 +238,6 @@ export function PayrollAttendancePanel({
     );
   }
 
-  const needsHours = batchKind === "presencial" || batchKind === "home";
-
   return (
     <section className="ui-dashboard-panel space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -232,17 +245,15 @@ export function PayrollAttendancePanel({
           <h2 className="text-base font-semibold text-foreground">
             Presença e refeição · {item.developer_name}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Horas padrão:{" "}
-            {item.contracted_hours_per_day.toLocaleString("pt-BR")} h/dia.
-            Presencial gera deslocamento; marque “Refeição” no dia quando
-            aplicável. Use{" "}
-            <span className="font-medium text-foreground">
-              Falta / folga
-            </span>{" "}
-            para dias não trabalhados (Fixo sem Jira — entra no compare com o
-            fechamento). Com horas Jira ativas, a carga mensal usa Jira/banco na
-            NF.
+          <p className="text-sm text-muted-foreground text-pretty">
+            <span className="font-medium text-foreground">Presencial</span> =
+            deslocamento; marque{" "}
+            <span className="font-medium text-foreground">Refeição</span> quando
+            couber.{" "}
+            <span className="font-medium text-foreground">Falta / folga</span>{" "}
+            conta no compare (Fixo sem Jira). Home = trabalhou sem deslocamento.
+            Feriados são só referência visual. Carga da NF vem do Jira ou das
+            faltas conforme o cadastro — não das horas digitadas aqui.
           </p>
           {finalizedClosingId ? (
             <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -336,7 +347,7 @@ export function PayrollAttendancePanel({
 
         <div className="space-y-2 border-t border-border/60 pt-3">
           <p className="text-xs font-medium text-foreground">Aplicar em lote</p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Tipo</span>
               <select
@@ -344,27 +355,15 @@ export function PayrollAttendancePanel({
                 value={batchKind}
                 disabled={pending || readOnly}
                 onChange={(event) =>
-                  setBatchKind(event.target.value as PayrollAttendanceKind)
+                  setBatchKind(event.target.value as EditableAttendanceKind)
                 }
               >
-                {PAYROLL_ATTENDANCE_KINDS.map((kind) => (
+                {EDITABLE_ATTENDANCE_KINDS.map((kind) => (
                   <option key={kind} value={kind}>
                     {PAYROLL_ATTENDANCE_KIND_LABELS[kind]}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="space-y-1 text-xs">
-              <span className="text-muted-foreground">Horas</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                className="ui-input text-xs"
-                value={batchHours}
-                disabled={pending || readOnly || !needsHours}
-                onChange={(event) => setBatchHours(event.target.value)}
-                placeholder={needsHours ? defaultHours : "0"}
-              />
             </label>
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">De</span>
@@ -390,7 +389,7 @@ export function PayrollAttendancePanel({
                 onChange={(event) => setRangeEnd(event.target.value)}
               />
             </label>
-            <label className="space-y-1 text-xs sm:col-span-2 lg:col-span-2">
+            <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Modo</span>
               <select
                 className="ui-select text-xs"
@@ -434,17 +433,8 @@ export function PayrollAttendancePanel({
               className="ui-btn-primary ml-auto text-xs"
               disabled={pending || readOnly || batchWeekdays.length === 0}
               onClick={() => {
-                const hoursRaw = batchHours.trim().replace(",", ".");
-                const hours = needsHours
-                  ? Number(hoursRaw || defaultHours)
-                  : 0;
-                if (needsHours && (!Number.isFinite(hours) || hours < 0)) {
-                  setError("Informe horas válidas para o lote.");
-                  return;
-                }
                 runBatch({
                   dayKind: batchKind,
-                  hours,
                   weekdays: batchWeekdays,
                   rangeStart: rangeStart || null,
                   rangeEnd: rangeEnd || null,
@@ -471,11 +461,10 @@ export function PayrollAttendancePanel({
 
       <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {localDays.map((day) => {
-          const isWorkable =
-            day.day_kind === "presencial" || day.day_kind === "home";
           const weekend = isCalendarWeekend(day.day_on);
           const holidayName = holidayOverlay.byDate.get(day.day_on);
           const isHolidayOverlay = holidayName != null;
+          const isLegacyHolidayKind = day.day_kind === "holiday";
           return (
             <div
               key={day.id}
@@ -518,21 +507,17 @@ export function PayrollAttendancePanel({
                 onChange={(event) => {
                   const nextKind = event.target
                     .value as PayrollAttendanceKind;
-                  const nextHours =
-                    nextKind === "presencial" || nextKind === "home"
-                      ? day.hours > 0
-                        ? day.hours
-                        : item.contracted_hours_per_day
-                      : 0;
                   saveDay({
                     dayOn: day.day_on,
                     dayKind: nextKind,
-                    hours: nextHours,
                     chargesMeal: nextKind === "presencial",
                   });
                 }}
               >
-                {PAYROLL_ATTENDANCE_KINDS.map((kind) => (
+                {isLegacyHolidayKind ? (
+                  <option value="holiday">Feriado (legado — trocar)</option>
+                ) : null}
+                {EDITABLE_ATTENDANCE_KINDS.map((kind) => (
                   <option key={kind} value={kind}>
                     {PAYROLL_ATTENDANCE_KIND_LABELS[kind]}
                   </option>
@@ -549,7 +534,6 @@ export function PayrollAttendancePanel({
                       saveDay({
                         dayOn: day.day_on,
                         dayKind: day.day_kind,
-                        hours: day.hours,
                         chargesMeal: event.target.checked,
                       });
                     }}
@@ -557,34 +541,6 @@ export function PayrollAttendancePanel({
                   Refeição
                 </label>
               ) : null}
-              {isWorkable ? (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="ui-input text-xs"
-                  key={`${day.id}-${day.hours}`}
-                  defaultValue={String(day.hours)}
-                  disabled={pending || readOnly}
-                  aria-label={`Horas em ${day.day_on}`}
-                  onBlur={(event) => {
-                    const raw = event.target.value.trim().replace(",", ".");
-                    const hours = Number(raw);
-                    if (!Number.isFinite(hours) || hours < 0) {
-                      return;
-                    }
-                    if (hours === day.hours) {
-                      return;
-                    }
-                    saveDay({
-                      dayOn: day.day_on,
-                      dayKind: day.day_kind,
-                      hours,
-                    });
-                  }}
-                />
-              ) : (
-                <p className="text-xs text-muted-foreground">0 h</p>
-              )}
             </div>
           );
         })}
