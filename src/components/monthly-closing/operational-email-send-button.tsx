@@ -10,7 +10,7 @@ import type {
   EmailSendTypeCode,
 } from "@/types/operational-email";
 import { EMAIL_DISPATCH_STATUS_LABELS } from "@/types/operational-email";
-import { Loader2, Mail } from "lucide-react";
+import { Building2, FileText, Loader2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -22,14 +22,16 @@ const TYPE_META: Record<
     readyHint: string;
     blockedHint: string;
     tone: "teal" | "emerald" | "cyan";
+    Icon: typeof Building2;
   }
 > = {
   financeiro: {
     fullLabel: "Financeiro",
-    compactLabel: "Fin.",
+    compactLabel: "Fin",
     readyHint: "Enviar ao Financeiro (NF + boleto)",
     blockedHint: "Disponível após finalize com NF e boleto",
     tone: "teal",
+    Icon: Building2,
   },
   rh: {
     fullLabel: "RH",
@@ -37,20 +39,19 @@ const TYPE_META: Record<
     readyHint: "Enviar ao RH (comprovante PIX)",
     blockedHint: "Disponível com comprovante PIX de refeição",
     tone: "emerald",
+    Icon: Users,
   },
   colaborador: {
     fullLabel: "Recibo",
-    compactLabel: "Rec.",
+    compactLabel: "Recibo",
     readyHint: "Enviar recibo ao colaborador (anexa NF/boleto se existirem)",
     blockedHint: "Disponível após finalize do fechamento",
     tone: "cyan",
+    Icon: FileText,
   },
 };
 
-const TONE_ENABLED: Record<
-  "teal" | "emerald" | "cyan",
-  string
-> = {
+const TONE_ENABLED: Record<"teal" | "emerald" | "cyan", string> = {
   teal: "border-teal-500/50 bg-teal-500/15 text-teal-900 hover:bg-teal-500/25 dark:text-teal-100",
   emerald:
     "border-emerald-500/50 bg-emerald-500/15 text-emerald-900 hover:bg-emerald-500/25 dark:text-emerald-100",
@@ -81,6 +82,7 @@ export function OperationalEmailSendButton({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const meta = TYPE_META[typeCode];
+  const Icon = meta.Icon;
 
   function send() {
     setError(null);
@@ -119,18 +121,14 @@ export function OperationalEmailSendButton({
           ? "Pronto"
           : "Indisp.";
 
-  const buttonLabel =
+  const actionVerb =
     status === "sent"
-      ? compact || matrix
-        ? "Reenv."
-        : "Reenviar"
+      ? "Reenviar"
       : status === "error"
-        ? compact || matrix
-          ? "Retentar"
-          : "Tentar de novo"
-        : compact || matrix
-          ? meta.compactLabel
-          : meta.fullLabel;
+        ? "Retentar"
+        : "Enviar";
+
+  const buttonLabel = compact || matrix ? actionVerb : `${actionVerb} ${meta.fullLabel}`;
 
   const titleBase = enabled
     ? status === "sent"
@@ -143,11 +141,15 @@ export function OperationalEmailSendButton({
   return (
     <div
       className={cn(
-        "flex flex-col items-center",
-        matrix ? "gap-1" : "gap-0.5",
-        compact && !matrix && "mt-1",
+        "flex flex-col",
+        compact || matrix ? "min-w-[4.75rem] items-stretch gap-1" : "items-start gap-0.5",
       )}
     >
+      {(compact || matrix) && (
+        <p className="text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {meta.compactLabel}
+        </p>
+      )}
       <button
         type="button"
         onClick={(event) => {
@@ -163,8 +165,10 @@ export function OperationalEmailSendButton({
         className={cn(
           "inline-flex items-center justify-center gap-1 rounded-[var(--radius-sm)] border font-semibold transition-colors",
           matrix
-            ? "min-h-7 min-w-[4.25rem] px-2 py-1 text-[11px]"
-            : "px-1.5 py-0.5 text-[10px]",
+            ? "min-h-7 w-full px-2 py-1 text-[11px]"
+            : compact
+              ? "min-h-7 w-full px-2 py-1 text-[11px]"
+              : "px-2 py-1 text-xs",
           enabled
             ? status === "error"
               ? "border-rose-500/50 bg-rose-500/15 text-rose-900 hover:bg-rose-500/25 dark:text-rose-100"
@@ -174,30 +178,35 @@ export function OperationalEmailSendButton({
       >
         {pending ? (
           <Loader2
-            className={cn(matrix ? "size-3.5" : "size-3", "animate-spin")}
+            className={cn(matrix || compact ? "size-3.5" : "size-3", "animate-spin")}
           />
         ) : (
-          <Mail className={matrix ? "size-3.5" : "size-3"} strokeWidth={2} />
+          <Icon
+            className={matrix || compact ? "size-3.5" : "size-3.5"}
+            strokeWidth={2}
+          />
         )}
         {pending ? (matrix || compact ? "…" : "Enviando…") : buttonLabel}
       </button>
       <span
         className={cn(
           "leading-tight",
-          matrix ? "text-[10px]" : "text-[9px]",
+          compact || matrix ? "text-center text-[10px]" : "text-[9px]",
           status === "sent" && "text-emerald-700 dark:text-emerald-300",
           status === "error" && "text-rose-700 dark:text-rose-300",
           status === "ready" && "text-amber-700 dark:text-amber-300",
           (!status || status === "unavailable") && "text-muted-foreground",
         )}
       >
-        {matrix ? shortStatus : statusLabel}
+        {matrix || compact ? shortStatus : statusLabel}
       </span>
       {displayError ? (
         <span
           className={cn(
             "text-danger text-pretty text-left",
-            matrix ? "max-w-[9rem] text-[9px]" : "max-w-[14rem] text-[10px]",
+            matrix || compact
+              ? "max-w-[9rem] text-[9px]"
+              : "max-w-[14rem] text-[10px]",
           )}
           title={displayError}
         >

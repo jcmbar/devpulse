@@ -606,13 +606,13 @@ export function GestorFechamentosOpsBoard({
                         </td>
                         <td className="px-3 py-2.5">
                           <CompactDocState
-                            label="Envio"
+                            label="Fin"
                             state={financeiroState}
                           />
                         </td>
                         <td className="px-3 py-2.5">
                           <CompactDocState
-                            label="Envio"
+                            label="RH"
                             state={
                               cell.requireMealPix ? rhState : "na"
                             }
@@ -621,7 +621,7 @@ export function GestorFechamentosOpsBoard({
                         <td className="px-3 py-2.5">
                           <div className="space-y-0.5">
                             <CompactDocState
-                              label="Envio"
+                              label="Recibo"
                               state={
                                 cell.closingStatus === "finalized"
                                   ? colaboradorState
@@ -646,7 +646,7 @@ export function GestorFechamentosOpsBoard({
                           className="px-3 py-2.5 text-right"
                           onClick={(event) => event.stopPropagation()}
                         >
-                          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                          <div className="inline-flex flex-wrap items-end justify-end gap-2">
                             {cell.closingId && financeiroReady ? (
                               <OperationalEmailSendButton
                                 typeCode="financeiro"
@@ -683,12 +683,17 @@ export function GestorFechamentosOpsBoard({
                               />
                             ) : null}
                             {cell.closingId ? (
-                              <Link
-                                href={`/app/gestor/fechamentos/${cell.closingId}`}
-                                className="ui-btn-secondary px-2 py-1 text-[11px]"
-                              >
-                                Abrir
-                              </Link>
+                              <div className="flex min-w-[4.25rem] flex-col items-stretch gap-1">
+                                <p className="text-center text-[10px] font-semibold tracking-wide text-transparent uppercase select-none">
+                                  ·
+                                </p>
+                                <Link
+                                  href={`/app/gestor/fechamentos/${cell.closingId}`}
+                                  className="ui-btn-secondary inline-flex min-h-7 items-center justify-center px-2.5 py-1 text-[11px]"
+                                >
+                                  Abrir
+                                </Link>
+                              </div>
                             ) : (
                               <span className="text-[11px] text-muted-foreground">
                                 —
