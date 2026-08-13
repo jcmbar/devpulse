@@ -11,6 +11,7 @@ import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
 import { getDeveloperAdmin } from "@/services/developers/admin";
+import { developerAvatarPublicUrl } from "@/services/developers/avatar";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listInvoiceIssuers, getInvoiceIssuer } from "@/services/invoice-issuers";
 import {
@@ -27,6 +28,7 @@ import {
 } from "@/services/operational-emails";
 import { getPayrollInvoiceIssuerIdForDeveloperMonth } from "@/services/payroll";
 import type { EmailDispatchStatus } from "@/types/operational-email";
+import { PersonAvatar } from "@/components/person-avatar";
 
 type PageProps = {
   params: Promise<{ closingId: string }>;
@@ -150,6 +152,15 @@ export default async function GestorClosingDetailPage({ params }: PageProps) {
       <PageHeader
         eyebrow="Gestor · Fechamento"
         title={developer?.full_name ?? "Developer"}
+        leading={
+          developer ? (
+            <PersonAvatar
+              name={developer.full_name}
+              src={developerAvatarPublicUrl(developer.avatar_path)}
+              size="lg"
+            />
+          ) : null
+        }
         description={
           <>
             Snapshot de {formatYearMonthLabel(closing.year_month)}

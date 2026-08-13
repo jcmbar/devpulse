@@ -227,6 +227,7 @@ export type FechamentoOpsDeveloperData = {
   id: string;
   fullName: string;
   isActive: boolean;
+  avatarUrl?: string | null;
   requireMealPix: boolean;
   /** Present months only (no empty months). */
   cellsByMonth: Record<string, FechamentoOpsCellData>;

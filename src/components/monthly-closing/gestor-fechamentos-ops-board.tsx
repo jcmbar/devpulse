@@ -6,6 +6,7 @@ import {
 } from "@/components/monthly-closing/gestor-closing-ops-drawer";
 import { OperationalEmailSendButton } from "@/components/monthly-closing/operational-email-send-button";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
+import { PersonAvatar } from "@/components/person-avatar";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { FilterBar } from "@/components/ui/section-shell";
 import {
@@ -254,6 +255,7 @@ export function GestorFechamentosOpsBoard({
     setDrawerTarget({
       developerId: developer.id,
       developerName: developer.fullName,
+      avatarUrl: developer.avatarUrl ?? null,
       yearMonth: cell.yearMonth,
       closingId: cell.closingId,
       opsStatus: cell.opsStatus,
@@ -568,15 +570,22 @@ export function GestorFechamentosOpsBoard({
                         onClick={() => openCell(developer, cell)}
                       >
                         <td className="sticky left-0 z-10 bg-[var(--surface-elevated)] px-3 py-2.5 shadow-[1px_0_0_var(--border)] group-hover:bg-muted/40">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">
-                              {developer.fullName}
-                            </p>
-                            {!developer.isActive ? (
-                              <p className="text-[11px] text-muted-foreground">
-                                Inativo
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <PersonAvatar
+                              name={developer.fullName}
+                              src={developer.avatarUrl}
+                              size="sm"
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">
+                                {developer.fullName}
                               </p>
-                            ) : null}
+                              {!developer.isActive ? (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Inativo
+                                </p>
+                              ) : null}
+                            </div>
                           </div>
                         </td>
                         <td className="px-3 py-2.5">
@@ -739,9 +748,16 @@ export function GestorFechamentosOpsBoard({
                       className="border-b border-border/70 hover:bg-muted/30"
                     >
                       <td className="sticky left-0 z-10 bg-[var(--surface-elevated)] px-3 py-2 shadow-[1px_0_0_var(--border)]">
-                        <p className="truncate font-medium">
-                          {developer.fullName}
-                        </p>
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <PersonAvatar
+                            name={developer.fullName}
+                            src={developer.avatarUrl}
+                            size="sm"
+                          />
+                          <p className="truncate font-medium">
+                            {developer.fullName}
+                          </p>
+                        </div>
                       </td>
                       {months.map((ym) => {
                         const cell = developer.cellsByMonth[ym];

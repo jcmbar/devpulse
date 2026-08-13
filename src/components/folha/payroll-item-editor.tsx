@@ -6,6 +6,7 @@ import {
   updatePayrollItemAction,
   type PayrollFormState,
 } from "@/app/app/gestor/folha/actions";
+import { PersonAvatar } from "@/components/person-avatar";
 import { FormFeedback } from "@/components/ui/form";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ type PayrollItemEditorProps = {
   /** When false, monetary amounts are masked. */
   moneyVisible?: boolean;
   onToggleMoneyVisible?: () => void;
+  avatarUrl?: string | null;
 };
 
 function formatHours(value: number): string {
@@ -85,6 +87,7 @@ export function PayrollItemEditor({
   finalizedClosingId = null,
   moneyVisible = false,
   onToggleMoneyVisible,
+  avatarUrl = null,
 }: PayrollItemEditorProps) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
@@ -148,6 +151,11 @@ export function PayrollItemEditor({
       <td className="align-top">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
+            <PersonAvatar
+              name={item.developer_name}
+              src={avatarUrl}
+              size="sm"
+            />
             <p className="font-medium text-foreground">{item.developer_name}</p>
             {onToggleMoneyVisible ? (
               <button

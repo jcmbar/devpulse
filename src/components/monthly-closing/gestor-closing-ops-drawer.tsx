@@ -16,6 +16,7 @@ import {
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { cn } from "@/lib/utils";
+import { PersonAvatar } from "@/components/person-avatar";
 import type {
   MonthlyClosing,
   MonthlyClosingAttachment,
@@ -32,6 +33,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 export type ClosingOpsDrawerTarget = {
   developerId: string;
   developerName: string;
+  avatarUrl?: string | null;
   yearMonth: string;
   closingId: string | null;
   opsStatus: FechamentoOpsStatus;
@@ -241,24 +243,32 @@ export function GestorClosingOpsDrawer({
         className="relative flex h-full w-full max-w-lg flex-col border-l border-border bg-[var(--surface-elevated)] shadow-[var(--shadow-md)]"
       >
         <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
-          <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {formatYearMonthLabel(target.yearMonth)}
-            </p>
-            <h2
-              id={titleId}
-              className="truncate text-lg font-semibold tracking-tight"
-            >
-              {target.developerName}
-            </h2>
-            <span
-              className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                opsStatusToneClass(target.opsStatus),
-              )}
-            >
-              {FECHAMENTO_OPS_STATUS_LABELS[target.opsStatus]}
-            </span>
+          <div className="flex min-w-0 items-start gap-3">
+            <PersonAvatar
+              name={target.developerName}
+              src={target.avatarUrl}
+              size="md"
+              className="mt-0.5"
+            />
+            <div className="min-w-0 space-y-1">
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                {formatYearMonthLabel(target.yearMonth)}
+              </p>
+              <h2
+                id={titleId}
+                className="truncate text-lg font-semibold tracking-tight"
+              >
+                {target.developerName}
+              </h2>
+              <span
+                className={cn(
+                  "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                  opsStatusToneClass(target.opsStatus),
+                )}
+              >
+                {FECHAMENTO_OPS_STATUS_LABELS[target.opsStatus]}
+              </span>
+            </div>
           </div>
           <button
             ref={closeRef}

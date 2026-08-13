@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PersonAvatar } from "@/components/person-avatar";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -20,6 +21,7 @@ type RankItem = {
   name: string;
   meta: string;
   href?: string;
+  avatarUrl?: string | null;
 };
 
 type DashboardComplementGridProps = {
@@ -169,6 +171,7 @@ export function DashboardRankList({ items }: { items: RankItem[] }) {
             <span className="w-4 shrink-0 text-xs tabular-nums text-muted-foreground">
               {index + 1}
             </span>
+            <PersonAvatar name={item.name} src={item.avatarUrl} size="sm" />
             {item.href ? (
               <Link
                 href={item.href}

@@ -14,6 +14,7 @@ import {
 import type { PerformanceThresholds } from "@/lib/metrics/performance-bands";
 import { resolveCapacitiesForDevelopers, resolveTeamDefaultCapacityForPeriod } from "@/services/capacity";
 import { listDevelopersAdmin } from "@/services/developers/admin";
+import { developerAvatarPublicUrl } from "@/services/developers/avatar";
 import {
   listJiraCardsByImportInRange,
   listJiraCardsForMonthlyMatrix,
@@ -44,6 +45,8 @@ export type GestorRankingRow = {
   developerId: string;
   fullName: string;
   email: string | null;
+  /** Public avatar URL when synced from Jira. */
+  avatarUrl: string | null;
   isActive: boolean;
   metrics: DeveloperPeriodMetrics;
   requiredHours: number | null;
@@ -78,6 +81,7 @@ export type GestorMonthlyCell = {
 export type GestorMonthlyRow = {
   developerId: string;
   fullName: string;
+  avatarUrl: string | null;
   isActive: boolean;
   cells: GestorMonthlyCell[];
 };
@@ -237,6 +241,7 @@ function buildMonthlyMatrix(input: {
     return {
       developerId: developer.id,
       fullName: developer.full_name,
+      avatarUrl: developerAvatarPublicUrl(developer.avatar_path),
       isActive: developer.is_active,
       cells: months.map((month) => {
         const cards = byMonth.get(month) ?? [];
@@ -414,6 +419,7 @@ export async function getGestorDashboard(input: {
         developerId: developer.id,
         fullName: developer.full_name,
         email: developer.email,
+        avatarUrl: developerAvatarPublicUrl(developer.avatar_path),
         isActive: developer.is_active,
         metrics,
         requiredHours,

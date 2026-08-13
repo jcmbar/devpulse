@@ -20,6 +20,7 @@ import {
 } from "@/lib/teams/team-filter";
 import { listCurrentCompensationsByDeveloperIds } from "@/services/developers/compensation";
 import { listDevelopersAdmin } from "@/services/developers/admin";
+import { developerAvatarPublicUrl } from "@/services/developers/avatar";
 import {
   listFinalizedClosingsWithJiraDrift,
   listMonthlyClosingAttachmentPresence,
@@ -149,11 +150,13 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       id: row.id,
       fullName: row.full_name,
       isActive: row.is_active,
+      avatarUrl: developerAvatarPublicUrl(row.avatar_path),
     })),
     ...extraDevelopers.map((row) => ({
       id: row.id,
       fullName: row.full_name,
       isActive: row.is_active,
+      avatarUrl: developerAvatarPublicUrl(row.avatar_path),
     })),
   ]
     .filter((row) => folhaReviewed.developerIds.has(row.id))
@@ -254,6 +257,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
         id: dev.id,
         fullName: dev.fullName,
         isActive: dev.isActive,
+        avatarUrl: dev.avatarUrl,
         requireMealPix,
         cellsByMonth,
       };

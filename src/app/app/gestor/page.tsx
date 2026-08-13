@@ -18,6 +18,7 @@ import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
 import { PageHeader } from "@/components/page-header";
+import { PersonAvatar } from "@/components/person-avatar";
 import { PageShell } from "@/components/page-shell";
 import { PerformanceBandsLegend } from "@/components/performance-bands-legend";
 import { DataTable } from "@/components/surface";
@@ -633,6 +634,7 @@ export default async function GestorDashboardPage({
                 items={ranking.slice(0, 5).map((row) => ({
                   name: row.fullName,
                   href: `/app/developers/${row.developerId}`,
+                  avatarUrl: row.avatarUrl,
                   meta: `Índ. ${formatDeliveryIndex(row.metrics.deliveryIndex)} · ${formatPercent(row.metrics.utilizationRate)}`,
                 }))}
               />
@@ -728,6 +730,12 @@ export default async function GestorDashboardPage({
                           <span className="mt-0.5 w-4 shrink-0 text-xs text-muted-foreground tabular-nums">
                             {index + 1}
                           </span>
+                          <PersonAvatar
+                            name={row.fullName}
+                            src={row.avatarUrl}
+                            size="sm"
+                            className="mt-0.5"
+                          />
                           <div className="min-w-0">
                             <Link
                               href={`/app/developers/${row.developerId}`}
@@ -877,13 +885,22 @@ export default async function GestorDashboardPage({
                   {monthlyMatrix.rows.map((row) => (
                     <tr key={row.developerId}>
                       <td className="font-medium whitespace-nowrap">
-                        {row.fullName}
-                        {!row.isActive ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · inativo
+                        <div className="flex items-center gap-2">
+                          <PersonAvatar
+                            name={row.fullName}
+                            src={row.avatarUrl}
+                            size="sm"
+                          />
+                          <span>
+                            {row.fullName}
+                            {!row.isActive ? (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                · inativo
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
+                        </div>
                       </td>
                       {row.cells.map((cell) => (
                         <td

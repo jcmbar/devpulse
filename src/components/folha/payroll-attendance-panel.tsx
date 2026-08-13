@@ -4,6 +4,7 @@ import {
   batchApplyAttendanceAction,
   upsertAttendanceDayAction,
 } from "@/app/app/gestor/folha/actions";
+import { PersonAvatar } from "@/components/person-avatar";
 import {
   WEEKDAY_OPTIONS,
   isCalendarWeekend,
@@ -33,6 +34,7 @@ type PayrollAttendancePanelProps = {
   finalizedClosingId?: string | null;
   /** Applicable holidays for this developer/month (visual overlay only). */
   holidays?: ReadonlyArray<HolidayOverlayEntry>;
+  avatarUrl?: string | null;
 };
 
 /** Kinds editable in Folha UI — holiday is overlay-only, not selectable. */
@@ -106,6 +108,7 @@ export function PayrollAttendancePanel({
   readOnly = false,
   finalizedClosingId = null,
   holidays = [],
+  avatarUrl = null,
 }: PayrollAttendancePanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -246,9 +249,16 @@ export function PayrollAttendancePanel({
     <section className="ui-dashboard-panel space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
-          <h2 className="text-base font-semibold text-foreground">
-            Presença e refeição · {item.developer_name}
-          </h2>
+          <div className="flex items-center gap-2.5">
+            <PersonAvatar
+              name={item.developer_name}
+              src={avatarUrl}
+              size="md"
+            />
+            <h2 className="text-base font-semibold text-foreground">
+              Presença e refeição · {item.developer_name}
+            </h2>
+          </div>
           <p className="text-sm text-muted-foreground text-pretty">
             <span className="font-medium text-foreground">Presencial</span> =
             deslocamento; marque{" "}

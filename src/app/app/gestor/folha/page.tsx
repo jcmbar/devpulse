@@ -27,6 +27,8 @@ import {
   listAttendanceForItem,
 } from "@/services/payroll";
 import { mapJiraDeliveryHoursByDeveloperForMonth } from "@/services/payroll/jira-hours";
+import { listDevelopersAdmin } from "@/services/developers/admin";
+import { developerAvatarPublicUrl } from "@/services/developers/avatar";
 import { listTeamsAdmin } from "@/services/teams";
 
 type PageProps = {
@@ -81,18 +83,28 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const teamParam = teamListFilterParam(teamFilter) || undefined;
   const month = parseYearMonth(params.month);
 
-  const [teams, issuers, payroll, finalizedByDeveloper] = await Promise.all([
-    listTeamsAdmin(),
-    listInvoiceIssuers({ activeOnly: true }),
-    ensurePayrollMonthWithItems({
-      yearMonth: month,
-      createdBy: profile.id,
-      teamId: selectedTeamId,
-    }),
-    mapFinalizedMonthlyClosingIdsByDeveloper(month),
-  ]);
+  const [teams, issuers, payroll, finalizedByDeveloper, developers] =
+    await Promise.all([
+      listTeamsAdmin(),
+      listInvoiceIssuers({ activeOnly: true }),
+      ensurePayrollMonthWithItems({
+        yearMonth: month,
+        createdBy: profile.id,
+        teamId: selectedTeamId,
+      }),
+      mapFinalizedMonthlyClosingIdsByDeveloper(month),
+      listDevelopersAdmin(
+        selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+      ),
+    ]);
 
   const { closing, items } = payroll;
+  const avatarUrlByDeveloper = Object.fromEntries(
+    developers.map((developer) => [
+      developer.id,
+      developerAvatarPublicUrl(developer.avatar_path),
+    ]),
+  );
   const jiraHoursByDeveloper = await mapJiraDeliveryHoursByDeveloperForMonth({
     yearMonth: month,
     developers: items.map((item) => ({
@@ -286,6 +298,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
           finalizedClosingId={
             finalizedByDeveloper.get(selectedItem.developer_id) ?? null
           }
+          avatarUrl={
+            avatarUrlByDeveloper[selectedItem.developer_id] ?? null
+          }
         />
       ) : null}
 
@@ -300,6 +315,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         month={month}
         jiraHoursByDeveloper={Object.fromEntries(jiraHoursByDeveloper)}
         finalizedByDeveloper={Object.fromEntries(finalizedByDeveloper)}
+        avatarUrlByDeveloper={avatarUrlByDeveloper}
       />
     </PageShell>
   );

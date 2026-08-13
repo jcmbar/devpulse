@@ -71,6 +71,7 @@ type Props = {
   month: string;
   jiraHoursByDeveloper: Record<string, number>;
   finalizedByDeveloper: Record<string, string>;
+  avatarUrlByDeveloper?: Record<string, string | null>;
 };
 
 function buildAttendanceHref(input: {
@@ -98,6 +99,7 @@ export function PayrollSinteticoPanel({
   month,
   jiraHoursByDeveloper,
   finalizedByDeveloper,
+  avatarUrlByDeveloper = {},
 }: Props) {
   const [revealAll, setRevealAll] = useState(false);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
@@ -231,6 +233,7 @@ export function PayrollSinteticoPanel({
                   })}
                   moneyVisible={moneyVisible}
                   onToggleMoneyVisible={() => toggleRow(item.id)}
+                  avatarUrl={avatarUrlByDeveloper[item.developer_id] ?? null}
                 />
               );
             })}
