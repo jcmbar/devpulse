@@ -73,7 +73,20 @@ function isWeekend(isoDate: string): boolean {
 const WEEKDAY_LETTERS = ["D", "S", "T", "Q", "Q", "S", "S"] as const;
 
 const DAY_CELL_BASE =
-  "flex aspect-square w-full items-center justify-center rounded-md border text-[11px] tabular-nums transition sm:text-xs";
+  "flex aspect-square w-full items-center justify-center rounded-md border text-[11px] font-medium tabular-nums transition sm:text-xs";
+
+/** Selected states — solid enough to read clearly on dark surfaces. */
+const TRAVEL_SELECTED =
+  "border-emerald-400 bg-emerald-500 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-emerald-600";
+const MEAL_SELECTED =
+  "border-sky-400 bg-sky-500 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-sky-600";
+const ABSENCE_ACCENT =
+  "border-amber-400 bg-amber-500 text-amber-950 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-amber-400";
+const MAKEUP_ACCENT =
+  "border-violet-400 bg-violet-500 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-violet-600";
+
+const LEGEND_SWATCH_ABSENCE = "border-amber-400 bg-amber-500";
+const LEGEND_SWATCH_MAKEUP = "border-violet-400 bg-violet-500";
 
 function CalendarCard({
   title,
@@ -85,12 +98,10 @@ function CalendarCard({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-[var(--surface)]/40 p-3 sm:p-3.5">
-      <div className="flex min-h-10 items-start justify-between gap-2">
+    <div className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-[var(--radius)] border border-border/70 bg-[var(--surface)]/40 p-3 sm:p-3.5">
+      <div className="min-w-0 space-y-0.5">
         <p className="text-sm font-medium leading-snug text-pretty">{title}</p>
-        <p className="shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
-          {meta}
-        </p>
+        <p className="text-xs tabular-nums text-muted-foreground">{meta}</p>
       </div>
       {children}
     </div>
@@ -214,11 +225,6 @@ function MonthDayPicker({
 
 type AbsenceMakeupMark = "none" | "absence" | "makeup";
 
-const ABSENCE_ACCENT =
-  "border-amber-500/50 bg-amber-500/20 font-semibold text-amber-950 dark:text-amber-100";
-const MAKEUP_ACCENT =
-  "border-indigo-500/50 bg-indigo-500/20 font-semibold text-indigo-950 dark:text-indigo-100";
-
 /** Single calendar: click cycles none → falta → compensação → none. */
 function AbsenceMakeupDayPicker({
   yearMonth,
@@ -264,8 +270,8 @@ function AbsenceMakeupDayPicker({
 
   return (
     <CalendarCard
-      title="Faltas / compensação"
-      meta={`${absenceSelected.size}F · ${makeupSelected.size}C · saldo ${billed}`}
+      title="Faltas"
+      meta={`${absenceSelected.size} falta${absenceSelected.size === 1 ? "" : "s"} · ${makeupSelected.size} ${makeupSelected.size === 1 ? "compensação" : "compensações"} · saldo ${billed}`}
     >
       <MonthDayGrid
         yearMonth={yearMonth}
@@ -530,7 +536,7 @@ export function ClosingSubmitValuesModal({
                   <span
                     className={cn(
                       "size-2.5 shrink-0 rounded-sm border",
-                      ABSENCE_ACCENT,
+                      LEGEND_SWATCH_ABSENCE,
                     )}
                     aria-hidden
                   />
@@ -540,7 +546,7 @@ export function ClosingSubmitValuesModal({
                   <span
                     className={cn(
                       "size-2.5 shrink-0 rounded-sm border",
-                      MAKEUP_ACCENT,
+                      LEGEND_SWATCH_MAKEUP,
                     )}
                     aria-hidden
                   />
@@ -574,7 +580,7 @@ export function ClosingSubmitValuesModal({
                 });
               }}
               label="Deslocamento"
-              accentClass="border-emerald-500/50 bg-emerald-500/20 font-semibold text-emerald-950 dark:text-emerald-100"
+              accentClass={TRAVEL_SELECTED}
               holidayNameByDate={holidayNameByDate}
             />
             <MonthDayPicker
@@ -582,7 +588,7 @@ export function ClosingSubmitValuesModal({
               selected={mealSelected}
               onChange={setMealSelected}
               label="Refeição"
-              accentClass="border-sky-500/50 bg-sky-500/20 font-semibold text-sky-950 dark:text-sky-100"
+              accentClass={MEAL_SELECTED}
               holidayNameByDate={holidayNameByDate}
             />
             {showAbsenceCalendar ? (
