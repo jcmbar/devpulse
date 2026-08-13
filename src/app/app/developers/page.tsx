@@ -5,6 +5,7 @@ import { ListPagination } from "@/components/list-pagination";
 import { ListSearchForm } from "@/components/list-search-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
+import { PersonAvatar } from "@/components/person-avatar";
 import { TeamFilterForm } from "@/components/team-filter";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
@@ -23,7 +24,10 @@ import {
   resolveDevelopersAccessInfoMap,
   type DeveloperAccessInfo,
 } from "@/services/auth/developer-access";
-import { listDevelopersAdminPaged } from "@/services/developers";
+import {
+  developerAvatarPublicUrl,
+  listDevelopersAdminPaged,
+} from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
 import {
   getJobTitleLabel,
@@ -347,26 +351,34 @@ export default async function DevelopersAdminPage({
                   return (
                     <tr key={developer.id}>
                       <td>
-                        <div className="min-w-[9rem] sm:min-w-[12rem]">
-                          <p className="font-medium text-foreground">
-                            {developer.full_name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {developer.email ?? "Sem e-mail"}
-                          </p>
-                          {developer.profile ? (
-                            <p className="mt-0.5 hidden truncate text-[11px] text-muted-foreground lg:block">
-                              Profile:{" "}
-                              {developer.profile.full_name ??
-                                developer.profile.email}
-                              {" · "}
-                              {getRoleLabel(developer.profile.role)}
+                        <div className="flex min-w-[9rem] items-start gap-2.5 sm:min-w-[12rem]">
+                          <PersonAvatar
+                            name={developer.full_name}
+                            src={developerAvatarPublicUrl(developer.avatar_path)}
+                            size="sm"
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground">
+                              {developer.full_name}
                             </p>
-                          ) : (
-                            <p className="mt-0.5 hidden text-[11px] text-muted-foreground lg:block">
-                              Sem vínculo de profile
+                            <p className="truncate text-xs text-muted-foreground">
+                              {developer.email ?? "Sem e-mail"}
                             </p>
-                          )}
+                            {developer.profile ? (
+                              <p className="mt-0.5 hidden truncate text-[11px] text-muted-foreground lg:block">
+                                Profile:{" "}
+                                {developer.profile.full_name ??
+                                  developer.profile.email}
+                                {" · "}
+                                {getRoleLabel(developer.profile.role)}
+                              </p>
+                            ) : (
+                              <p className="mt-0.5 hidden text-[11px] text-muted-foreground lg:block">
+                                Sem vínculo de profile
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="hidden sm:table-cell">

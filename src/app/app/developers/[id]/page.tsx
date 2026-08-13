@@ -10,17 +10,20 @@ import { ResendInvitePanel } from "@/app/app/developers/resend-invite-panel";
 import { DeveloperAccessSummary } from "@/components/developer-access-summary";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
+import { PersonAvatar } from "@/components/person-avatar";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { SectionShell } from "@/components/ui/section-shell";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import { resolveDeveloperAccessInfo } from "@/services/auth/developer-access";
 import {
+  developerAvatarPublicUrl,
   getCurrentDeveloperCompensation,
   getDeveloperAdmin,
 } from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
 import { getJobTitleLabel } from "@/types/developer-compensation";
+import { SyncDeveloperAvatarButton } from "@/app/app/developers/sync-developer-avatar-button";
 
 type EditDeveloperPageProps = {
   params: Promise<{ id: string }>;
@@ -103,6 +106,13 @@ export default async function EditDeveloperPage({
       <PageHeader
         eyebrow="Cadastro"
         title={developer.full_name}
+        leading={
+          <PersonAvatar
+            name={developer.full_name}
+            src={developerAvatarPublicUrl(developer.avatar_path)}
+            size="lg"
+          />
+        }
         description={`${getJobTitleLabel(developer.job_title)} · ${developer.cards_count} card(s) · Cadastro ${developer.is_active ? "ativo" : "inativo"}`}
         breadcrumb={
           <Link
@@ -111,6 +121,12 @@ export default async function EditDeveloperPage({
           >
             ← Pessoas
           </Link>
+        }
+        actions={
+          <SyncDeveloperAvatarButton
+            developerId={developer.id}
+            hasJiraAccountId={Boolean(developer.jira_account_id?.trim())}
+          />
         }
       />
 

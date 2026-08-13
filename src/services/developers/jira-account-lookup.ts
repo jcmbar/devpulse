@@ -221,6 +221,11 @@ export async function lookupAndFillDeveloperJiraAccount(input: {
       jiraAccountId: pick.accountId,
     });
 
+    const { syncDeveloperAvatarFromJira } = await import(
+      "@/services/developers/avatar"
+    );
+    await syncDeveloperAvatarFromJira(developer.id);
+
     return {
       developerId: developer.id,
       status: "filled",

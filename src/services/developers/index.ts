@@ -24,6 +24,8 @@ function coerceDeveloper(row: Record<string, unknown>): Developer {
     state_code: normalizeHolidayCode(row.state_code as string | null),
     city_code: normalizeHolidayCode(row.city_code as string | null),
     team_code: normalizeHolidayCode(row.team_code as string | null),
+    avatar_path: (row.avatar_path as string | null) ?? null,
+    avatar_synced_at: (row.avatar_synced_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -141,6 +143,13 @@ export {
   listCurrentCompensationsByDeveloperIds,
   upsertCurrentDeveloperCompensation,
 } from "./compensation";
+
+export {
+  developerAvatarPublicUrl,
+  syncDeveloperAvatarFromJira,
+} from "./avatar";
+
+export type { SyncDeveloperAvatarResult } from "./avatar";
 
 export type {
   CreateDeveloperInput,

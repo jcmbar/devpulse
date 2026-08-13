@@ -77,6 +77,8 @@ function mapDeveloperRow(row: {
   state_code?: string | null;
   city_code?: string | null;
   team_code?: string | null;
+  avatar_path?: string | null;
+  avatar_synced_at?: string | null;
   created_at: string;
   updated_at: string;
 }): Developer {
@@ -97,6 +99,8 @@ function mapDeveloperRow(row: {
     state_code: normalizeCode(row.state_code),
     city_code: normalizeCode(row.city_code),
     team_code: normalizeCode(row.team_code),
+    avatar_path: row.avatar_path ?? null,
+    avatar_synced_at: row.avatar_synced_at ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

@@ -134,6 +134,15 @@ export async function createDeveloperAction(
     };
   }
 
+  try {
+    const { syncDeveloperAvatarFromJira } = await import(
+      "@/services/developers/avatar"
+    );
+    await syncDeveloperAvatarFromJira(developerId);
+  } catch {
+    // Avatar sync is best-effort on create.
+  }
+
   revalidatePath("/app/developers");
   redirect(`/app/developers/${developerId}`);
 }
@@ -172,6 +181,15 @@ export async function updateDeveloperAction(
       stateCode: readOptionalString(formData, "stateCode") ?? "",
       cityCode: readOptionalString(formData, "cityCode") ?? "",
     });
+
+    try {
+      const { syncDeveloperAvatarFromJira } = await import(
+        "@/services/developers/avatar"
+      );
+      await syncDeveloperAvatarFromJira(developerId);
+    } catch {
+      // Avatar sync is best-effort on update.
+    }
 
     revalidatePath("/app/developers");
     revalidatePath(`/app/developers/${developerId}`);
@@ -383,8 +401,13 @@ export async function updateDeveloperJiraAccountAction(
       developerId: id,
       jiraAccountId: normalized,
     });
+    const { syncDeveloperAvatarFromJira } = await import(
+      "@/services/developers/avatar"
+    );
+    await syncDeveloperAvatarFromJira(id);
     revalidatePath("/app/developers");
     revalidatePath(`/app/developers/${id}`);
+    revalidatePath("/app");
     return { error: null };
   } catch (error) {
     return {
@@ -392,6 +415,38 @@ export async function updateDeveloperJiraAccountAction(
         error instanceof Error
           ? error.message
           : "Não foi possível atualizar o Jira Account ID.",
+    };
+  }
+}
+
+export async function syncDeveloperAvatarAction(
+  developerId: string,
+): Promise<{ error: string | null; success: string | null }> {
+  await requireTeamAccess();
+  const id = developerId.trim();
+  if (!id) {
+    return { error: "Developer inválido.", success: null };
+  }
+
+  try {
+    const { syncDeveloperAvatarFromJira } = await import(
+      "@/services/developers/avatar"
+    );
+    const result = await syncDeveloperAvatarFromJira(id);
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${id}`);
+    revalidatePath("/app");
+    if (!result.ok) {
+      return { error: result.message, success: null };
+    }
+    return { error: null, success: result.message };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível sincronizar o avatar.",
+      success: null,
     };
   }
 }

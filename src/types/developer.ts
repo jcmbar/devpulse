@@ -15,6 +15,9 @@ export type Developer = {
   state_code: string;
   city_code: string;
   team_code: string;
+  /** Public storage path in developer-avatars ({id}/avatar.*). */
+  avatar_path: string | null;
+  avatar_synced_at: string | null;
   created_at: string;
   updated_at: string;
 };

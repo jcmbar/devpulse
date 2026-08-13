@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandMark } from "@/components/brand-mark";
+import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth/actions";
 import { canManageTeam } from "@/lib/auth/roles";
@@ -38,6 +39,8 @@ import {
 
 type AppChromeProps = {
   profile: Profile;
+  /** Public avatar URL of the linked developer, when available. */
+  avatarUrl?: string | null;
   children: ReactNode;
 };
 
@@ -91,7 +94,7 @@ function NavLink({
   );
 }
 
-export function AppChrome({ profile, children }: AppChromeProps) {
+export function AppChrome({ profile, avatarUrl = null, children }: AppChromeProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -314,9 +317,14 @@ export function AppChrome({ profile, children }: AppChromeProps) {
           <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Link
               href="/app/conta"
-              className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 transition-colors hover:bg-muted/60 xl:flex"
+              className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-2.5 py-1.5 transition-colors hover:bg-muted/60 xl:flex"
               title="Abrir minha conta"
             >
+              <PersonAvatar
+                name={profile.full_name ?? profile.email}
+                src={avatarUrl}
+                size="sm"
+              />
               <span className="max-w-[160px] truncate text-xs font-medium text-foreground">
                 {profile.full_name ?? profile.email}
               </span>
@@ -343,13 +351,20 @@ export function AppChrome({ profile, children }: AppChromeProps) {
 
         {open ? (
           <div className="border-t border-border/70 px-3 py-3 sm:px-6 lg:hidden">
-            <div className="mb-3 rounded-[var(--radius-sm)] border border-border/60 bg-muted/30 px-3 py-2.5">
-              <p className="truncate text-sm font-medium text-foreground">
-                {profile.full_name ?? profile.email}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {getRoleLabel(profile.role)}
-              </p>
+            <div className="mb-3 flex items-center gap-3 rounded-[var(--radius-sm)] border border-border/60 bg-muted/30 px-3 py-2.5">
+              <PersonAvatar
+                name={profile.full_name ?? profile.email}
+                src={avatarUrl}
+                size="md"
+              />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {profile.full_name ?? profile.email}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {getRoleLabel(profile.role)}
+                </p>
+              </div>
             </div>
             <nav className="flex flex-col gap-1">
               {drawerItems.map((item) => {

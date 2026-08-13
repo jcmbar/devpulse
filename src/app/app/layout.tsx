@@ -1,6 +1,7 @@
 import { AppChrome } from "@/components/app-chrome";
 import { InspectionDeterrent } from "@/components/security/inspection-deterrent";
 import { getAppContext } from "@/lib/auth/app-context";
+import { developerAvatarPublicUrl } from "@/services/developers";
 
 /**
  * Shared layout for all authenticated `/app/**` routes (home, pessoas, imports,
@@ -11,11 +12,14 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { profile } = await getAppContext();
+  const { profile, developer } = await getAppContext();
+  const avatarUrl = developerAvatarPublicUrl(developer?.avatar_path);
 
   return (
     <InspectionDeterrent>
-      <AppChrome profile={profile}>{children}</AppChrome>
+      <AppChrome profile={profile} avatarUrl={avatarUrl}>
+        {children}
+      </AppChrome>
     </InspectionDeterrent>
   );
 }

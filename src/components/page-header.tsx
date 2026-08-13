@@ -6,6 +6,8 @@ type PageHeaderProps = {
   description?: ReactNode;
   breadcrumb?: ReactNode;
   actions?: ReactNode;
+  /** Optional mark beside the title (e.g. avatar). */
+  leading?: ReactNode;
   className?: string;
   eyebrow?: string;
 };
@@ -15,6 +17,7 @@ export function PageHeader({
   description,
   breadcrumb,
   actions,
+  leading,
   className,
   eyebrow,
 }: PageHeaderProps) {
@@ -34,9 +37,12 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl sm:text-[2rem]">
-          {title}
-        </h1>
+        <div className="flex min-w-0 items-center gap-3">
+          {leading}
+          <h1 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl sm:text-[2rem]">
+            {title}
+          </h1>
+        </div>
         {description ? (
           <div className="max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
             {description}

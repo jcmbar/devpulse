@@ -103,6 +103,27 @@ export class JiraClient {
   }
 
   /**
+   * Single user by accountId (includes avatarUrls).
+   * @see https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-users/#api-rest-api-3-user-get
+   */
+  async getUser(accountId: string): Promise<{
+    accountId: string;
+    displayName?: string;
+    emailAddress?: string;
+    active?: boolean;
+    avatarUrls?: Record<string, string>;
+  }> {
+    const id = accountId.trim();
+    if (!id) {
+      throw new Error("accountId obrigatório.");
+    }
+    return this.requestJson(
+      "GET",
+      `/rest/api/3/user?accountId=${encodeURIComponent(id)}`,
+    );
+  }
+
+  /**
    * User search (Cloud). Query matches display name / email.
    * `emailAddress` may be omitted under privacy settings.
    * @see https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-users/#api-rest-api-3-user-search-get
