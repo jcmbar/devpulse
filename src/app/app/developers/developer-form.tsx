@@ -6,6 +6,7 @@ import {
   FormCheck,
   FormFeedback,
   FormField,
+  FormSectionHeader,
 } from "@/components/ui/form";
 import { useActionState } from "react";
 import {
@@ -33,102 +34,132 @@ export function DeveloperForm({ mode, developer, teams }: DeveloperFormProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="ui-dashboard-panel space-y-5">
+    <form action={formAction} className="ui-dashboard-panel space-y-8 p-5 sm:p-6">
       {mode === "edit" && developer ? (
         <input type="hidden" name="developerId" value={developer.id} />
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <FormField label="Nome" htmlFor="fullName" className="sm:col-span-2 lg:col-span-3">
-          <input
-            id="fullName"
-            name="fullName"
-            type="text"
-            required
-            defaultValue={developer?.full_name ?? ""}
-            className="ui-input"
-          />
-        </FormField>
-
-        <FormField label="E-mail" htmlFor="email">
-          <input
-            id="email"
-            name="email"
-            type="email"
-            defaultValue={developer?.email ?? ""}
-            className="ui-input"
-          />
-        </FormField>
-
-        <FormField
-          label="Cargo / Função"
-          htmlFor="jobTitle"
-          hint="Perfil profissional (não é o privilégio de acesso)."
-        >
-          <select
-            id="jobTitle"
-            name="jobTitle"
-            className="ui-select"
-            defaultValue={developer?.job_title ?? "developer"}
-            required
+      <section className="space-y-4">
+        <FormSectionHeader
+          title="Identificação"
+          description="Nome, e-mail e cargo no cadastro operacional."
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <FormField
+            label="Nome"
+            htmlFor="fullName"
+            className="sm:col-span-2"
           >
-            {DEVELOPER_JOB_TITLES.map((title) => (
-              <option key={title} value={title}>
-                {DEVELOPER_JOB_TITLE_LABELS[title]}
-              </option>
-            ))}
-          </select>
-        </FormField>
+            <input
+              id="fullName"
+              name="fullName"
+              type="text"
+              required
+              defaultValue={developer?.full_name ?? ""}
+              className="ui-input"
+            />
+          </FormField>
 
-        <FormField label="Jira Account ID (opcional)" htmlFor="jiraAccountId">
-          <input
-            id="jiraAccountId"
-            name="jiraAccountId"
-            type="text"
-            defaultValue={developer?.jira_account_id ?? ""}
-            className="ui-input"
-          />
-        </FormField>
+          <FormField label="E-mail" htmlFor="email">
+            <input
+              id="email"
+              name="email"
+              type="email"
+              defaultValue={developer?.email ?? ""}
+              className="ui-input"
+            />
+          </FormField>
 
-        <FormField
-          label="Time"
-          htmlFor="teamId"
-          hint="team_id estruturado; código auxiliar sincroniza feriados de escopo time."
-        >
-          <TeamSelect
-            id="teamId"
-            name="teamId"
-            teams={teams}
-            defaultValue={developer?.team_id ?? ""}
-            includeEmpty
-            emptyLabel="Sem time"
-          />
-        </FormField>
+          <FormField
+            label="Cargo"
+            htmlFor="jobTitle"
+            hint="Perfil profissional — não é o privilégio de acesso."
+          >
+            <select
+              id="jobTitle"
+              name="jobTitle"
+              className="ui-select"
+              defaultValue={developer?.job_title ?? "developer"}
+              required
+            >
+              {DEVELOPER_JOB_TITLES.map((title) => (
+                <option key={title} value={title}>
+                  {DEVELOPER_JOB_TITLE_LABELS[title]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+      </section>
 
-        <FormField label="Estado" htmlFor="stateCode">
-          <input
-            id="stateCode"
-            name="stateCode"
-            type="text"
-            placeholder="BR-SP"
-            defaultValue={developer?.state_code ?? ""}
-            className="ui-input"
-          />
-        </FormField>
+      <section className="space-y-4 border-t border-border/60 pt-6">
+        <FormSectionHeader
+          title="Time e Jira"
+          description="Vínculo com o time e identificação no Jira."
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <FormField
+            label="Time"
+            htmlFor="teamId"
+            hint="Usado em filtros, Folha e feriados do time."
+          >
+            <TeamSelect
+              id="teamId"
+              name="teamId"
+              teams={teams}
+              defaultValue={developer?.team_id ?? ""}
+              includeEmpty
+              emptyLabel="Sem time"
+            />
+          </FormField>
 
-        <FormField label="Cidade" htmlFor="cityCode">
-          <input
-            id="cityCode"
-            name="cityCode"
-            type="text"
-            placeholder="BR-SP-SAO_PAULO"
-            defaultValue={developer?.city_code ?? ""}
-            className="ui-input"
-          />
-        </FormField>
-      </div>
+          <FormField
+            label="Jira Account ID"
+            htmlFor="jiraAccountId"
+            hint="Opcional — pode preencher depois na lista."
+          >
+            <input
+              id="jiraAccountId"
+              name="jiraAccountId"
+              type="text"
+              defaultValue={developer?.jira_account_id ?? ""}
+              className="ui-input"
+            />
+          </FormField>
+        </div>
+      </section>
 
-      <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="space-y-4 border-t border-border/60 pt-6">
+        <FormSectionHeader
+          title="Localidade"
+          description="Códigos para feriados e regras por região."
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <FormField label="Estado" htmlFor="stateCode">
+            <input
+              id="stateCode"
+              name="stateCode"
+              type="text"
+              placeholder="BR-SP"
+              defaultValue={developer?.state_code ?? ""}
+              className="ui-input"
+            />
+          </FormField>
+
+          <FormField label="Cidade" htmlFor="cityCode">
+            <input
+              id="cityCode"
+              name="cityCode"
+              type="text"
+              placeholder="BR-SP-SAO_PAULO"
+              defaultValue={developer?.city_code ?? ""}
+              className="ui-input"
+            />
+          </FormField>
+        </div>
+      </section>
+
+      <div className="flex flex-col gap-4 border-t border-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
         <FormCheck>
           <input
             type="checkbox"

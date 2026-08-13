@@ -2,7 +2,6 @@ import Link from "next/link";
 import { DeveloperForm } from "@/app/app/developers/developer-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { Surface } from "@/components/surface";
 import { requireTeamAccess } from "@/lib/auth/permissions";
 import { listTeamsAdmin } from "@/services/teams";
 
@@ -11,10 +10,10 @@ export default async function NewDeveloperPage() {
   const teams = await listTeamsAdmin({ includeInactive: true });
 
   return (
-    <PageShell size="sm">
+    <PageShell size="md">
       <PageHeader
         title="Nova pessoa"
-        description="Cadastre um colaborador (desenvolvedor, analista, etc.) para bater com o responsável da planilha/Jira. O vínculo com profile e os valores podem ser feitos depois."
+        description="Cadastre um colaborador para bater com o responsável da planilha/Jira. Vínculo de acesso e valores podem ser feitos depois."
         breadcrumb={
           <Link
             href="/app/developers"
@@ -24,9 +23,7 @@ export default async function NewDeveloperPage() {
           </Link>
         }
       />
-      <Surface>
-        <DeveloperForm mode="create" teams={teams} />
-      </Surface>
+      <DeveloperForm mode="create" teams={teams} />
     </PageShell>
   );
 }
