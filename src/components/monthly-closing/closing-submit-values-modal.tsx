@@ -10,7 +10,13 @@ import { cn } from "@/lib/utils";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
 import { COMPENSATION_BASE_TYPE_LABELS } from "@/types/developer-compensation";
 import { Loader2, X } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type ClosingSubmitValuesPayload = {
   travelDays: string[];
@@ -64,6 +70,82 @@ function isWeekend(isoDate: string): boolean {
   return weekday === 0 || weekday === 6;
 }
 
+const WEEKDAY_LETTERS = ["D", "S", "T", "Q", "Q", "S", "S"] as const;
+
+const DAY_CELL_BASE =
+  "flex aspect-square w-full items-center justify-center rounded-md border text-[11px] tabular-nums transition sm:text-xs";
+
+function CalendarCard({
+  title,
+  meta,
+  children,
+}: {
+  title: string;
+  meta: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-[var(--surface)]/40 p-3 sm:p-3.5">
+      <div className="flex min-h-10 items-start justify-between gap-2">
+        <p className="text-sm font-medium leading-snug text-pretty">{title}</p>
+        <p className="shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
+          {meta}
+        </p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MonthDayGrid({
+  yearMonth,
+  holidayNameByDate,
+  renderDay,
+}: {
+  yearMonth: string;
+  holidayNameByDate: Map<string, string>;
+  renderDay: (input: {
+    day: string;
+    weekend: boolean;
+    holidayName: string | null;
+  }) => ReactNode;
+}) {
+  const days = useMemo(() => listDaysInYearMonth(yearMonth), [yearMonth]);
+  const firstWeekday = days[0]
+    ? new Date(`${days[0]}T12:00:00.000Z`).getUTCDay()
+    : 0;
+  const leadingEmpty = firstWeekday;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+        {WEEKDAY_LETTERS.map((letter, index) => (
+          <span
+            key={`${letter}-${index}`}
+            className="flex h-5 items-center justify-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
+          >
+            {letter}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+        {Array.from({ length: leadingEmpty }).map((_, index) => (
+          <span key={`empty-${index}`} className="aspect-square" />
+        ))}
+        {days.map((day) => {
+          const weekend = isWeekend(day);
+          const holidayName = holidayNameByDate.get(day) ?? null;
+          return (
+            <div key={day} className="min-w-0">
+              {renderDay({ day, weekend, holidayName })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MonthDayPicker({
   yearMonth,
   selected,
@@ -79,13 +161,6 @@ function MonthDayPicker({
   accentClass: string;
   holidayNameByDate: Map<string, string>;
 }) {
-  const days = useMemo(() => listDaysInYearMonth(yearMonth), [yearMonth]);
-  const firstWeekday = days[0]
-    ? new Date(`${days[0]}T12:00:00.000Z`).getUTCDay()
-    : 0;
-  /** Sunday-first grid offset. */
-  const leadingEmpty = firstWeekday;
-
   function toggle(day: string) {
     const next = new Set(selected);
     if (next.has(day)) {
@@ -97,30 +172,18 @@ function MonthDayPicker({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs tabular-nums text-muted-foreground">
-          {selected.size} dia{selected.size === 1 ? "" : "s"}
-        </p>
-      </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {["D", "S", "T", "Q", "Q", "S", "S"].map((letter, index) => (
-          <span key={`${letter}-${index}`}>{letter}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {Array.from({ length: leadingEmpty }).map((_, index) => (
-          <span key={`empty-${index}`} />
-        ))}
-        {days.map((day) => {
+    <CalendarCard
+      title={label}
+      meta={`${selected.size} dia${selected.size === 1 ? "" : "s"}`}
+    >
+      <MonthDayGrid
+        yearMonth={yearMonth}
+        holidayNameByDate={holidayNameByDate}
+        renderDay={({ day, weekend, holidayName }) => {
           const active = selected.has(day);
-          const weekend = isWeekend(day);
-          const holidayName = holidayNameByDate.get(day) ?? null;
           const isHoliday = holidayName != null;
           return (
             <button
-              key={day}
               type="button"
               onClick={() => toggle(day)}
               title={
@@ -129,7 +192,7 @@ function MonthDayPicker({
                   : `${weekdayShort(day)} ${day}`
               }
               className={cn(
-                "flex h-8 flex-col items-center justify-center rounded-md border text-xs tabular-nums transition",
+                DAY_CELL_BASE,
                 isHoliday && !active
                   ? HOLIDAY_OVERLAY_CELL_CLASS
                   : active
@@ -143,9 +206,9 @@ function MonthDayPicker({
               {dayNumber(day)}
             </button>
           );
-        })}
-      </div>
-    </div>
+        }}
+      />
+    </CalendarCard>
   );
 }
 
@@ -173,11 +236,6 @@ function AbsenceMakeupDayPicker({
   }) => void;
   holidayNameByDate: Map<string, string>;
 }) {
-  const days = useMemo(() => listDaysInYearMonth(yearMonth), [yearMonth]);
-  const firstWeekday = days[0]
-    ? new Date(`${days[0]}T12:00:00.000Z`).getUTCDay()
-    : 0;
-  const leadingEmpty = firstWeekday;
   const billed = Math.max(0, absenceSelected.size - makeupSelected.size);
 
   function markFor(day: string): AbsenceMakeupMark {
@@ -205,40 +263,15 @@ function AbsenceMakeupDayPicker({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium">Faltas / compensação</p>
-        <p className="text-xs tabular-nums text-muted-foreground">
-          {absenceSelected.size}F · {makeupSelected.size}C · saldo {billed}
-        </p>
-      </div>
-      <p className="text-[11px] leading-snug text-muted-foreground text-pretty">
-        Clique cicla: sem marca → falta → compensação → limpar. Cada
-        compensação quita uma falta no desconto.
-      </p>
-      <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <span className={cn("size-2.5 rounded-sm border", ABSENCE_ACCENT)} />
-          Falta
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className={cn("size-2.5 rounded-sm border", MAKEUP_ACCENT)} />
-          Compensação
-        </span>
-      </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {["D", "S", "T", "Q", "Q", "S", "S"].map((letter, index) => (
-          <span key={`${letter}-${index}`}>{letter}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {Array.from({ length: leadingEmpty }).map((_, index) => (
-          <span key={`empty-${index}`} />
-        ))}
-        {days.map((day) => {
+    <CalendarCard
+      title="Faltas / compensação"
+      meta={`${absenceSelected.size}F · ${makeupSelected.size}C · saldo ${billed}`}
+    >
+      <MonthDayGrid
+        yearMonth={yearMonth}
+        holidayNameByDate={holidayNameByDate}
+        renderDay={({ day, weekend, holidayName }) => {
           const mark = markFor(day);
-          const weekend = isWeekend(day);
-          const holidayName = holidayNameByDate.get(day) ?? null;
           const isHoliday = holidayName != null;
           const active = mark !== "none";
           const accent = mark === "absence" ? ABSENCE_ACCENT : MAKEUP_ACCENT;
@@ -250,7 +283,6 @@ function AbsenceMakeupDayPicker({
                 : null;
           return (
             <button
-              key={day}
               type="button"
               onClick={() => cycle(day)}
               title={
@@ -268,7 +300,7 @@ function AbsenceMakeupDayPicker({
                   : `${dayNumber(day)}`
               }
               className={cn(
-                "flex h-8 flex-col items-center justify-center rounded-md border text-xs tabular-nums transition",
+                DAY_CELL_BASE,
                 isHoliday && !active
                   ? HOLIDAY_OVERLAY_CELL_CLASS
                   : active
@@ -282,9 +314,9 @@ function AbsenceMakeupDayPicker({
               {dayNumber(day)}
             </button>
           );
-        })}
-      </div>
-    </div>
+        }}
+      />
+    </CalendarCard>
   );
 }
 
@@ -454,7 +486,7 @@ export function ClosingSubmitValuesModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 flex max-h-[min(92dvh,100%)] w-full min-w-0 max-w-2xl flex-col overflow-hidden rounded-t-[var(--radius)] border border-border bg-[var(--surface-elevated)] shadow-[var(--shadow-md)] sm:rounded-[var(--radius)]"
+        className="relative z-10 flex max-h-[min(92dvh,100%)] w-full min-w-0 max-w-4xl flex-col overflow-hidden rounded-t-[var(--radius)] border border-border bg-[var(--surface-elevated)] shadow-[var(--shadow-md)] sm:rounded-[var(--radius)]"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
           <div>
@@ -479,15 +511,50 @@ export function ClosingSubmitValuesModal({
 
         <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           {holidayNameByDate.size > 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground text-pretty">
               Feriados cadastrados aparecem em vermelho como referência. Você
               ainda pode marcá-los como presenciais se necessário.
             </p>
           ) : null}
+          {showAbsenceCalendar ? (
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-1">
+              <p className="text-xs text-muted-foreground text-pretty">
+                Em faltas: clique cicla{" "}
+                <span className="text-foreground/85">
+                  falta → compensação → limpar
+                </span>
+                . Cada compensação quita uma falta.
+              </p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "size-2.5 shrink-0 rounded-sm border",
+                      ABSENCE_ACCENT,
+                    )}
+                    aria-hidden
+                  />
+                  Falta
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "size-2.5 shrink-0 rounded-sm border",
+                      MAKEUP_ACCENT,
+                    )}
+                    aria-hidden
+                  />
+                  Compensação
+                </span>
+              </div>
+            </div>
+          ) : null}
           <div
             className={cn(
-              "grid gap-5",
-              showAbsenceCalendar ? "sm:grid-cols-3" : "sm:grid-cols-2",
+              "grid items-start gap-4",
+              showAbsenceCalendar
+                ? "lg:grid-cols-3"
+                : "sm:grid-cols-2",
             )}
           >
             <MonthDayPicker
@@ -506,7 +573,7 @@ export function ClosingSubmitValuesModal({
                   return merged;
                 });
               }}
-              label="Deslocamento — presencial"
+              label="Deslocamento"
               accentClass="border-emerald-500/50 bg-emerald-500/20 font-semibold text-emerald-950 dark:text-emerald-100"
               holidayNameByDate={holidayNameByDate}
             />
