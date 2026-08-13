@@ -4,6 +4,7 @@ import {
   computeClosingSubmitValues,
   formatClosingMoney,
 } from "@/lib/metrics/closing-submit-values";
+import { HOLIDAY_OVERLAY_CELL_CLASS } from "@/lib/metrics/holiday-overlay";
 import { listDaysInYearMonth } from "@/lib/metrics/payroll-calc";
 import { cn } from "@/lib/utils";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
@@ -73,9 +74,6 @@ function MonthDayPicker({
   const leadingEmpty = firstWeekday;
 
   function toggle(day: string) {
-    if (holidayNameByDate.has(day)) {
-      return;
-    }
     const next = new Set(selected);
     if (next.has(day)) {
       next.delete(day);
@@ -106,13 +104,12 @@ function MonthDayPicker({
           const active = selected.has(day);
           const weekend = isWeekend(day);
           const holidayName = holidayNameByDate.get(day) ?? null;
-          const blocked = holidayName != null;
+          const isHoliday = holidayName != null;
           return (
             <button
               key={day}
               type="button"
               onClick={() => toggle(day)}
-              disabled={blocked}
               title={
                 holidayName
                   ? `Feriado: ${holidayName}`
@@ -120,13 +117,14 @@ function MonthDayPicker({
               }
               className={cn(
                 "flex h-8 flex-col items-center justify-center rounded-md border text-xs tabular-nums transition",
-                blocked
-                  ? "cursor-not-allowed border-rose-500/40 bg-rose-500/15 text-rose-900/80 dark:text-rose-100/80"
+                isHoliday && !active
+                  ? HOLIDAY_OVERLAY_CELL_CLASS
                   : active
                     ? accentClass
                     : weekend
                       ? "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted/40"
                       : "border-border bg-card hover:bg-muted/50",
+                isHoliday && active ? accentClass : null,
               )}
             >
               {dayNumber(day)}
@@ -189,11 +187,14 @@ export function ClosingSubmitValuesModal({
         baseType: compensation.base_type,
         baseAmount: compensation.base_amount,
         hourlyRate: compensation.hourly_rate,
+        contractedHoursPerDay: compensation.contracted_hours_per_day,
+        contractedHoursPerMonth: compensation.contracted_hours_per_month,
         dailyTravelAmount: compensation.daily_travel_amount,
         dailyMealAmount: compensation.daily_meal_amount,
         workedHours,
         travelDays: [...travelSelected],
         mealDays: [...mealSelected],
+        timeBankEnabled: compensation.time_bank_enabled,
       }),
     [compensation, workedHours, travelSelected, mealSelected],
   );
@@ -213,11 +214,9 @@ export function ClosingSubmitValuesModal({
       return;
     }
     setLocalError(null);
-    const allowed = (days: Set<string>) =>
-      [...days].filter((day) => !holidayNameByDate.has(day)).sort();
     onConfirm({
-      travelDays: allowed(travelSelected),
-      mealDays: allowed(mealSelected),
+      travelDays: [...travelSelected].sort(),
+      mealDays: [...mealSelected].sort(),
       valuesNotes: isVariable ? valuesNotes.trim() || null : null,
     });
   }
@@ -263,16 +262,28 @@ export function ClosingSubmitValuesModal({
         <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           {holidayNameByDate.size > 0 ? (
             <p className="text-xs text-muted-foreground">
-              Feriados cadastrados aparecem em destaque e não podem ser
-              selecionados como presenciais.
+              Feriados cadastrados aparecem em vermelho como referência. Você
+              ainda pode marcá-los como presenciais se necessário.
             </p>
           ) : null}
           <div className="grid gap-5 sm:grid-cols-2">
             <MonthDayPicker
               yearMonth={yearMonth}
               selected={travelSelected}
-              onChange={setTravelSelected}
-              label="Dias presenciais — Deslocamento"
+              onChange={(next) => {
+                setTravelSelected(next);
+                // Suggest meal on same days when newly marking travel.
+                setMealSelected((prev) => {
+                  const merged = new Set(prev);
+                  for (const day of next) {
+                    if (!travelSelected.has(day)) {
+                      merged.add(day);
+                    }
+                  }
+                  return merged;
+                });
+              }}
+              label="Deslocamento — presencial"
               accentClass="border-emerald-500/50 bg-emerald-500/20 font-semibold text-emerald-950 dark:text-emerald-100"
               holidayNameByDate={holidayNameByDate}
             />
@@ -280,7 +291,7 @@ export function ClosingSubmitValuesModal({
               yearMonth={yearMonth}
               selected={mealSelected}
               onChange={setMealSelected}
-              label="Dias presenciais — Refeição"
+              label="Refeição"
               accentClass="border-sky-500/50 bg-sky-500/20 font-semibold text-sky-950 dark:text-sky-100"
               holidayNameByDate={holidayNameByDate}
             />
@@ -303,38 +314,59 @@ export function ClosingSubmitValuesModal({
                 <p className="ui-kpi-hero__value text-brand-foreground dark:text-brand">
                   {formatClosingMoney(preview.invoiceAmount)}
                 </p>
+                <p className="mt-1 text-[11px] text-muted-foreground text-pretty">
+                  Estimativa com base no cadastro e nas horas Jira do mês.
+                  Fechamentos já finalizados/pagos não são recalculados.
+                </p>
               </div>
 
-              <div
-                className={cn(
-                  "grid gap-2",
-                  isVariable
-                    ? "sm:grid-cols-2 lg:grid-cols-4"
-                    : "sm:grid-cols-3",
-                )}
-              >
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
                   <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                    {isVariable ? "Base" : "Compensação fixa (base)"}
+                    Base contratual
                   </p>
                   <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
                     {formatClosingMoney(compensation.base_amount)}
                   </p>
                 </div>
 
-                {isVariable ? (
+                <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Horas Jira
+                  </p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                    {workedHours.toLocaleString("pt-BR", {
+                      maximumFractionDigits: 1,
+                    })}{" "}
+                    /{" "}
+                    {compensation.contracted_hours_per_month.toLocaleString(
+                      "pt-BR",
+                      { maximumFractionDigits: 1 },
+                    )}{" "}
+                    h
+                  </p>
+                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                    {compensation.time_bank_enabled
+                      ? preview.timeBankHoursDelta === 0
+                        ? "Banco de horas ativo · sem movimento"
+                        : `Banco de horas · ${preview.timeBankHoursDelta > 0 ? "+" : ""}${preview.timeBankHoursDelta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`
+                      : preview.jiraDeficitAmount > 0
+                        ? `Déficit −${formatClosingMoney(preview.jiraDeficitAmount)}`
+                        : "Sem déficit"}
+                  </p>
+                </div>
+
+                {preview.presencialExtraAmount > 0 ? (
                   <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
                     <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                      Diferencial
+                      Excedente presencial
                     </p>
                     <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
-                      {formatClosingMoney(preview.differentialAmount)}
+                      {formatClosingMoney(preview.presencialExtraAmount)}
                     </p>
                     <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
-                      {workedHours.toLocaleString("pt-BR", {
-                        maximumFractionDigits: 1,
-                      })}{" "}
-                      h × valor/hora − base
+                      {preview.travelPresencialDays} × 2 h ×{" "}
+                      {formatClosingMoney(compensation.hourly_rate)}
                     </p>
                   </div>
                 ) : null}
@@ -364,8 +396,10 @@ export function ClosingSubmitValuesModal({
 
               <p className="text-xs leading-snug text-muted-foreground text-pretty">
                 {isVariable
-                  ? "Compensação variável — mesmos critérios da Folha. O total soma base + diferencial + deslocamento + refeição."
-                  : "Compensação fixa: não há adicional por diferença de dias. O total soma base + deslocamento + refeição."}
+                  ? compensation.contracted_hours_per_day === 6
+                    ? "Variável 6h/dia: dias de deslocamento incluem 2h extras. Carga mínima mensal via Jira."
+                    : "Variável: carga mínima mensal via Jira; deslocamento e refeição pelos dias marcados."
+                  : "Fixo: base contratual ± déficit Jira (ou banco) + deslocamento + refeição."}
               </p>
             </div>
           </section>

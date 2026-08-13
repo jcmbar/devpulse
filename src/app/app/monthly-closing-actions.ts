@@ -125,8 +125,11 @@ export async function submitMonthlyClosingAction(input: {
           baseAmount: compensation.base_amount,
           baseType: compensation.base_type,
           hourlyRate: compensation.hourly_rate,
+          contractedHoursPerDay: compensation.contracted_hours_per_day,
+          contractedHoursPerMonth: compensation.contracted_hours_per_month,
           dailyTravelAmount: compensation.daily_travel_amount,
           dailyMealAmount: compensation.daily_meal_amount,
+          timeBankEnabled: compensation.time_bank_enabled,
         },
       },
     });

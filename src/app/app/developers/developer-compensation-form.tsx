@@ -218,6 +218,29 @@ export function DeveloperCompensationForm({
         </FormField>
 
         <FormField
+          label="Banco de horas"
+          htmlFor="timeBankEnabled"
+          hint="Se habilitado, a diferença entre horas Jira e o contratado/mês vai ao banco (crédito ou débito) e não altera o valor da NF. Fechamentos já finalizados não são afetados."
+        >
+          <label
+            htmlFor="timeBankEnabled"
+            className="flex min-h-10 cursor-pointer items-start gap-2 rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-2.5 text-sm"
+          >
+            <input
+              id="timeBankEnabled"
+              name="timeBankEnabled"
+              type="checkbox"
+              value="true"
+              defaultChecked={compensation?.time_bank_enabled ?? false}
+              className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
+            />
+            <span className="text-pretty">
+              Usar banco de horas (Δ Jira sem impacto em R$)
+            </span>
+          </label>
+        </FormField>
+
+        <FormField
           label="Vigência a partir de"
           htmlFor="effectiveFrom"
           hint="Data de início do valor atual."

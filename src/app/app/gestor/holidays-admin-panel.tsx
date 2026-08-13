@@ -21,12 +21,19 @@ import {
   updateHolidayAction,
   type ConfigFormState,
 } from "@/app/app/gestor/actions";
+import { listDaysInYearMonth } from "@/lib/metrics/payroll-calc";
+import {
+  HOLIDAY_OVERLAY_CELL_CLASS,
+  toHolidayOverlay,
+} from "@/lib/metrics/holiday-overlay";
+import { cn } from "@/lib/utils";
 import {
   HOLIDAY_SCOPE_LABELS,
   type Holiday,
   type HolidayScope,
 } from "@/types/holiday";
 import type { Team } from "@/types/team";
+import { useMemo } from "react";
 
 const initialState: ConfigFormState = { error: null, success: null };
 
@@ -146,7 +153,7 @@ function HolidayFields({
           defaultChecked={holiday?.is_active ?? true}
           className="ui-checkbox mt-0.5"
         />
-        <span>Ativo (impacta capacidade)</span>
+        <span>Ativo (visível nos calendários)</span>
       </FormCheck>
     </>
   );
@@ -185,6 +192,22 @@ export function HolidaysAdminPanel({
 
   const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
   const editing = holidays.find((row) => row.id === editingId) ?? null;
+  const monthPreview = useMemo(() => {
+    const activeInMonth = holidays.filter(
+      (row) => row.is_active && row.holiday_on.startsWith(yearMonth),
+    );
+    const overlay = toHolidayOverlay(
+      activeInMonth.map((row) => ({
+        date: row.holiday_on,
+        name: row.name,
+      })),
+    );
+    const days = listDaysInYearMonth(yearMonth);
+    const firstWeekday = days[0]
+      ? new Date(`${days[0]}T12:00:00.000Z`).getUTCDay()
+      : 0;
+    return { days, firstWeekday, overlay };
+  }, [holidays, yearMonth]);
 
   return (
     <div className="space-y-5">
@@ -193,18 +216,58 @@ export function HolidaysAdminPanel({
         description={
           <>
             <p>
-              Cadastro usado na meta de capacidade. Preferir{" "}
+              Feriados aparecem em vermelho nos calendários de Folha e
+              fechamento. Preferir{" "}
               <span className="font-medium">desativar</span> em vez de excluir
-              feriados do seed. Inativos não reduzem horas.
+              feriados do seed.
             </p>
             <p className="mt-1 text-xs">
-              Estado/cidade usam `region_code` digitado (ex.: BR-SP). Escopo time
-              usa select do cadastro estruturado — matching com developers via{" "}
+              Escopos nacional, estado, cidade e time filtram quem vê o
+              destaque. Estado/cidade usam `region_code` (ex.: BR-SP). Time usa
+              cadastro estruturado — matching via{" "}
               <span className="font-medium">team_id → teams.code</span>.
             </p>
           </>
         }
       />
+
+      <div className="rounded-[var(--radius-sm)] border border-border/80 bg-muted/20 p-3">
+        <p className="text-sm font-medium">
+          Prévia {String(month).padStart(2, "0")}/{year}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Feriados ativos do filtro atual no mês selecionado (todos os escopos
+          visíveis na listagem).
+        </p>
+        <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {["D", "S", "T", "Q", "Q", "S", "S"].map((letter, index) => (
+            <span key={`${letter}-${index}`}>{letter}</span>
+          ))}
+        </div>
+        <div className="mt-1 grid grid-cols-7 gap-1">
+          {Array.from({ length: monthPreview.firstWeekday }).map((_, index) => (
+            <span key={`empty-${index}`} />
+          ))}
+          {monthPreview.days.map((day) => {
+            const holidayName = monthPreview.overlay.byDate.get(day);
+            const isHoliday = holidayName != null;
+            return (
+              <span
+                key={day}
+                title={isHoliday ? `Feriado: ${holidayName}` : day}
+                className={cn(
+                  "flex h-8 items-center justify-center rounded-md border text-xs tabular-nums",
+                  isHoliday
+                    ? HOLIDAY_OVERLAY_CELL_CLASS
+                    : "border-border/60 bg-card text-muted-foreground",
+                )}
+              >
+                {Number(day.slice(8, 10))}
+              </span>
+            );
+          })}
+        </div>
+      </div>
 
       <form className="flex flex-wrap items-end gap-4">
         <input type="hidden" name="month" value={month} />

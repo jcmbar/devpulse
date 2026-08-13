@@ -22,7 +22,6 @@ import {
   resolveZeroWeekendPatches,
   type BatchApplyMode,
 } from "@/lib/metrics/payroll-attendance-batch";
-import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   PAYROLL_ATTENDANCE_KINDS,
   PAYROLL_CLOSING_STATUSES,
@@ -137,6 +136,7 @@ export async function upsertAttendanceDayAction(input: {
   dayOn: string;
   dayKind: string;
   hours: number;
+  chargesMeal?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireTeamAccess();
 
@@ -157,6 +157,7 @@ export async function upsertAttendanceDayAction(input: {
       dayOn: input.dayOn,
       dayKind: input.dayKind as PayrollAttendanceKind,
       hours: input.hours,
+      chargesMeal: input.chargesMeal,
     });
   } catch (error) {
     return {
@@ -214,16 +215,9 @@ export async function batchApplyAttendanceAction(input: {
     let patches;
     switch (input.shortcut) {
       case "fill_month_default": {
-        const yearMonth = existing[0]!.day_on.slice(0, 7);
-        const { dates: holidayDates } =
-          await listApplicableHolidayDatesForDeveloperMonth({
-            developerId: payrollItem.developer_id,
-            yearMonth,
-          });
         patches = resolveFillMonthDefaultPatches({
           days: snapshots,
           contractedHoursPerDay: contracted,
-          holidayDates,
         });
         break;
       }

@@ -274,6 +274,9 @@ export async function upsertDeveloperCompensationAction(
       requireMealPixReceipt:
         String(formData.get("requireMealPixReceipt") ?? "") === "on" ||
         String(formData.get("requireMealPixReceipt") ?? "") === "true",
+      timeBankEnabled:
+        String(formData.get("timeBankEnabled") ?? "") === "on" ||
+        String(formData.get("timeBankEnabled") ?? "") === "true",
       effectiveFrom,
       notes: readOptionalString(formData, "notes"),
     });

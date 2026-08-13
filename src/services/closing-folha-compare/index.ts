@@ -11,6 +11,7 @@ import {
 } from "@/services/monthly-closings";
 import {
   getPayrollItemForDeveloperMonth,
+  listPayrollMealDaysForItem,
   listPayrollPresencialDaysForItem,
 } from "@/services/payroll";
 import type { MonthlyClosing } from "@/types/monthly-closing";
@@ -42,15 +43,9 @@ function closingToSide(
 
 function folhaToSide(
   item: PayrollClosingItem,
-  presencialDays: string[],
+  travelDays: string[],
+  mealDays: string[],
 ): ClosingValuesSide {
-  // Folha só tem "dias presenciais" (não separa travel vs meal).
-  // Na conferência: dias de deslocamento/refeição acompanham o valor cobrado
-  // na linha — assim "só refeição, sem deslocamento" (travel_amount = 0) não
-  // exige que o usuário marque deslocamento no mesmo dia.
-  const chargesTravel = (item.travel_amount ?? 0) > 0.005;
-  const chargesMeal = (item.meal_amount ?? 0) > 0.005;
-
   return {
     travelAmount: item.travel_amount,
     mealAmount: item.meal_amount,
@@ -58,8 +53,8 @@ function folhaToSide(
     invoiceAmount: item.invoice_amount,
     dailyTravelAmount: item.daily_travel_amount,
     dailyMealAmount: item.daily_meal_amount,
-    travelDays: chargesTravel ? presencialDays : [],
-    mealDays: chargesMeal ? presencialDays : [],
+    travelDays,
+    mealDays,
   };
 }
 
@@ -91,8 +86,11 @@ export async function loadClosingFolhaCompare(
 
   let folhaSide: ClosingValuesSide | null = null;
   if (folhaItem) {
-    const presencialDays = await listPayrollPresencialDaysForItem(folhaItem.id);
-    folhaSide = folhaToSide(folhaItem, presencialDays);
+    const [folhaTravel, folhaMeal] = await Promise.all([
+      listPayrollPresencialDaysForItem(folhaItem.id),
+      listPayrollMealDaysForItem(folhaItem.id),
+    ]);
+    folhaSide = folhaToSide(folhaItem, folhaTravel, folhaMeal);
   }
 
   const compare = compareClosingToFolha({

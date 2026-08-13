@@ -220,6 +220,9 @@ export default async function GestorDashboardPage({
   const configHref = configYearMonth
     ? `/app/gestor/config?year=${configYearMonth.slice(0, 4)}&month=${Number(configYearMonth.slice(5, 7))}`
     : "/app/gestor/config";
+  const capacidadeHref = configYearMonth
+    ? `/app/gestor/config/capacidade?year=${configYearMonth.slice(0, 4)}&month=${Number(configYearMonth.slice(5, 7))}`
+    : "/app/gestor/config/capacidade";
 
   const sourceParam = dataSource === "auto" ? undefined : dataSource;
   const preservedWithSource = {
@@ -307,7 +310,7 @@ export default async function GestorDashboardPage({
               Visão analítica
             </Link>
             <Link href={configHref} className="ui-btn-secondary">
-              Capacidade
+              Feriados
             </Link>
             {syncTarget ? (
               <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:items-end">
@@ -544,31 +547,13 @@ export default async function GestorDashboardPage({
                 <p className="text-warning">
                   Capacidade do time ainda não configurada. Defina em{" "}
                   <Link
-                    href={configHref}
+                    href={capacidadeHref}
                     className="underline underline-offset-4"
                   >
                     Capacidade e faixas
                   </Link>
                   .
                 </p>
-              )}
-              {dashboard.holidayImpact.affected ? (
-                <p>
-                  Feriados reduziram a referência em{" "}
-                  <span className="font-medium text-foreground">
-                    {formatHours(dashboard.holidayImpact.hoursExcluded)}
-                  </span>
-                  :{" "}
-                  {dashboard.holidayImpact.impactingHolidays
-                    .map(
-                      (item) =>
-                        `${item.date} (${item.name}, −${formatHours(item.hoursExcluded)})`,
-                    )
-                    .join("; ")}
-                  . {dashboard.holidayScopeNote}
-                </p>
-              ) : (
-                <p>{dashboard.holidayScopeNote}</p>
               )}
             </div>
           </SectionShell>

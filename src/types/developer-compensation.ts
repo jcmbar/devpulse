@@ -49,6 +49,11 @@ export type DeveloperCompensation = {
   daily_meal_amount: number;
   /** Cobrar comprovante PIX de reembolso de refeição após finalize. */
   require_meal_pix_receipt: boolean;
+  /**
+   * Quando true, diferença Jira vs horas/mês contratadas vai ao banco
+   * (sem ajuste monetário na NF).
+   */
+  time_bank_enabled: boolean;
   currency: string;
   effective_from: string;
   effective_to: string | null;
@@ -68,6 +73,7 @@ export type UpsertCurrentCompensationInput = {
   dailyTravelAmount: number;
   dailyMealAmount: number;
   requireMealPixReceipt?: boolean;
+  timeBankEnabled?: boolean;
   currency?: string;
   effectiveFrom?: string;
   notes?: string | null;

@@ -65,7 +65,7 @@ export async function updateThresholdsAction(
   }
 
   revalidatePath("/app/gestor");
-  revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/config/capacidade");
   return { error: null, success: "Faixas de aproveitamento atualizadas." };
 }
 
@@ -92,7 +92,7 @@ export async function updateWeekdayCapacityAction(
   }
 
   revalidatePath("/app/gestor");
-  revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/config/capacidade");
   return {
     error: null,
     success: "Horas padrão por dia da semana atualizadas.",
@@ -132,7 +132,7 @@ export async function upsertDeveloperCapacityAction(
   }
 
   revalidatePath("/app/gestor");
-  revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/config/capacidade");
   return {
     error: null,
     success: "Capacidade do developer salva para o mês.",
@@ -166,7 +166,7 @@ export async function deleteDeveloperCapacityAction(
   }
 
   revalidatePath("/app/gestor");
-  revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/config/capacidade");
   return {
     error: null,
     success: "Override removido. O developer volta a herdar o padrão do time.",
@@ -199,6 +199,7 @@ export async function createHolidayAction(
 
   revalidatePath("/app/gestor");
   revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/folha");
   return { error: null, success: "Feriado criado." };
 }
 
@@ -229,6 +230,7 @@ export async function updateHolidayAction(
 
   revalidatePath("/app/gestor");
   revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/folha");
   return { error: null, success: "Feriado atualizado." };
 }
 
@@ -255,6 +257,7 @@ export async function toggleHolidayActiveAction(
 
   revalidatePath("/app/gestor");
   revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/folha");
   return {
     error: null,
     success: nextActive ? "Feriado ativado." : "Feriado desativado.",
@@ -281,6 +284,7 @@ export async function deleteHolidayAction(
 
   revalidatePath("/app/gestor");
   revalidatePath("/app/gestor/config");
+  revalidatePath("/app/gestor/folha");
   return {
     error: null,
     success: "Feriado excluído permanentemente.",

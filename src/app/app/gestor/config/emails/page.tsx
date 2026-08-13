@@ -53,7 +53,7 @@ export default async function GestorEmailsConfigPage() {
               ← Dashboard
             </Link>
             <Link
-              href="/app/gestor/config"
+              href="/app/gestor/config/capacidade"
               className="underline-offset-4 hover:underline"
             >
               Capacidade e faixas

@@ -19,6 +19,7 @@ import {
   teamListFilterParam,
 } from "@/lib/teams/team-filter";
 import { listInvoiceIssuers } from "@/services/invoice-issuers";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import { mapFinalizedMonthlyClosingIdsByDeveloper } from "@/services/monthly-closings";
 import {
   ensurePayrollMonthWithItems,
@@ -114,6 +115,22 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const attendanceDays =
     selectedItem != null
       ? await listAttendanceForItem(selectedItem.id)
+      : [];
+  const attendanceHolidays =
+    selectedItem != null
+      ? (
+          await listApplicableHolidayDatesForDeveloperMonth({
+            developerId: selectedItem.developer_id,
+            yearMonth: month,
+          })
+        ).byDate
+      : null;
+  const holidayEntries =
+    attendanceHolidays != null
+      ? [...attendanceHolidays.entries()].map(([date, name]) => ({
+          date,
+          name,
+        }))
       : [];
 
   const readOnly = closing.status === "closed";
@@ -261,6 +278,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         <PayrollAttendancePanel
           item={selectedItem}
           days={attendanceDays}
+          holidays={holidayEntries}
           closeHref={buildFolhaHref({ teamId: teamParam, month })}
           readOnly={
             readOnly || finalizedByDeveloper.has(selectedItem.developer_id)

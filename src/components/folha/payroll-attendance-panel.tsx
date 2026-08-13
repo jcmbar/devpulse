@@ -9,6 +9,11 @@ import {
   isCalendarWeekend,
   type BatchApplyMode,
 } from "@/lib/metrics/payroll-attendance-batch";
+import {
+  HOLIDAY_OVERLAY_RING_CLASS,
+  toHolidayOverlay,
+  type HolidayOverlayEntry,
+} from "@/lib/metrics/holiday-overlay";
 import { cn } from "@/lib/utils";
 import {
   PAYROLL_ATTENDANCE_KIND_LABELS,
@@ -27,6 +32,8 @@ type PayrollAttendancePanelProps = {
   closeHref: string;
   readOnly?: boolean;
   finalizedClosingId?: string | null;
+  /** Applicable holidays for this developer/month (visual overlay only). */
+  holidays?: ReadonlyArray<HolidayOverlayEntry>;
 };
 
 const KIND_CARD_CLASS: Record<PayrollAttendanceKind, string> = {
@@ -76,6 +83,7 @@ export function PayrollAttendancePanel({
   closeHref,
   readOnly = false,
   finalizedClosingId = null,
+  holidays = [],
 }: PayrollAttendancePanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -83,6 +91,7 @@ export function PayrollAttendancePanel({
   const [info, setInfo] = useState<string | null>(null);
   const [localDays, setLocalDays] = useState(days);
   const [syncedDays, setSyncedDays] = useState(days);
+  const holidayOverlay = useMemo(() => toHolidayOverlay(holidays), [holidays]);
 
   const bounds = useMemo(() => monthBounds(days), [days]);
   const monthKey = bounds ? `${bounds.start}:${bounds.end}` : "";
@@ -113,6 +122,7 @@ export function PayrollAttendancePanel({
       dayOn: string;
       dayKind: PayrollAttendanceKind;
       hours: number;
+      chargesMeal?: boolean;
     }>,
   ) {
     const byDay = new Map(patches.map((p) => [p.dayOn, p]));
@@ -126,6 +136,9 @@ export function PayrollAttendancePanel({
           ...day,
           day_kind: patch.dayKind,
           hours: patch.hours,
+          charges_meal:
+            patch.chargesMeal ??
+            (patch.dayKind === "presencial" ? true : false),
         };
       }),
     );
@@ -135,6 +148,7 @@ export function PayrollAttendancePanel({
     dayOn: string;
     dayKind: PayrollAttendanceKind;
     hours: number;
+    chargesMeal?: boolean;
   }) {
     if (readOnly) {
       return;
@@ -147,6 +161,7 @@ export function PayrollAttendancePanel({
         dayOn: input.dayOn,
         dayKind: input.dayKind,
         hours: input.hours,
+        chargesMeal: input.chargesMeal,
       });
       if (!result.ok) {
         setError(result.error);
@@ -160,6 +175,8 @@ export function PayrollAttendancePanel({
             input.dayKind === "presencial" || input.dayKind === "home"
               ? input.hours
               : 0,
+          chargesMeal:
+            input.chargesMeal ?? input.dayKind === "presencial",
         },
       ]);
       router.refresh();
@@ -213,13 +230,14 @@ export function PayrollAttendancePanel({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <h2 className="text-base font-semibold text-foreground">
-            Calendário de presença · {item.developer_name}
+            Presença e refeição · {item.developer_name}
           </h2>
           <p className="text-sm text-muted-foreground">
             Horas padrão:{" "}
             {item.contracted_hours_per_day.toLocaleString("pt-BR")} h/dia.
-            Presencial e home office somam horas para o diferencial; só os dias
-            presenciais geram deslocamento e refeição.
+            Presencial gera deslocamento; marque “Refeição” no dia quando
+            aplicável. Carga mensal e banco de horas usam horas Jira no
+            cálculo da NF.
           </p>
           {finalizedClosingId ? (
             <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -243,6 +261,13 @@ export function PayrollAttendancePanel({
                 {PAYROLL_ATTENDANCE_KIND_LABELS[row.kind]}
               </li>
             ))}
+            <li className="inline-flex items-center gap-1.5">
+              <span
+                className={cn("size-2.5 rounded-sm bg-rose-500/70")}
+                aria-hidden
+              />
+              Feriado (referência)
+            </li>
           </ul>
         </div>
         <a href={closeHref} className="ui-btn-secondary text-sm">
@@ -444,15 +469,21 @@ export function PayrollAttendancePanel({
           const isWorkable =
             day.day_kind === "presencial" || day.day_kind === "home";
           const weekend = isCalendarWeekend(day.day_on);
+          const holidayName = holidayOverlay.byDate.get(day.day_on);
+          const isHolidayOverlay = holidayName != null;
           return (
             <div
               key={day.id}
+              title={
+                isHolidayOverlay ? `Feriado: ${holidayName}` : undefined
+              }
               className={cn(
                 "space-y-2 rounded-[var(--radius-sm)] border p-2.5",
                 KIND_CARD_CLASS[day.day_kind],
                 weekend && day.day_kind !== "weekend"
                   ? "ring-1 ring-violet-500/25"
                   : null,
+                isHolidayOverlay ? HOLIDAY_OVERLAY_RING_CLASS : null,
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
@@ -470,9 +501,9 @@ export function PayrollAttendancePanel({
                   {weekdayLabel(day.day_on)}
                 </span>
               </div>
-              {day.day_kind === "holiday" ? (
+              {isHolidayOverlay ? (
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                  Feriado
+                  Feriado: {holidayName}
                 </p>
               ) : null}
               <select
@@ -492,6 +523,7 @@ export function PayrollAttendancePanel({
                     dayOn: day.day_on,
                     dayKind: nextKind,
                     hours: nextHours,
+                    chargesMeal: nextKind === "presencial",
                   });
                 }}
               >
@@ -501,6 +533,25 @@ export function PayrollAttendancePanel({
                   </option>
                 ))}
               </select>
+              {day.day_kind === "presencial" ? (
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-[var(--brand)]"
+                    checked={day.charges_meal}
+                    disabled={pending || readOnly}
+                    onChange={(event) => {
+                      saveDay({
+                        dayOn: day.day_on,
+                        dayKind: day.day_kind,
+                        hours: day.hours,
+                        chargesMeal: event.target.checked,
+                      });
+                    }}
+                  />
+                  Refeição
+                </label>
+              ) : null}
               {isWorkable ? (
                 <input
                   type="text"

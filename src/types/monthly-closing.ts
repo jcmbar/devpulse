@@ -65,6 +65,12 @@ export type MonthlyClosing = {
   compensation_daily_travel_amount: number | null;
   compensation_daily_meal_amount: number | null;
   worked_hours_snapshot: number | null;
+  contracted_hours_month_snapshot: number | null;
+  time_bank_enabled_snapshot: boolean | null;
+  time_bank_hours_delta: number | null;
+  jira_deficit_amount: number | null;
+  presencial_extra_amount: number | null;
+  time_bank_posted_at: string | null;
   developer_values_notes: string | null;
   values_submitted_at: string | null;
   jira_changed_after_finalized: boolean;

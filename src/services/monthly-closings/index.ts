@@ -303,6 +303,27 @@ function mapClosing(row: Record<string, unknown>): MonthlyClosing {
       row.worked_hours_snapshot == null
         ? null
         : Number(row.worked_hours_snapshot),
+    contracted_hours_month_snapshot:
+      row.contracted_hours_month_snapshot == null
+        ? null
+        : Number(row.contracted_hours_month_snapshot),
+    time_bank_enabled_snapshot:
+      row.time_bank_enabled_snapshot == null
+        ? null
+        : Boolean(row.time_bank_enabled_snapshot),
+    time_bank_hours_delta:
+      row.time_bank_hours_delta == null
+        ? null
+        : Number(row.time_bank_hours_delta),
+    jira_deficit_amount:
+      row.jira_deficit_amount == null
+        ? null
+        : Number(row.jira_deficit_amount),
+    presencial_extra_amount:
+      row.presencial_extra_amount == null
+        ? null
+        : Number(row.presencial_extra_amount),
+    time_bank_posted_at: (row.time_bank_posted_at as string | null) ?? null,
     developer_values_notes:
       (row.developer_values_notes as string | null) ?? null,
     values_submitted_at: (row.values_submitted_at as string | null) ?? null,
@@ -966,8 +987,11 @@ export async function submitMonthlyClosingForReview(input: {
       baseAmount: number;
       baseType: "fixed" | "variable";
       hourlyRate: number | null;
+      contractedHoursPerDay: number;
+      contractedHoursPerMonth: number;
       dailyTravelAmount: number;
       dailyMealAmount: number;
+      timeBankEnabled: boolean;
     };
   };
 }): Promise<MonthlyClosing> {
@@ -998,11 +1022,14 @@ export async function submitMonthlyClosingForReview(input: {
     baseType: input.values.compensation.baseType,
     baseAmount: input.values.compensation.baseAmount,
     hourlyRate: input.values.compensation.hourlyRate,
+    contractedHoursPerDay: input.values.compensation.contractedHoursPerDay,
+    contractedHoursPerMonth: input.values.compensation.contractedHoursPerMonth,
     dailyTravelAmount: input.values.compensation.dailyTravelAmount,
     dailyMealAmount: input.values.compensation.dailyMealAmount,
     workedHours: input.values.workedHours,
     travelDays: input.values.travelDays,
     mealDays: input.values.mealDays,
+    timeBankEnabled: input.values.compensation.timeBankEnabled,
   });
 
   const audit = await loadMonthlyClosingAuditForDeveloper({
@@ -1150,6 +1177,11 @@ export async function submitMonthlyClosingForReview(input: {
     compensation_daily_travel_amount: computed.compensationDailyTravelAmount,
     compensation_daily_meal_amount: computed.compensationDailyMealAmount,
     worked_hours_snapshot: computed.workedHoursSnapshot,
+    contracted_hours_month_snapshot: computed.contractedHoursMonthSnapshot,
+    time_bank_enabled_snapshot: computed.timeBankEnabled,
+    time_bank_hours_delta: computed.timeBankHoursDelta,
+    jira_deficit_amount: computed.jiraDeficitAmount,
+    presencial_extra_amount: computed.presencialExtraAmount,
     developer_values_notes: valuesNotes,
     values_submitted_at: now,
   };
@@ -1870,13 +1902,41 @@ export async function finalizeMonthlyClosing(input: {
     );
   }
 
+  // Post time bank BEFORE status=finalized so we can stamp posted_at in the
+  // same row update (finalized trigger blocks later money/meta edits).
+  // Skip when snapshot is null (pre-feature closings) — never backfill.
+  let timeBankPostedAt: string | null = closing.time_bank_posted_at;
+  if (
+    closing.time_bank_enabled_snapshot === true &&
+    closing.time_bank_posted_at == null &&
+    closing.time_bank_hours_delta != null &&
+    closing.time_bank_hours_delta !== 0
+  ) {
+    const { postTimeBankEntryForClosing } = await import(
+      "@/services/time-bank"
+    );
+    await postTimeBankEntryForClosing({
+      developerId: closing.developer_id,
+      yearMonth: closing.year_month,
+      hoursDelta: closing.time_bank_hours_delta,
+      monthlyClosingId: closing.id,
+      actorUserId: input.actorUserId,
+    });
+    timeBankPostedAt = now;
+  }
+
+  const finalizePatch: Record<string, unknown> = {
+    status: "finalized",
+    finalized_at: now,
+    finalized_by_user_id: input.actorUserId,
+  };
+  if (timeBankPostedAt && closing.time_bank_posted_at == null) {
+    finalizePatch.time_bank_posted_at = timeBankPostedAt;
+  }
+
   const { data, error } = await supabase
     .from("monthly_closings")
-    .update({
-      status: "finalized",
-      finalized_at: now,
-      finalized_by_user_id: input.actorUserId,
-    })
+    .update(finalizePatch)
     .eq("id", closing.id)
     .eq("status", "closed")
     .select("*")
@@ -1896,6 +1956,8 @@ export async function finalizeMonthlyClosing(input: {
     payload: {
       invoiceValidated: true,
       boletoValidated: true,
+      timeBankPosted: Boolean(timeBankPostedAt && !closing.time_bank_posted_at),
+      timeBankHoursDelta: closing.time_bank_hours_delta,
     },
   });
 

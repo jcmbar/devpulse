@@ -41,8 +41,6 @@ export type BatchApplyAttendanceInput = {
   rangeEnd: string | null;
   mode: BatchApplyMode;
   contractedHoursPerDay: number;
-  /** ISO dates that should seed as holiday (weekday only). */
-  holidayDates?: ReadonlySet<string>;
 };
 
 export type BatchApplyPatch = {
@@ -60,16 +58,10 @@ function hoursNearlyEqual(a: number, b: number): boolean {
 }
 
 /** Mirrors payroll-calc.defaultDayKindForDate (kept local for node:test). */
-function defaultDayKindForDate(
-  isoDate: string,
-  holidayDates?: ReadonlySet<string>,
-): BatchAttendanceKind {
+function defaultDayKindForDate(isoDate: string): BatchAttendanceKind {
   const weekday = utcWeekday(isoDate);
   if (weekday === 0 || weekday === 6) {
     return "weekend";
-  }
-  if (holidayDates?.has(isoDate)) {
-    return "holiday";
   }
   return "home";
 }
@@ -86,18 +78,17 @@ export function normalizeAttendanceHours(
 
 /**
  * Seed state from ensureAttendanceDefaults / “mês padrão”:
- * weekend → weekend/0h; holiday → holiday/0h; weekday → home + contracted hours.
+ * weekend → weekend/0h; weekday → home + contracted hours.
  */
 export function isUnfilledSeedDay(
   day: AttendanceDaySnapshot,
   contractedHoursPerDay: number,
-  holidayDates?: ReadonlySet<string>,
 ): boolean {
-  const expectedKind = defaultDayKindForDate(day.day_on, holidayDates);
+  const expectedKind = defaultDayKindForDate(day.day_on);
   if (day.day_kind !== expectedKind) {
     return false;
   }
-  if (expectedKind === "weekend" || expectedKind === "holiday") {
+  if (expectedKind === "weekend") {
     return day.hours === 0;
   }
   return hoursNearlyEqual(day.hours, contractedHoursPerDay);
@@ -130,7 +121,7 @@ export function resolveBatchTargetDays(
     }
     if (
       input.mode === "fill_unfilled" &&
-      !isUnfilledSeedDay(day, input.contractedHoursPerDay, input.holidayDates)
+      !isUnfilledSeedDay(day, input.contractedHoursPerDay)
     ) {
       continue;
     }
@@ -144,14 +135,13 @@ export function resolveBatchTargetDays(
   return patches;
 }
 
-/** Atalho: úteis = home + horas padrão; feriados = holiday/0; fins de semana = weekend/0. */
+/** Atalho: úteis = home + horas padrão; fins de semana = weekend/0. */
 export function resolveFillMonthDefaultPatches(input: {
   days: AttendanceDaySnapshot[];
   contractedHoursPerDay: number;
-  holidayDates?: ReadonlySet<string>;
 }): BatchApplyPatch[] {
   return input.days.map((day) => {
-    const kind = defaultDayKindForDate(day.day_on, input.holidayDates);
+    const kind = defaultDayKindForDate(day.day_on);
     return {
       dayOn: day.day_on,
       dayKind: kind,

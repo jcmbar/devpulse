@@ -5,6 +5,7 @@ import {
   type JiraLogicalFieldKey,
   type ResolvedJiraFieldMappings,
 } from "@/lib/jira/field-mappings";
+import { jiraEstimateSecondsToHours } from "@/lib/metrics/hours";
 import type { JiraFieldMappings } from "@/types/jira-integration";
 
 export type RawJiraIssue = {
@@ -190,15 +191,7 @@ function readParentKey(value: unknown): string | null {
 }
 
 function readEstimateHours(value: unknown): number | null {
-  const seconds = asNumber(value);
-  if (seconds == null) {
-    return null;
-  }
-  // Jira original estimate is seconds; also accept values already in hours (< 1000).
-  if (seconds >= 1000) {
-    return Math.round((seconds / 3600) * 100) / 100;
-  }
-  return Math.round(seconds * 100) / 100;
+  return jiraEstimateSecondsToHours(asNumber(value));
 }
 
 function readIssueType(value: unknown): string | null {

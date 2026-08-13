@@ -1,21 +1,60 @@
-import {
-  computeInvoiceAmount,
-  computeMealAmount,
-  computeTravelAmount,
-  roundMoney,
-} from "@/lib/metrics/payroll-calc";
 import type { CompensationBaseType } from "@/types/developer-compensation";
+
+/** Extra hours billed per presencial (travel) day when variable + 6h/day contract. */
+export const PRESENCIAL_EXTRA_HOURS = 2;
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function computeTravelAmount(input: {
+  presencialDays: number;
+  dailyTravelAmount: number;
+}): number {
+  return roundMoney(
+    Math.max(0, input.presencialDays) * Math.max(0, input.dailyTravelAmount),
+  );
+}
+
+function computeMealAmount(input: {
+  presencialDays: number;
+  dailyMealAmount: number;
+}): number {
+  return roundMoney(
+    Math.max(0, input.presencialDays) * Math.max(0, input.dailyMealAmount),
+  );
+}
+
+function computeInvoiceAmount(input: {
+  baseAmount: number;
+  differentialAmount: number;
+  discountsAmount: number;
+  travelAmount: number;
+  mealAmount: number;
+}): number {
+  return roundMoney(
+    input.baseAmount +
+      input.differentialAmount -
+      input.discountsAmount +
+      input.travelAmount +
+      input.mealAmount,
+  );
+}
 
 export type ClosingSubmitValuesInput = {
   baseType: CompensationBaseType;
   baseAmount: number;
   hourlyRate: number | null;
+  contractedHoursPerDay: number;
+  contractedHoursPerMonth: number;
   dailyTravelAmount: number;
   dailyMealAmount: number;
-  /** Jira "horas realizadas" no mês do fechamento (Folha uses attendance; here we snapshot delivery hours). */
+  /** Jira delivery hours in the closing month. */
   workedHours: number;
   travelDays: string[];
   mealDays: string[];
+  /** When true, Jira Δ goes to time bank — no money adjustment on NF. */
+  timeBankEnabled?: boolean;
 };
 
 export type ClosingSubmitValuesResult = {
@@ -23,9 +62,18 @@ export type ClosingSubmitValuesResult = {
   mealPresencialDays: number;
   travelAmount: number;
   mealAmount: number;
+  /** −jiraDeficitAmount + presencialExtraAmount (bank ON ⇒ deficit money = 0). */
   differentialAmount: number;
   invoiceAmount: number;
   workedHoursSnapshot: number;
+  contractedHoursMonthSnapshot: number;
+  timeBankEnabled: boolean;
+  /** Jira − contracted (positive credits bank / no cash bonus when bank off). */
+  timeBankHoursDelta: number;
+  /** Money discount for Jira shortfall when bank OFF; else 0. */
+  jiraDeficitAmount: number;
+  /** Variable + ~6h/day: travelDays × 2h × rate. */
+  presencialExtraAmount: number;
   compensationBaseAmount: number;
   compensationBaseType: CompensationBaseType;
   compensationHourlyRate: number | null;
@@ -34,11 +82,14 @@ export type ClosingSubmitValuesResult = {
 };
 
 /**
- * Amounts frozen on monthly closing submit.
- * Travel/meal: same Folha formulas (days × daily rate).
- * Differential (variable): (workedHours × hourlyRate) − base — same structure as Folha,
- * using closing Jira hours until Folha attendance exists.
- * Invoice: base + differential + travel + meal (discounts 0 at submit).
+ * NF amounts frozen on monthly closing submit.
+ *
+ * Fixo:     base − déficit Jira + desloc. + refeição
+ * Variável: base − déficit Jira + excedente presencial (se 6h/dia) + desloc. + refeição
+ *
+ * Déficit Jira = max(0, contratado_mês − Jira) × R$/h — só em dinheiro se banco OFF.
+ * Excedente presencial = dias_deslocamento × 2 × R$/h se variável e ~6h/dia.
+ * Does not rewrite historical closings; only used on new submit.
  */
 export function computeClosingSubmitValues(
   input: ClosingSubmitValuesInput,
@@ -50,10 +101,39 @@ export function computeClosingSubmitValues(
   const dailyTravel = Math.max(0, input.dailyTravelAmount);
   const dailyMeal = Math.max(0, input.dailyMealAmount);
   const baseAmount = Number.isFinite(input.baseAmount) ? input.baseAmount : 0;
+  const contractedMonth = Math.max(
+    0,
+    Number.isFinite(input.contractedHoursPerMonth)
+      ? input.contractedHoursPerMonth
+      : 0,
+  );
   const workedHours =
     Number.isFinite(input.workedHours) && input.workedHours > 0
       ? Math.round(input.workedHours * 100) / 100
       : 0;
+  const rate =
+    input.hourlyRate != null &&
+    Number.isFinite(input.hourlyRate) &&
+    input.hourlyRate >= 0
+      ? input.hourlyRate
+      : null;
+  const timeBankEnabled = Boolean(input.timeBankEnabled);
+
+  const hoursDelta = roundHours(workedHours - contractedMonth);
+  const shortfallHours = Math.max(0, -hoursDelta);
+
+  const jiraDeficitAmount =
+    !timeBankEnabled && rate != null && shortfallHours > 0
+      ? roundMoney(shortfallHours * rate)
+      : 0;
+
+  const presencialExtraAmount = qualifiesPresencialExtra({
+    baseType: input.baseType,
+    contractedHoursPerDay: input.contractedHoursPerDay,
+    hourlyRate: rate,
+  })
+    ? roundMoney(travelPresencialDays * PRESENCIAL_EXTRA_HOURS * (rate as number))
+    : 0;
 
   const travelAmount = computeTravelAmount({
     presencialDays: travelPresencialDays,
@@ -64,14 +144,10 @@ export function computeClosingSubmitValues(
     dailyMealAmount: dailyMeal,
   });
 
-  let differentialAmount = 0;
-  if (input.baseType === "variable") {
-    const rate = input.hourlyRate;
-    if (rate != null && Number.isFinite(rate) && rate >= 0) {
-      const workedAmount = roundMoney(workedHours * rate);
-      differentialAmount = roundMoney(workedAmount - baseAmount);
-    }
-  }
+  // differential_amount stores the signed money adjustment beyond base.
+  const differentialAmount = roundMoney(
+    -jiraDeficitAmount + presencialExtraAmount,
+  );
 
   const invoiceAmount = computeInvoiceAmount({
     baseAmount,
@@ -89,12 +165,39 @@ export function computeClosingSubmitValues(
     differentialAmount,
     invoiceAmount,
     workedHoursSnapshot: workedHours,
+    contractedHoursMonthSnapshot: contractedMonth,
+    timeBankEnabled,
+    timeBankHoursDelta: hoursDelta,
+    jiraDeficitAmount,
+    presencialExtraAmount,
     compensationBaseAmount: baseAmount,
     compensationBaseType: input.baseType,
     compensationHourlyRate: input.hourlyRate,
     compensationDailyTravelAmount: dailyTravel,
     compensationDailyMealAmount: dailyMeal,
   };
+}
+
+export function qualifiesPresencialExtra(input: {
+  baseType: CompensationBaseType;
+  contractedHoursPerDay: number;
+  hourlyRate: number | null;
+}): boolean {
+  if (input.baseType !== "variable") {
+    return false;
+  }
+  if (input.hourlyRate == null || !Number.isFinite(input.hourlyRate)) {
+    return false;
+  }
+  return isSixHourContractDay(input.contractedHoursPerDay);
+}
+
+export function isSixHourContractDay(hoursPerDay: number): boolean {
+  return Number.isFinite(hoursPerDay) && Math.abs(hoursPerDay - 6) < 0.05;
+}
+
+function roundHours(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function uniqueIsoDates(values: string[]): string[] {

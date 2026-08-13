@@ -10,7 +10,9 @@ import type { Profile } from "@/types/profile";
 import {
   Building2,
   Cable,
+  CalendarCheck2,
   CalendarDays,
+  ChevronDown,
   FolderKanban,
   Home,
   LayoutDashboard,
@@ -24,7 +26,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ComponentType, type ReactNode, type SVGProps } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type SVGProps,
+} from "react";
 
 type AppChromeProps = {
   profile: Profile;
@@ -49,12 +59,55 @@ function isActive(pathname: string, item: NavItem): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
+function NavLink({
+  item,
+  pathname,
+  onClick,
+  className,
+}: {
+  item: NavItem;
+  pathname: string;
+  onClick?: () => void;
+  className?: string;
+}) {
+  const active = isActive(pathname, item);
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      prefetch
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 xl:gap-2 xl:px-2.5",
+        active
+          ? "bg-brand-soft text-brand-foreground shadow-[var(--shadow-sm)]"
+          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+        className,
+      )}
+    >
+      <Icon className={cn("size-3.5 shrink-0", item.iconClass)} strokeWidth={1.9} />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
+
 export function AppChrome({ profile, children }: AppChromeProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreMenuId = useId();
   const team = canManageTeam(profile.role);
 
-  const items: NavItem[] = [
+  const contaItem: NavItem = {
+    href: "/app/conta",
+    label: "Conta",
+    icon: UserRound,
+    iconClass: "text-rose-600 dark:text-rose-400",
+    match: (path) => path.startsWith("/app/conta"),
+  };
+
+  const primary: NavItem[] = [
     {
       href: "/app",
       label: "Início",
@@ -74,7 +127,9 @@ export function AppChrome({ profile, children }: AppChromeProps) {
               !path.startsWith("/app/gestor/config/emails") &&
               !path.startsWith("/app/gestor/folha/empresas") &&
               path !== "/app/gestor/config" &&
-              !path.startsWith("/app/gestor/config?"),
+              !path.startsWith("/app/gestor/config?") &&
+              path !== "/app/gestor/config/capacidade" &&
+              !path.startsWith("/app/gestor/config/capacidade?"),
           },
           {
             href: "/app/developers",
@@ -84,38 +139,6 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             match: (path: string) => path.startsWith("/app/developers"),
           },
           {
-            href: "/app/gestor/config/emails",
-            label: "E-mails",
-            icon: Mail,
-            iconClass: "text-orange-600 dark:text-orange-400",
-            match: (path: string) =>
-              path.startsWith("/app/gestor/config/emails"),
-          },
-          {
-            href: "/app/gestor/folha/empresas",
-            label: "Empresas",
-            icon: Building2,
-            iconClass: "text-lime-600 dark:text-lime-400",
-            match: (path: string) =>
-              path.startsWith("/app/gestor/folha/empresas"),
-          },
-          {
-            href: "/app/gestor/config#feriados",
-            label: "Feriados",
-            icon: CalendarDays,
-            iconClass: "text-yellow-600 dark:text-yellow-400",
-            match: (path: string) =>
-              path === "/app/gestor/config" ||
-              path.startsWith("/app/gestor/config?"),
-          },
-          {
-            href: "/app/imports",
-            label: "Imports",
-            icon: Upload,
-            iconClass: "text-cyan-600 dark:text-cyan-400",
-            match: (path: string) => path.startsWith("/app/imports"),
-          },
-          {
             href: "/app/jira",
             label: "Jira",
             icon: Cable,
@@ -123,22 +146,91 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             match: (path: string) => path.startsWith("/app/jira"),
           },
           {
-            href: "/app/teams",
-            label: "Times",
-            icon: FolderKanban,
-            iconClass: "text-emerald-600 dark:text-emerald-400",
-            match: (path: string) => path.startsWith("/app/teams"),
+            href: "/app/stg",
+            label: "STG",
+            icon: CalendarCheck2,
+            iconClass: "text-violet-600 dark:text-violet-400",
+            match: (path: string) => path.startsWith("/app/stg"),
           },
         ]
-      : []),
-    {
-      href: "/app/conta",
-      label: "Conta",
-      icon: UserRound,
-      iconClass: "text-rose-600 dark:text-rose-400",
-      match: (path) => path.startsWith("/app/conta"),
-    },
+      : [contaItem]),
   ];
+
+  const more: NavItem[] = team
+    ? [
+        {
+          href: "/app/gestor/config/emails",
+          label: "E-mails",
+          icon: Mail,
+          iconClass: "text-orange-600 dark:text-orange-400",
+          match: (path: string) => path.startsWith("/app/gestor/config/emails"),
+        },
+        {
+          href: "/app/gestor/folha/empresas",
+          label: "Empresas",
+          icon: Building2,
+          iconClass: "text-lime-600 dark:text-lime-400",
+          match: (path: string) =>
+            path.startsWith("/app/gestor/folha/empresas"),
+        },
+        {
+          href: "/app/gestor/config#feriados",
+          label: "Feriados",
+          icon: CalendarDays,
+          iconClass: "text-yellow-600 dark:text-yellow-400",
+          match: (path: string) =>
+            path === "/app/gestor/config" ||
+            path.startsWith("/app/gestor/config?"),
+        },
+        {
+          href: "/app/imports",
+          label: "Imports",
+          icon: Upload,
+          iconClass: "text-cyan-600 dark:text-cyan-400",
+          match: (path: string) => path.startsWith("/app/imports"),
+        },
+        {
+          href: "/app/teams",
+          label: "Times",
+          icon: FolderKanban,
+          iconClass: "text-emerald-600 dark:text-emerald-400",
+          match: (path: string) => path.startsWith("/app/teams"),
+        },
+        contaItem,
+      ]
+    : [];
+
+  const drawerItems = [...primary, ...more];
+  const moreActive = more.some((item) => isActive(pathname, item));
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!moreOpen) {
+      return;
+    }
+    function onPointerDown(event: MouseEvent) {
+      if (
+        moreRef.current &&
+        !moreRef.current.contains(event.target as Node)
+      ) {
+        setMoreOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [moreOpen]);
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
@@ -154,33 +246,72 @@ export function AppChrome({ profile, children }: AppChromeProps) {
             </span>
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
-            {items.map((item) => {
-              const active = isActive(pathname, item);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  prefetch
+          <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-visible lg:flex">
+            {primary.map((item) => (
+              <NavLink key={item.href} item={item} pathname={pathname} />
+            ))}
+            {more.length > 0 ? (
+              <div ref={moreRef} className="relative z-50 shrink-0">
+                <button
+                  type="button"
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 xl:gap-2 xl:px-2.5",
-                    active
+                    "inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 xl:gap-1.5 xl:px-2.5",
+                    moreActive || moreOpen
                       ? "bg-brand-soft text-brand-foreground shadow-[var(--shadow-sm)]"
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                   )}
+                  aria-expanded={moreOpen}
+                  aria-controls={moreMenuId}
+                  aria-haspopup="menu"
+                  onClick={() => setMoreOpen((value) => !value)}
                 >
-                  <Icon
-                    className={cn("size-3.5 shrink-0", item.iconClass)}
+                  Mais
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 shrink-0 transition-transform duration-150",
+                      moreOpen ? "rotate-180" : "rotate-0",
+                    )}
                     strokeWidth={1.9}
                   />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            })}
+                </button>
+                {moreOpen ? (
+                  <div
+                    id={moreMenuId}
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+0.4rem)] z-50 min-w-[12.5rem] rounded-[var(--radius)] border border-border/70 bg-header/95 p-1 shadow-[var(--shadow-sm)] backdrop-blur-xl"
+                  >
+                    {more.map((item) => {
+                      const active = isActive(pathname, item);
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          prefetch
+                          role="menuitem"
+                          onClick={() => setMoreOpen(false)}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-2 text-sm font-medium transition-colors",
+                            active
+                              ? "bg-brand-soft text-brand-foreground"
+                              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                          )}
+                        >
+                          <Icon
+                            className={cn("size-3.5 shrink-0", item.iconClass)}
+                            strokeWidth={1.9}
+                          />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </nav>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Link
               href="/app/conta"
               className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 transition-colors hover:bg-muted/60 xl:flex"
@@ -221,7 +352,7 @@ export function AppChrome({ profile, children }: AppChromeProps) {
               </p>
             </div>
             <nav className="flex flex-col gap-1">
-              {items.map((item) => {
+              {drawerItems.map((item) => {
                 const active = isActive(pathname, item);
                 const Icon = item.icon;
                 return (

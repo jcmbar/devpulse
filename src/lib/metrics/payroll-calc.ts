@@ -134,17 +134,11 @@ export function listDaysInYearMonth(yearMonth: string): string[] {
   return days;
 }
 
-export function defaultDayKindForDate(
-  isoDate: string,
-  holidayDates?: ReadonlySet<string>,
-): PayrollAttendanceKind {
+export function defaultDayKindForDate(isoDate: string): PayrollAttendanceKind {
   const date = new Date(`${isoDate}T12:00:00.000Z`);
   const weekday = date.getUTCDay();
   if (weekday === 0 || weekday === 6) {
     return "weekend";
-  }
-  if (holidayDates?.has(isoDate)) {
-    return "holiday";
   }
   return "home";
 }

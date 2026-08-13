@@ -103,6 +103,8 @@ export type PayrollAttendanceDay = {
   day_on: string;
   day_kind: PayrollAttendanceKind;
   hours: number;
+  /** Conta para refeição; deslocamento = day_kind presencial. */
+  charges_meal: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;

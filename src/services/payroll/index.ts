@@ -2,10 +2,6 @@ import "server-only";
 
 import {
   computeInvoiceAmount,
-  computeMealAmount,
-  computePayrollDifferential,
-  computeTravelAmount,
-  countPresencialDays,
   defaultDayKindForDate,
   listDaysInYearMonth,
   yearMonthPeriod,
@@ -13,7 +9,6 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { listCurrentCompensationsByDeveloperIds } from "@/services/developers/compensation";
 import { listDevelopersAdmin } from "@/services/developers/admin";
-import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   assertMonthlyClosingNotFinalizedForPayroll,
   mapFinalizedMonthlyClosingIdsByDeveloper,
@@ -109,6 +104,7 @@ function mapAttendance(row: Record<string, unknown>): PayrollAttendanceDay {
     day_on: String(row.day_on),
     day_kind: dayKind,
     hours: Number(row.hours ?? 0),
+    charges_meal: Boolean(row.charges_meal),
     notes: (row.notes as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
@@ -200,39 +196,8 @@ async function ensureAttendanceDefaults(input: {
   yearMonth: string;
   contractedHoursPerDay: number;
 }): Promise<void> {
-  const { dates: holidayDates } =
-    await listApplicableHolidayDatesForDeveloperMonth({
-      developerId: input.developerId,
-      yearMonth: input.yearMonth,
-    });
-
   const existing = await listAttendanceForItem(input.itemId);
   if (existing.length > 0) {
-    // Soft sync: only upgrade default "home" weekdays that are now holidays.
-    const softPatches = existing.filter(
-      (day) =>
-        day.day_kind === "home" &&
-        holidayDates.has(day.day_on) &&
-        defaultDayKindForDate(day.day_on, holidayDates) === "holiday",
-    );
-    if (softPatches.length === 0) {
-      return;
-    }
-
-    const supabase = await createClient();
-    for (const day of softPatches) {
-      const { error } = await supabase
-        .from("payroll_attendance_days")
-        .update({ day_kind: "holiday", hours: 0 })
-        .eq("id", day.id)
-        .eq("day_kind", "home");
-      if (error) {
-        throw new Error(
-          `Falha ao aplicar feriado em ${day.day_on}: ${error.message}`,
-        );
-      }
-    }
-    await recalculatePayrollItem(input.itemId);
     return;
   }
 
@@ -242,13 +207,14 @@ async function ensureAttendanceDefaults(input: {
   }
 
   const rows = days.map((dayOn) => {
-    const kind = defaultDayKindForDate(dayOn, holidayDates);
+    const kind = defaultDayKindForDate(dayOn);
     const isWorkday = kind === "home" || kind === "presencial";
     return {
       payroll_item_id: input.itemId,
       day_on: dayOn,
       day_kind: kind,
       hours: isWorkday ? input.contractedHoursPerDay : 0,
+      charges_meal: kind === "presencial",
     };
   });
 
@@ -298,33 +264,67 @@ export async function setPayrollItemReviewed(input: {
 /** Auto-calculated amounts for an item, before manual overrides. */
 async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   presencialDays: number;
+  mealDays: number;
   differential: number;
   travel: number;
   meal: number;
 }> {
   const attendance = await listAttendanceForItem(item.id);
-  const attendanceInput = attendance.map((day) => ({
-    dayKind: day.day_kind,
-    hours: day.hours,
-  }));
-  const presencialDays = countPresencialDays(attendanceInput);
+  const travelDays = attendance
+    .filter((day) => day.day_kind === "presencial")
+    .map((day) => day.day_on);
+  const mealDayList = attendance
+    .filter((day) => day.charges_meal)
+    .map((day) => day.day_on);
+
+  const supabase = await createClient();
+  const { data: closingRow } = await supabase
+    .from("payroll_month_closings")
+    .select("year_month")
+    .eq("id", item.payroll_closing_id)
+    .maybeSingle();
+  const yearMonth =
+    (closingRow?.year_month as string | undefined) ??
+    item.created_at.slice(0, 7);
+
+  const { getCurrentDeveloperCompensation } = await import(
+    "@/services/developers/compensation"
+  );
+  const { mapJiraDeliveryHoursByDeveloperForMonth } = await import(
+    "@/services/payroll/jira-hours"
+  );
+  const { computeClosingSubmitValues } = await import(
+    "@/lib/metrics/closing-submit-values"
+  );
+
+  const compensation = await getCurrentDeveloperCompensation(item.developer_id);
+  const jiraMapForMonth = await mapJiraDeliveryHoursByDeveloperForMonth({
+    yearMonth,
+    developers: [{ id: item.developer_id, teamId: item.team_id }],
+    teamId: item.team_id,
+  });
+  const jiraHours = jiraMapForMonth.get(item.developer_id) ?? 0;
+
+  const computed = computeClosingSubmitValues({
+    baseType: item.base_type,
+    baseAmount: item.base_amount,
+    hourlyRate: item.hourly_rate,
+    contractedHoursPerDay: item.contracted_hours_per_day,
+    contractedHoursPerMonth: item.contracted_hours_per_month,
+    dailyTravelAmount: item.daily_travel_amount,
+    dailyMealAmount: item.daily_meal_amount,
+    workedHours: jiraHours,
+    travelDays,
+    mealDays: mealDayList,
+    timeBankEnabled: compensation?.time_bank_enabled ?? false,
+  });
 
   return {
-    presencialDays,
-    differential: computePayrollDifferential({
-      baseType: item.base_type,
-      baseAmount: item.base_amount,
-      hourlyRate: item.hourly_rate,
-      attendance: attendanceInput,
-    }),
-    travel: computeTravelAmount({
-      presencialDays,
-      dailyTravelAmount: item.daily_travel_amount,
-    }),
-    meal: computeMealAmount({
-      presencialDays,
-      dailyMealAmount: item.daily_meal_amount,
-    }),
+    presencialDays: computed.travelPresencialDays,
+    mealDays: computed.mealPresencialDays,
+    differential: computed.differentialAmount,
+    travel: computed.travelAmount,
+    meal: computed.mealAmount,
   };
 }
 
@@ -654,6 +654,16 @@ export async function listPayrollPresencialDaysForItem(
     .sort();
 }
 
+export async function listPayrollMealDaysForItem(
+  itemId: string,
+): Promise<string[]> {
+  const days = await listAttendanceForItem(itemId);
+  return days
+    .filter((day) => day.charges_meal)
+    .map((day) => day.day_on)
+    .sort();
+}
+
 function sameNullableNumber(
   left: number | null,
   right: number | null,
@@ -957,12 +967,15 @@ export async function upsertPayrollAttendanceDay(input: {
   dayOn: string;
   dayKind: PayrollAttendanceKind;
   hours: number;
+  chargesMeal?: boolean;
 }): Promise<PayrollAttendanceDay> {
   const supabase = await createClient();
   const hours =
     input.dayKind === "presencial" || input.dayKind === "home"
       ? Math.max(0, input.hours)
       : 0;
+  const chargesMeal =
+    input.chargesMeal ?? input.dayKind === "presencial";
 
   const { data, error } = await supabase
     .from("payroll_attendance_days")
@@ -972,6 +985,7 @@ export async function upsertPayrollAttendanceDay(input: {
         day_on: input.dayOn,
         day_kind: input.dayKind,
         hours,
+        charges_meal: chargesMeal && input.dayKind === "presencial",
       },
       { onConflict: "payroll_item_id,day_on" },
     )
@@ -1008,6 +1022,7 @@ export async function batchUpsertPayrollAttendanceDays(input: {
       patch.dayKind === "presencial" || patch.dayKind === "home"
         ? Math.max(0, patch.hours)
         : 0,
+    charges_meal: patch.dayKind === "presencial",
   }));
 
   const { error } = await supabase

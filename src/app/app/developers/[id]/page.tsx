@@ -62,6 +62,14 @@ export default async function EditDeveloperPage({
     notFound();
   }
 
+  let timeBankBalance = 0;
+  if (activeTab === "valores" && compensation?.time_bank_enabled) {
+    const { getDeveloperTimeBankBalance } = await import(
+      "@/services/time-bank"
+    );
+    timeBankBalance = await getDeveloperTimeBankBalance(developer.id);
+  }
+
   let access: Awaited<ReturnType<typeof resolveDeveloperAccessInfo>> | null =
     null;
   let accessError: string | null = null;
@@ -282,8 +290,21 @@ export default async function EditDeveloperPage({
       {activeTab === "valores" ? (
         <SectionShell
           title="Valores e capacidade contratada"
-          description="Remuneração e horas do contrato. Usado futuramente para custo por pessoa."
+          description="Remuneração, horas do contrato, banco de horas e diárias. Usado no fechamento e na Folha. Fechamentos já finalizados não são recalculados."
         >
+          {compensation?.time_bank_enabled ? (
+            <p className="mb-4 text-sm text-muted-foreground">
+              Saldo do banco de horas:{" "}
+              <span className="font-semibold tabular-nums text-foreground">
+                {timeBankBalance > 0 ? "+" : ""}
+                {timeBankBalance.toLocaleString("pt-BR", {
+                  maximumFractionDigits: 1,
+                })}{" "}
+                h
+              </span>
+              . Movimentos entram ao finalizar novos fechamentos.
+            </p>
+          ) : null}
           <DeveloperCompensationForm
             developerId={developer.id}
             compensation={compensation}
