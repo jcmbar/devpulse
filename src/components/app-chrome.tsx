@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShellMesh } from "@/components/app-shell-mesh";
+import { SessionActivityGuard } from "@/components/session-activity-guard";
 import { BrandMark } from "@/components/brand-mark";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -42,6 +43,7 @@ type AppChromeProps = {
   profile: Profile;
   /** Public avatar URL of the linked developer, when available. */
   avatarUrl?: string | null;
+  idleMinutes?: number | null;
   children: ReactNode;
 };
 
@@ -95,7 +97,12 @@ function NavLink({
   );
 }
 
-export function AppChrome({ profile, avatarUrl = null, children }: AppChromeProps) {
+export function AppChrome({
+  profile,
+  avatarUrl = null,
+  idleMinutes = null,
+  children,
+}: AppChromeProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -238,6 +245,7 @@ export function AppChrome({ profile, avatarUrl = null, children }: AppChromeProp
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
+      <SessionActivityGuard idleMinutes={idleMinutes} />
       <div className="app-shell-backdrop" aria-hidden>
         <AppShellMesh />
       </div>

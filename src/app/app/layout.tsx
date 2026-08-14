@@ -1,6 +1,7 @@
 import { AppChrome } from "@/components/app-chrome";
 import { InspectionDeterrent } from "@/components/security/inspection-deterrent";
 import { getAppContext } from "@/lib/auth/app-context";
+import { getSessionIdleMinutes } from "@/lib/auth/session-ttl";
 import { developerAvatarPublicUrl } from "@/services/developers";
 
 /**
@@ -17,7 +18,11 @@ export default async function AppLayout({
 
   return (
     <InspectionDeterrent>
-      <AppChrome profile={profile} avatarUrl={avatarUrl}>
+      <AppChrome
+        profile={profile}
+        avatarUrl={avatarUrl}
+        idleMinutes={getSessionIdleMinutes()}
+      >
         {children}
       </AppChrome>
     </InspectionDeterrent>

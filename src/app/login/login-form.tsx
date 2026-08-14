@@ -19,9 +19,13 @@ function loginErrorMessage(message: string): string {
   return "Não foi possível entrar. Tente novamente.";
 }
 
-export function LoginForm() {
+export function LoginForm({
+  expiredMessage = null,
+}: {
+  expiredMessage?: string | null;
+}) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(expiredMessage);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

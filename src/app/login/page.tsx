@@ -3,7 +3,13 @@ import { LoginConversationGraph } from "@/components/login-conversation-graph";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LoginForm } from "./login-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ expired?: string; idle?: string }>;
+}) {
+  const { expired, idle } = await searchParams;
+
   return (
     <main className="login-stage login-stage--hybrid">
       <div className="login-stage__backdrop" aria-hidden>
@@ -32,7 +38,15 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <LoginForm />
+          <LoginForm
+            expiredMessage={
+              idle === "1"
+                ? "Sua sessão encerrou por inatividade. Entre novamente para continuar."
+                : expired === "1"
+                  ? "Sua sessão expirou. Entre novamente para continuar."
+                  : null
+            }
+          />
         </div>
 
         <p className="mt-8 max-w-sm text-center text-xs text-muted-foreground">
