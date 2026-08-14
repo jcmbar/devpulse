@@ -36,17 +36,12 @@ export function MonthlyClosingStatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs font-semibold tracking-wide",
-        status === "open" &&
-          "border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-100",
-        status === "in_review" &&
-          "border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-100",
-        status === "rejected" &&
-          "border-rose-500/45 bg-rose-500/15 text-rose-950 dark:text-rose-100",
-        status === "closed" &&
-          "border-violet-500/40 bg-violet-500/15 text-violet-950 dark:text-violet-100",
-        status === "finalized" &&
-          "border-emerald-500/40 bg-emerald-500/15 text-emerald-950 dark:text-emerald-100",
+        "ui-closing-status",
+        status === "open" && "ui-closing-status--open",
+        status === "in_review" && "ui-closing-status--in_review",
+        status === "rejected" && "ui-closing-status--rejected",
+        status === "closed" && "ui-closing-status--closed",
+        status === "finalized" && "ui-closing-status--finalized",
         className,
       )}
     >

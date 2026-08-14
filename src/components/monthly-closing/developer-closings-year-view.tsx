@@ -103,30 +103,6 @@ function formatHours(value: number): string {
   })} h`;
 }
 
-/** Distinct month accent bands (Jan → Dec) — seasonal blues → greens → warm. */
-const MONTH_BAND_COLORS = [
-  "#1d4ed8", // Jan
-  "#2563eb", // Fev
-  "#0284c7", // Mar
-  "#0891b2", // Abr
-  "#0d9488", // Mai
-  "#65a30d", // Jun
-  "#ca8a04", // Jul
-  "#d97706", // Ago
-  "#ea580c", // Set
-  "#dc2626", // Out
-  "#be123c", // Nov
-  "#334155", // Dez
-] as const;
-
-function monthBandColor(yearMonth: string): string {
-  const monthPart = Number(yearMonth.split("-")[1]);
-  if (!Number.isFinite(monthPart) || monthPart < 1 || monthPart > 12) {
-    return MONTH_BAND_COLORS[0];
-  }
-  return MONTH_BAND_COLORS[monthPart - 1];
-}
-
 function shortMonthLabel(yearMonth: string): string {
   const [year, monthPart] = yearMonth.split("-");
   const date = new Date(Number(year), Number(monthPart) - 1, 1);
@@ -492,9 +468,7 @@ function MonthGridCard({
   const status = rowStatus(row);
   const needsCorrection = status === "rejected" && !isOpen;
   const openLabel = actionLabel(isOpen, status, row.closing?.started_at);
-  const bandColor = needsCorrection
-    ? "#e11d48"
-    : monthBandColor(row.yearMonth);
+  const bandStatus = needsCorrection ? "rejected" : status;
 
   return (
     <div
@@ -506,10 +480,16 @@ function MonthGridCard({
       )}
     >
       <div
-        className="px-3 py-1.5"
-        style={{ backgroundColor: bandColor }}
+        className={cn(
+          "ui-closing-month-band",
+          bandStatus === "open" && "ui-closing-month-band--open",
+          bandStatus === "in_review" && "ui-closing-month-band--in_review",
+          bandStatus === "rejected" && "ui-closing-month-band--rejected",
+          bandStatus === "closed" && "ui-closing-month-band--closed",
+          bandStatus === "finalized" && "ui-closing-month-band--finalized",
+        )}
       >
-        <p className="ui-kpi-hero__band-label text-white">
+        <p className="ui-kpi-hero__band-label">
           {shortMonthLabel(row.yearMonth)}
         </p>
       </div>

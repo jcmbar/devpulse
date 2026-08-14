@@ -474,18 +474,77 @@ body {
 
   .ui-kpi-hero.ui-kpi-card--brand .ui-kpi-hero__band {
     background: var(--kpi-brand-accent);
+    color: var(--brand-on);
   }
   .ui-kpi-hero.ui-kpi-card--success .ui-kpi-hero__band {
     background: var(--kpi-success-accent);
+    color: var(--success-foreground);
   }
   .ui-kpi-hero.ui-kpi-card--warning .ui-kpi-hero__band {
     background: var(--kpi-warning-accent);
+    color: var(--warning-foreground);
   }
   .ui-kpi-hero.ui-kpi-card--danger .ui-kpi-hero__band {
     background: var(--kpi-danger-accent);
+    color: var(--danger-foreground);
   }
   .ui-kpi-hero.ui-kpi-card--info .ui-kpi-hero__band {
     background: var(--kpi-info-accent);
+    color: var(--info-foreground);
+  }
+
+  .ui-closing-status {
+    @apply inline-flex items-center rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs font-semibold tracking-wide;
+  }
+  .ui-closing-status--open {
+    border-color: color-mix(in oklab, var(--info) 45%, var(--border));
+    background: var(--info-soft);
+    color: var(--info-ink);
+  }
+  .ui-closing-status--in_review {
+    border-color: color-mix(in oklab, var(--warning) 45%, var(--border));
+    background: var(--kpi-warning-soft);
+    color: var(--kpi-warning-ink);
+  }
+  .ui-closing-status--rejected {
+    border-color: color-mix(in oklab, var(--danger) 45%, var(--border));
+    background: var(--kpi-danger-soft);
+    color: var(--kpi-danger-ink);
+  }
+  .ui-closing-status--closed {
+    border-color: color-mix(in oklab, var(--brand) 40%, var(--border));
+    background: var(--brand-soft);
+    color: var(--brand-foreground);
+  }
+  .ui-closing-status--finalized {
+    border-color: color-mix(in oklab, var(--success) 45%, var(--border));
+    background: var(--kpi-success-soft);
+    color: var(--kpi-success-ink);
+  }
+
+  .ui-closing-month-band {
+    @apply px-3 py-1.5;
+    color: #fff;
+  }
+  .ui-closing-month-band--open {
+    background: var(--kpi-info-accent);
+    color: var(--info-foreground);
+  }
+  .ui-closing-month-band--in_review {
+    background: var(--kpi-warning-accent);
+    color: var(--warning-foreground);
+  }
+  .ui-closing-month-band--rejected {
+    background: var(--kpi-danger-accent);
+    color: var(--danger-foreground);
+  }
+  .ui-closing-month-band--closed {
+    background: var(--kpi-brand-accent);
+    color: var(--brand-on);
+  }
+  .ui-closing-month-band--finalized {
+    background: var(--kpi-success-accent);
+    color: var(--success-foreground);
   }
 
   .ui-kpi-card--brand {
