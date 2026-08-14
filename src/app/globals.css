@@ -226,38 +226,6 @@ body {
   outline-offset: 2px;
 }
 
-@keyframes login-orb-drift-a {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(4%, 6%, 0) scale(1.06);
-  }
-}
-
-@keyframes login-orb-drift-b {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-5%, -4%, 0) scale(1.08);
-  }
-}
-
-@keyframes login-orb-drift-c {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-    opacity: 0.7;
-  }
-  50% {
-    transform: translate3d(3%, -5%, 0);
-    opacity: 1;
-  }
-}
-
 @keyframes closing-attention-pulse {
   0%,
   100% {
@@ -283,10 +251,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .login-orb {
-    animation: none !important;
-  }
-
   .ui-closing-attention,
   .ui-closing-attention-btn {
     animation: none !important;
@@ -797,55 +761,197 @@ body {
 
   .login-stage {
     @apply relative isolate flex min-h-full flex-1 flex-col overflow-hidden;
+    overscroll-behavior: none;
+    --login-depth: #e8eef8;
+    --login-channel: rgb(71 85 105 / 0.2);
+    --login-node: rgb(71 85 105 / 0.4);
+    --login-node-fill: #f8fafc;
+    --login-signal: #155e75;
+    --login-ack: #3f6212;
+    --login-ack-fill: rgb(63 98 18 / 0.12);
+    --login-mesh: rgb(14 116 144 / 0.82);
+    --login-mesh-line: rgb(71 85 105 / 0.2);
+    background: var(--login-depth);
+    color: var(--foreground);
+  }
+
+  html.dark .login-stage {
+    --login-depth: #070b14;
+    --login-channel: rgb(148 163 184 / 0.16);
+    --login-node: rgb(148 163 184 / 0.44);
+    --login-node-fill: rgb(12 18 28 / 0.92);
+    --login-signal: #22d3ee;
+    --login-ack: #84cc16;
+    --login-ack-fill: rgb(132 204 22 / 0.14);
+    --login-mesh: rgb(103 232 249 / 0.55);
+    --login-mesh-line: rgb(56 120 168 / 0.28);
+  }
+
+  .login-stage--hybrid {
+    --login-depth: #e8eef8;
+  }
+
+  html.dark .login-stage--hybrid {
+    --login-depth: #060910;
+  }
+
+  .login-stage--canon {
+    --background: #070b14;
+    --foreground: #e8eef7;
+    --muted: #111827;
+    --muted-foreground: #94a3b8;
+    --border: #1e293b;
+    --ring: #22d3ee;
+    --accent: #22d3ee;
+    --accent-foreground: #083344;
+    --card: #0c121c;
+    --card-foreground: #e8eef7;
+    --surface: #0c121c;
+    --surface-elevated: #111927;
+    --brand: #22d3ee;
+    --brand-soft: rgb(34 211 238 / 0.12);
+    --brand-foreground: #a5f3fc;
+    --brand-on: #083344;
+    --login-depth: #070b14;
+    --login-channel: rgb(148 163 184 / 0.16);
+    --login-node: rgb(148 163 184 / 0.48);
+    --login-node-fill: rgb(12 18 28 / 0.92);
+    --login-signal: #22d3ee;
+    --login-ack: #a3e635;
+    --login-ack-fill: rgb(163 230 53 / 0.16);
+    color: var(--foreground);
+    background: var(--login-depth);
   }
 
   .login-stage__backdrop {
     @apply pointer-events-none absolute inset-0 -z-10 overflow-hidden;
-    background-color: var(--background);
-    background-image: linear-gradient(
-        135deg,
-        color-mix(in oklab, var(--brand-blue) 10%, transparent) 0%,
-        transparent 42%,
-        color-mix(in oklab, var(--brand) 8%, transparent) 58%,
-        color-mix(in oklab, var(--brand-lime) 9%, transparent) 100%
-      ),
-      var(--page-glow);
+    background-color: var(--login-depth, var(--background));
   }
 
-  .login-orb {
-    @apply absolute rounded-full blur-3xl;
-    will-change: transform;
+  .login-stage--hybrid .login-stage__backdrop::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse 42rem 30rem at 50% 12%,
+      rgb(8 145 178 / 0.22),
+      transparent 58%
+    );
   }
 
-  .login-orb--a {
-    width: min(72vw, 420px);
-    height: min(72vw, 420px);
-    top: -12%;
-    left: -8%;
-    background: var(--login-orb-a);
-    animation: login-orb-drift-a 18s ease-in-out infinite;
+  html.dark .login-stage--hybrid .login-stage__backdrop::before {
+    background: radial-gradient(
+      ellipse 42rem 30rem at 50% 12%,
+      rgb(34 211 238 / 0.14),
+      transparent 58%
+    );
   }
 
-  .login-orb--b {
-    width: min(80vw, 480px);
-    height: min(80vw, 480px);
-    right: -18%;
-    bottom: -10%;
-    background: var(--login-orb-b);
-    animation: login-orb-drift-b 22s ease-in-out infinite;
+  .login-mesh {
+    @apply absolute inset-0 block h-full w-full;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 22%,
+      rgb(0 0 0 / 0.35) 42%,
+      #000 58%
+    );
   }
 
-  .login-orb--c {
-    width: min(50vw, 280px);
-    height: min(50vw, 280px);
-    top: 42%;
-    left: 38%;
-    background: var(--login-orb-c);
-    animation: login-orb-drift-c 16s ease-in-out infinite;
+  html:not(.dark) .login-mesh {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 20%,
+      rgb(0 0 0 / 0.4) 40%,
+      #000 56%
+    );
+  }
+
+  @media (max-width: 640px) {
+    .login-mesh {
+      opacity: 0.48;
+    }
+  }
+
+  @media (max-height: 560px) {
+    .login-mesh {
+      opacity: 0;
+    }
   }
 
   .login-panel {
-    @apply w-full max-w-md space-y-6 rounded-[var(--radius)] border border-border/70 p-6 text-card-foreground shadow-[var(--shadow-md)] backdrop-blur-[2px] sm:p-8;
-    background: color-mix(in oklab, var(--surface-elevated) 92%, transparent);
+    @apply relative z-10 w-full max-w-md space-y-6 rounded-[var(--radius)] border border-border p-6 text-card-foreground shadow-[var(--shadow-md)] sm:p-8;
+    background: var(--surface-elevated);
+  }
+
+  .login-panel::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 3px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      var(--brand-blue) 0%,
+      var(--brand) 46%,
+      var(--brand-lime) 100%
+    );
+  }
+
+  .login-panel__header {
+    @apply space-y-3 text-center sm:text-left;
+  }
+
+  .login-panel__mark {
+    @apply text-[13px] font-semibold tracking-[0.14em] text-brand uppercase;
+  }
+
+  .login-panel__eyebrow {
+    @apply mt-0.5 text-[11px] tracking-[0.04em] text-muted-foreground;
+  }
+
+  .login-panel::before {
+    content: "";
+    position: absolute;
+    inset: -3.25rem;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      var(--login-depth, var(--background)) 46%,
+      transparent 76%
+    );
+  }
+
+  .login-stage--hybrid .login-panel::before {
+    inset: -3.5rem -3.25rem -5rem;
+    background: radial-gradient(
+      ellipse at 50% 42%,
+      var(--login-depth, var(--background)) 48%,
+      transparent 78%
+    );
+  }
+
+  .login-panel .ui-btn-primary {
+    @apply py-2.5 text-[15px] font-semibold tracking-[0.01em] sm:py-2.5;
+    background: linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--accent) 72%, var(--brand-lime)) 0%,
+      var(--accent) 52%,
+      color-mix(in oklab, var(--accent) 84%, var(--brand-blue)) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 8px 20px -12px color-mix(in oklab, var(--accent) 55%, transparent);
+  }
+
+  .login-stage .ui-input {
+    @apply bg-card placeholder:text-muted-foreground/55;
+  }
+
+  .login-stage .ui-label {
+    @apply text-foreground;
   }
 }

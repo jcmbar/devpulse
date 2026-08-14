@@ -5,12 +5,8 @@ import { SetPasswordForm } from "./set-password-form";
 
 export default function SetPasswordPage() {
   return (
-    <main className="login-stage">
-      <div className="login-stage__backdrop" aria-hidden>
-        <span className="login-orb login-orb--a" />
-        <span className="login-orb login-orb--b" />
-        <span className="login-orb login-orb--c" />
-      </div>
+    <main className="login-stage login-stage--canon">
+      <div className="login-stage__backdrop" aria-hidden />
 
       <div className="absolute top-4 right-4 z-10 sm:top-6 sm:right-6">
         <ThemeToggle />

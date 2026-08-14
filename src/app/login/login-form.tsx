@@ -5,6 +5,20 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+function loginErrorMessage(message: string): string {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("invalid login") ||
+    normalized.includes("invalid credentials")
+  ) {
+    return "E-mail ou senha incorretos.";
+  }
+  if (normalized.includes("email not confirmed")) {
+    return "Confirme o e-mail antes de entrar.";
+  }
+  return "Não foi possível entrar. Tente novamente.";
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +42,7 @@ export function LoginForm() {
     setIsLoading(false);
 
     if (signInError) {
-      setError(signInError.message);
+      setError(loginErrorMessage(signInError.message));
       return;
     }
 
@@ -57,7 +71,6 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
-          placeholder="••••••••"
           className="ui-input"
         />
       </FormField>
@@ -67,7 +80,7 @@ export function LoginForm() {
       <FormActions
         fullWidth
         primary={{
-          label: "Entrar no DevPulse",
+          label: "Entrar",
           loadingLabel: "Entrando…",
           pending: isLoading,
         }}
