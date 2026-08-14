@@ -3,8 +3,7 @@
 import { useTheme } from "@/components/theme-provider";
 import {
   LOGIN_MESH,
-  loginMeshDimensions,
-  loginMeshRow,
+  loginMeshPoints,
 } from "@/lib/login-graph";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
@@ -35,12 +34,6 @@ const getReducedMotionSnapshot = getMediaSnapshot(
 const subscribeCompact = subscribeMedia(COMPACT_QUERY);
 const getCompactSnapshot = getMediaSnapshot(COMPACT_QUERY);
 
-function hideBehindCard(x: number, y: number): boolean {
-  const nx = (x - 50) / 16;
-  const ny = (y - 44) / 14;
-  return nx * nx + ny * ny < 1;
-}
-
 export function LoginConversationGraph() {
   const { resolvedTheme } = useTheme();
   const reducedMotion = useSyncExternalStore(
@@ -57,7 +50,6 @@ export function LoginConversationGraph() {
   const listeningRef = useRef(false);
   const staticMesh = reducedMotion || compact;
   const light = resolvedTheme === "light";
-  const { cols, rows } = loginMeshDimensions(resolvedTheme, compact);
 
   const clock = staticMesh
     ? compact
@@ -67,12 +59,12 @@ export function LoginConversationGraph() {
 
   const points = useMemo(
     () =>
-      Array.from({ length: rows }, (_, row) =>
-        loginMeshRow(row, rows, cols, clock),
-      )
-        .flat()
-        .filter((point) => !hideBehindCard(point.x * 100, point.y * 100)),
-    [clock, cols, rows],
+      loginMeshPoints(resolvedTheme, compact, clock).filter((point) => {
+        const nx = (point.x * 100 - 50) / 16;
+        const ny = (point.y * 100 - 44) / 14;
+        return nx * nx + ny * ny >= 1;
+      }),
+    [clock, compact, resolvedTheme],
   );
 
   useEffect(() => {

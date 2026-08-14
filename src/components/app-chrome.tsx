@@ -1,5 +1,6 @@
 "use client";
 
+import { AppShellMesh } from "@/components/app-shell-mesh";
 import { BrandMark } from "@/components/brand-mark";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -237,6 +238,9 @@ export function AppChrome({ profile, avatarUrl = null, children }: AppChromeProp
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
+      <div className="app-shell-backdrop" aria-hidden>
+        <AppShellMesh />
+      </div>
       <header className="sticky top-0 z-40 border-b border-border/60 bg-header shadow-[var(--shadow-sm)] backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3 lg:px-8">
           <Link
@@ -402,7 +406,7 @@ export function AppChrome({ profile, avatarUrl = null, children }: AppChromeProp
         ) : null}
       </header>
 
-      <div className="relative z-0 flex flex-1 flex-col">{children}</div>
+      <div className="relative z-10 flex flex-1 flex-col">{children}</div>
     </div>
   );
 }

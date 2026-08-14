@@ -105,7 +105,13 @@ export type LoginMeshPoint = {
 export function loginMeshDimensions(
   theme: "light" | "dark",
   compact: boolean,
+  volume: "login" | "shell" = "login",
 ): { cols: number; rows: number } {
+  if (volume === "shell") {
+    return theme === "light"
+      ? { cols: 24, rows: 16 }
+      : { cols: 26, rows: 16 };
+  }
   if (compact) {
     return { cols: LOGIN_MESH.compactCols, rows: LOGIN_MESH.compactRows };
   }
@@ -113,6 +119,18 @@ export function loginMeshDimensions(
     return { cols: LOGIN_MESH.lightCols, rows: LOGIN_MESH.lightRows };
   }
   return { cols: LOGIN_MESH.cols, rows: LOGIN_MESH.rows };
+}
+
+export function loginMeshPoints(
+  theme: "light" | "dark",
+  compact: boolean,
+  timeMs: number,
+  volume: "login" | "shell" = "login",
+): LoginMeshPoint[] {
+  const { cols, rows } = loginMeshDimensions(theme, compact, volume);
+  return Array.from({ length: rows }, (_, row) =>
+    loginMeshRow(row, rows, cols, timeMs),
+  ).flat();
 }
 
 function meshJitter(col: number, row: number): number {
