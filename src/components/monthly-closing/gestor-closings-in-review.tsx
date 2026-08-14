@@ -46,14 +46,24 @@ export function GestorClosingsInReviewSection({
                     <p className="text-xs text-muted-foreground">
                       Houve alteração no Jira após a finalização deste
                       fechamento. Apenas para ciência.
+                      {row.jira_changed_after_finalized_at ? (
+                        <>
+                          {" "}
+                          Detectado em{" "}
+                          {formatDateTimeBrazil(
+                            row.jira_changed_after_finalized_at,
+                          )}
+                          .
+                        </>
+                      ) : null}
                     </p>
                   </div>
                 </div>
                 <Link
-                  href={`/app/gestor/fechamentos/${row.id}`}
+                  href={`/app/gestor/fechamentos/${row.id}/alteracoes-jira`}
                   className="text-sm font-medium text-brand underline-offset-4 hover:underline"
                 >
-                  Ver
+                  Ver alterações
                 </Link>
               </li>
             ))}

@@ -14,7 +14,13 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listDelayJustificationsForDeveloperImports } from "@/services/delay-justifications";
-import { listJiraCardsByDeveloperAndImport } from "@/services/jira-cards";
+import { listImportBatches } from "@/services/imports";
+import {
+  listJiraCardsByDeveloperAndImport,
+  listJiraCardsByKeysInImport,
+} from "@/services/jira-cards";
+import { diffClosingItemAgainstLiveCard } from "@/lib/fechamentos/jira-post-finalize-diff";
+import type { JiraPostFinalizeCardDiff } from "@/lib/fechamentos/jira-post-finalize-diff";
 import type { DelayJustificationRequest } from "@/types/delay-justification";
 import type { JiraCard } from "@/types/jira-card";
 import type {
@@ -2291,11 +2297,112 @@ export async function revertMonthlyClosingStatus(input: {
   return updated;
 }
 
-function normalizeCompareNumber(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) {
-    return "";
+export type ClosingJiraPostFinalizeDiff = {
+  closingId: string;
+  yearMonth: string;
+  developerId: string;
+  finalizedAt: string | null;
+  detectedAt: string | null;
+  liveImportId: string | null;
+  liveImportCompletedAt: string | null;
+  cards: JiraPostFinalizeCardDiff[];
+};
+
+async function resolveLiveJiraImportForClosing(input: {
+  teamId: string | null;
+  fallbackImportId: string | null;
+}): Promise<{ id: string; completedAt: string | null } | null> {
+  if (input.teamId) {
+    const batches = await listImportBatches({
+      teamId: input.teamId,
+      sources: ["jira"],
+    });
+    const latest = batches[0];
+    if (latest) {
+      return { id: latest.id, completedAt: latest.completed_at };
+    }
   }
-  return String(Math.round(value * 1000) / 1000);
+  if (input.fallbackImportId) {
+    return { id: input.fallbackImportId, completedAt: null };
+  }
+  return null;
+}
+
+function diffClosingItemsAgainstLive(
+  items: MonthlyClosingItem[],
+  liveCards: Array<{
+    jira_key: string;
+    summary: string | null;
+    status: string | null;
+    estimate_hours: number | null;
+    time_spent_hours: number | null;
+    delay_days: number | null;
+    due_on: string | null;
+    unit_test_delivery_on: string | null;
+    is_rework: boolean;
+    rework_weight: number | null;
+  }>,
+): JiraPostFinalizeCardDiff[] {
+  const liveByKey = new Map(
+    liveCards.map((card) => [String(card.jira_key).trim().toUpperCase(), card]),
+  );
+  const diffs: JiraPostFinalizeCardDiff[] = [];
+  for (const item of items) {
+    const live = liveByKey.get(item.jira_key.trim().toUpperCase()) ?? null;
+    const diff = diffClosingItemAgainstLiveCard(item, live);
+    if (diff) {
+      diffs.push(diff);
+    }
+  }
+  return diffs;
+}
+
+/**
+ * Snapshot vs current Jira Compilado for a finalized closing flagged with drift.
+ */
+export async function getClosingJiraPostFinalizeDiff(
+  closingId: string,
+): Promise<ClosingJiraPostFinalizeDiff | null> {
+  const closing = await getMonthlyClosingById(closingId);
+  if (!closing) {
+    return null;
+  }
+
+  const events = await listMonthlyClosingEvents(closing.id);
+  const driftEvent = events.find(
+    (event) => event.event_type === "jira_changed_after_finalized_detected",
+  );
+  const eventImportId =
+    typeof driftEvent?.payload_json?.importId === "string"
+      ? driftEvent.payload_json.importId
+      : null;
+
+  const liveImport = await resolveLiveJiraImportForClosing({
+    teamId: closing.team_id,
+    fallbackImportId: eventImportId ?? closing.import_id,
+  });
+
+  const items = await listMonthlyClosingItems(closing.id);
+  const liveCards =
+    liveImport && items.length > 0
+      ? await listJiraCardsByKeysInImport({
+          importId: liveImport.id,
+          keys: items.map((item) => item.jira_key),
+          developerId: closing.developer_id,
+        })
+      : [];
+
+  return {
+    closingId: closing.id,
+    yearMonth: closing.year_month,
+    developerId: closing.developer_id,
+    finalizedAt: closing.finalized_at,
+    detectedAt:
+      closing.jira_changed_after_finalized_at ?? driftEvent?.created_at ?? null,
+    liveImportId: liveImport?.id ?? null,
+    liveImportCompletedAt: liveImport?.completedAt ?? null,
+    cards: diffClosingItemsAgainstLive(items, liveCards),
+  };
 }
 
 /**
@@ -2360,44 +2467,8 @@ export async function detectJiraChangesAfterFinalized(input: {
       );
     }
 
-    const liveByKey = new Map(
-      (liveCards ?? []).map((card) => [
-        String(card.jira_key).trim().toUpperCase(),
-        card,
-      ]),
-    );
-
-    const changedKeys: string[] = [];
-    for (const item of items) {
-      const live = liveByKey.get(item.jira_key.trim().toUpperCase());
-      if (!live) {
-        changedKeys.push(item.jira_key);
-        continue;
-      }
-      const differs =
-        (live.summary ?? null) !== (item.summary ?? null) ||
-        (live.status ?? null) !== (item.status_name ?? null) ||
-        normalizeCompareNumber(
-          live.estimate_hours == null ? null : Number(live.estimate_hours),
-        ) !== normalizeCompareNumber(item.estimate_hours) ||
-        normalizeCompareNumber(
-          live.time_spent_hours == null ? null : Number(live.time_spent_hours),
-        ) !== normalizeCompareNumber(item.actual_hours) ||
-        normalizeCompareNumber(
-          live.delay_days == null ? null : Number(live.delay_days),
-        ) !== normalizeCompareNumber(item.delay_days) ||
-        (live.due_on ?? null) !== (item.due_on ?? null) ||
-        (live.unit_test_delivery_on ?? null) !==
-          (item.unit_test_delivery_on ?? null) ||
-        Boolean(live.is_rework) !== item.is_rework ||
-        normalizeCompareNumber(
-          live.rework_weight == null ? null : Number(live.rework_weight),
-        ) !== normalizeCompareNumber(item.rework_weight);
-
-      if (differs) {
-        changedKeys.push(item.jira_key);
-      }
-    }
+    const diffs = diffClosingItemsAgainstLive(items, liveCards ?? []);
+    const changedKeys = diffs.map((diff) => diff.jiraKey);
 
     if (changedKeys.length === 0) {
       continue;
@@ -2430,6 +2501,11 @@ export async function detectJiraChangesAfterFinalized(input: {
         importId: input.importId,
         changedKeys: changedKeys.slice(0, 50),
         changedCount: changedKeys.length,
+        cards: diffs.slice(0, 50).map((diff) => ({
+          jiraKey: diff.jiraKey,
+          kind: diff.kind,
+          fields: diff.changes.map((change) => change.field),
+        })),
       },
     });
 

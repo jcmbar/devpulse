@@ -35,6 +35,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useId, useMemo, useState, useTransition } from "react";
 
 export function GestorClosingDecisionPanel({
@@ -237,18 +238,26 @@ export function GestorClosingDecisionPanel({
       {closing.jira_changed_after_finalized ? (
         <div className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-100">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
-          <p className="text-pretty">
-            Houve alteração no Jira após a finalização deste fechamento. Apenas
-            para ciência.
-            {closing.jira_changed_after_finalized_at ? (
-              <span className="mt-1 block text-xs opacity-80">
-                Detectado em{" "}
-                {formatDateTimeBrazil(
-                  closing.jira_changed_after_finalized_at,
-                )}
-              </span>
-            ) : null}
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-pretty">
+              Houve alteração no Jira após a finalização deste fechamento. Apenas
+              para ciência.
+              {closing.jira_changed_after_finalized_at ? (
+                <span className="mt-1 block text-xs opacity-80">
+                  Detectado em{" "}
+                  {formatDateTimeBrazil(
+                    closing.jira_changed_after_finalized_at,
+                  )}
+                </span>
+              ) : null}
+            </p>
+            <Link
+              href={`/app/gestor/fechamentos/${closing.id}/alteracoes-jira`}
+              className="text-sm font-medium text-brand underline-offset-4 hover:underline"
+            >
+              Ver o que mudou
+            </Link>
+          </div>
         </div>
       ) : null}
 
