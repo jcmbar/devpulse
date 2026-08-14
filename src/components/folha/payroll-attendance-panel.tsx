@@ -1,14 +1,16 @@
 "use client";
 
-import {
-  batchApplyAttendanceAction,
-  upsertAttendanceDayAction,
-} from "@/app/app/gestor/folha/actions";
+import { commitAttendanceDraftAction } from "@/app/app/gestor/folha/actions";
 import { PersonAvatar } from "@/components/person-avatar";
 import {
   WEEKDAY_OPTIONS,
   isCalendarWeekend,
+  resolveBatchTargetDays,
+  resolveFillMonthDefaultPatches,
+  resolveWorkweekKindPatches,
+  resolveZeroWeekendPatches,
   type BatchApplyMode,
+  type BatchApplyPatch,
 } from "@/lib/metrics/payroll-attendance-batch";
 import {
   HOLIDAY_OVERLAY_RING_CLASS,
@@ -24,7 +26,7 @@ import {
 } from "@/types/payroll-closing";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PayrollAttendancePanelProps = {
   item: PayrollClosingItem;
@@ -101,6 +103,17 @@ function defaultHoursForKind(
   return 0;
 }
 
+function isSameDayState(
+  a: PayrollAttendanceDay,
+  b: PayrollAttendanceDay,
+): boolean {
+  return (
+    a.day_kind === b.day_kind &&
+    a.charges_meal === b.charges_meal &&
+    Math.abs(a.hours - b.hours) < 0.001
+  );
+}
+
 export function PayrollAttendancePanel({
   item,
   days,
@@ -111,11 +124,12 @@ export function PayrollAttendancePanel({
   avatarUrl = null,
 }: PayrollAttendancePanelProps) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [sourceItemId, setSourceItemId] = useState(item.id);
+  const [baseline, setBaseline] = useState(days);
   const [localDays, setLocalDays] = useState(days);
-  const [syncedDays, setSyncedDays] = useState(days);
   const holidayOverlay = useMemo(() => toHolidayOverlay(holidays), [holidays]);
 
   const bounds = useMemo(() => monthBounds(days), [days]);
@@ -129,9 +143,12 @@ export function PayrollAttendancePanel({
   const [rangeMonthKey, setRangeMonthKey] = useState(monthKey);
   const [batchMode, setBatchMode] = useState<BatchApplyMode>("overwrite");
 
-  if (days !== syncedDays) {
-    setSyncedDays(days);
+  if (item.id !== sourceItemId) {
+    setSourceItemId(item.id);
+    setBaseline(days);
     setLocalDays(days);
+    setError(null);
+    setInfo(null);
   }
 
   if (monthKey !== rangeMonthKey) {
@@ -140,34 +157,53 @@ export function PayrollAttendancePanel({
     setRangeEnd(bounds?.end ?? "");
   }
 
-  function applyLocalPatches(
-    patches: Array<{
-      dayOn: string;
-      dayKind: PayrollAttendanceKind;
-      hours: number;
-      chargesMeal?: boolean;
-    }>,
-  ) {
-    const byDay = new Map(patches.map((p) => [p.dayOn, p]));
+  const dirtyDays = useMemo(() => {
+    const byDate = new Map(baseline.map((day) => [day.day_on, day]));
+    return localDays.filter((day) => {
+      const saved = byDate.get(day.day_on);
+      return saved == null || !isSameDayState(day, saved);
+    });
+  }, [baseline, localDays]);
+  const dirtyCount = dirtyDays.length;
+  const locked = saving || readOnly;
+
+  useEffect(() => {
+    if (dirtyCount === 0) {
+      return;
+    }
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirtyCount]);
+
+  function applyLocalPatches(patches: BatchApplyPatch[]) {
+    const byDay = new Map(patches.map((patch) => [patch.dayOn, patch]));
     setLocalDays((prev) =>
       prev.map((day) => {
         const patch = byDay.get(day.day_on);
         if (!patch) {
           return day;
         }
+        const dayKind = patch.dayKind as PayrollAttendanceKind;
         return {
           ...day,
-          day_kind: patch.dayKind,
+          day_kind: dayKind,
           hours: patch.hours,
           charges_meal:
-            patch.chargesMeal ??
-            (patch.dayKind === "presencial" ? true : false),
+            dayKind === "presencial"
+              ? day.day_kind === "presencial"
+                ? day.charges_meal
+                : true
+              : false,
         };
       }),
     );
   }
 
-  function saveDay(input: {
+  function updateDay(input: {
     dayOn: string;
     dayKind: PayrollAttendanceKind;
     chargesMeal?: boolean;
@@ -181,57 +217,143 @@ export function PayrollAttendancePanel({
     );
     setError(null);
     setInfo(null);
-    startTransition(async () => {
-      const result = await upsertAttendanceDayAction({
-        itemId: item.id,
-        dayOn: input.dayOn,
-        dayKind: input.dayKind,
-        chargesMeal: input.chargesMeal,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      applyLocalPatches([
-        {
-          dayOn: input.dayOn,
-          dayKind: input.dayKind,
+    setLocalDays((prev) =>
+      prev.map((day) => {
+        if (day.day_on !== input.dayOn) {
+          return day;
+        }
+        return {
+          ...day,
+          day_kind: input.dayKind,
           hours,
-          chargesMeal:
+          charges_meal:
             input.chargesMeal ?? input.dayKind === "presencial",
-        },
-      ]);
-      router.refresh();
-    });
+        };
+      }),
+    );
   }
 
-  type BatchInput = Omit<
-    Parameters<typeof batchApplyAttendanceAction>[0],
-    "itemId"
-  >;
+  function snapshots() {
+    return localDays.map((day) => ({
+      day_on: day.day_on,
+      day_kind: day.day_kind,
+      hours: day.hours,
+    }));
+  }
 
-  function runBatch(input: BatchInput) {
+  function applyBatchLocally(
+    patches: BatchApplyPatch[],
+    emptyMessage: string,
+  ) {
     if (readOnly) {
       return;
     }
     setError(null);
+    if (patches.length === 0) {
+      setInfo(emptyMessage);
+      return;
+    }
+    applyLocalPatches(patches);
+    setInfo(
+      `${patches.length} dia(s) atualizado(s) no calendário. Salve para gravar na folha.`,
+    );
+  }
+
+  function runShortcut(
+    shortcut:
+      | "fill_month_default"
+      | "workweek_home"
+      | "workweek_presencial"
+      | "zero_weekends",
+  ) {
+    const contracted = item.contracted_hours_per_day;
+    const daysSnap = snapshots();
+    if (shortcut === "fill_month_default") {
+      applyBatchLocally(
+        resolveFillMonthDefaultPatches({
+          days: daysSnap,
+          contractedHoursPerDay: contracted,
+        }),
+        "Nenhum dia alterado com os critérios atuais.",
+      );
+      return;
+    }
+    if (shortcut === "zero_weekends") {
+      applyBatchLocally(
+        resolveZeroWeekendPatches({
+          days: daysSnap,
+          rangeStart: rangeStart || null,
+          rangeEnd: rangeEnd || null,
+        }),
+        "Nenhum dia alterado com os critérios atuais.",
+      );
+      return;
+    }
+    applyBatchLocally(
+      resolveWorkweekKindPatches({
+        days: daysSnap,
+        dayKind: shortcut === "workweek_home" ? "home" : "presencial",
+        contractedHoursPerDay: contracted,
+        rangeStart: rangeStart || null,
+        rangeEnd: rangeEnd || null,
+      }),
+      "Nenhum dia alterado com os critérios atuais.",
+    );
+  }
+
+  function applyCustomBatch() {
+    applyBatchLocally(
+      resolveBatchTargetDays({
+        days: snapshots(),
+        dayKind: batchKind,
+        hours: defaultHoursForKind(batchKind, item.contracted_hours_per_day),
+        weekdays: batchWeekdays,
+        rangeStart: rangeStart || null,
+        rangeEnd: rangeEnd || null,
+        mode: batchMode,
+        contractedHoursPerDay: item.contracted_hours_per_day,
+      }),
+      "Nenhum dia alterado com os critérios atuais.",
+    );
+  }
+
+  function discardDraft() {
+    setLocalDays(baseline);
+    setError(null);
+    setInfo("Alterações descartadas.");
+  }
+
+  async function saveDraft() {
+    if (readOnly || dirtyCount === 0 || saving) {
+      return;
+    }
+    setError(null);
     setInfo(null);
-    startTransition(async () => {
-      const result = await batchApplyAttendanceAction({
-        ...input,
+    setSaving(true);
+    try {
+      const result = await commitAttendanceDraftAction({
         itemId: item.id,
+        patches: dirtyDays.map((day) => ({
+          dayOn: day.day_on,
+          dayKind: day.day_kind,
+          hours: day.hours,
+          chargesMeal: day.charges_meal,
+        })),
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      setBaseline(localDays);
       setInfo(
         result.updatedCount === 0
-          ? "Nenhum dia alterado com os critérios atuais."
-          : `${result.updatedCount} dia(s) atualizado(s).`,
+          ? "Nada para salvar."
+          : `${result.updatedCount} dia(s) gravado(s) na folha.`,
       );
       router.refresh();
-    });
+    } finally {
+      setSaving(false);
+    }
   }
 
   function toggleWeekday(value: number) {
@@ -266,8 +388,9 @@ export function PayrollAttendancePanel({
             couber.{" "}
             <span className="font-medium text-foreground">Falta / folga</span>{" "}
             conta no compare (Fixo sem Jira). Home = trabalhou sem deslocamento.
-            Feriados são só referência visual. Carga da NF vem do Jira ou das
-            faltas conforme o cadastro — não das horas digitadas aqui.
+            Feriados são só referência visual.             Carga da NF vem do Jira ou das
+            faltas conforme o cadastro — não das horas digitadas aqui. As
+            mudanças no calendário só entram na folha quando você salvar.
           </p>
           {finalizedClosingId ? (
             <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -300,7 +423,20 @@ export function PayrollAttendancePanel({
             </li>
           </ul>
         </div>
-        <a href={closeHref} className="ui-btn-secondary text-sm">
+        <a
+          href={closeHref}
+          className="ui-btn-secondary text-sm"
+          onClick={(event) => {
+            if (
+              dirtyCount > 0 &&
+              !window.confirm(
+                "Há alterações não salvas. Sair do calendário mesmo assim?",
+              )
+            ) {
+              event.preventDefault();
+            }
+          }}
+        >
           Fechar calendário
         </a>
       </div>
@@ -310,50 +446,32 @@ export function PayrollAttendancePanel({
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending || readOnly}
-            onClick={() => runBatch({ shortcut: "fill_month_default" })}
+            disabled={locked}
+            onClick={() => runShortcut("fill_month_default")}
           >
             Preencher mês padrão
           </button>
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending || readOnly}
-            onClick={() =>
-              runBatch({
-                shortcut: "workweek_home",
-                rangeStart: rangeStart || null,
-                rangeEnd: rangeEnd || null,
-              })
-            }
+            disabled={locked}
+            onClick={() => runShortcut("workweek_home")}
           >
             Marcar úteis como home office
           </button>
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending || readOnly}
-            onClick={() =>
-              runBatch({
-                shortcut: "workweek_presencial",
-                rangeStart: rangeStart || null,
-                rangeEnd: rangeEnd || null,
-              })
-            }
+            disabled={locked}
+            onClick={() => runShortcut("workweek_presencial")}
           >
             Marcar úteis como presencial
           </button>
           <button
             type="button"
             className="ui-btn-secondary text-xs"
-            disabled={pending || readOnly}
-            onClick={() =>
-              runBatch({
-                shortcut: "zero_weekends",
-                rangeStart: rangeStart || null,
-                rangeEnd: rangeEnd || null,
-              })
-            }
+            disabled={locked}
+            onClick={() => runShortcut("zero_weekends")}
           >
             Zerar fins de semana
           </button>
@@ -361,13 +479,17 @@ export function PayrollAttendancePanel({
 
         <div className="space-y-2 border-t border-border/60 pt-3">
           <p className="text-xs font-medium text-foreground">Aplicar em lote</p>
+          <p className="text-[11px] text-muted-foreground">
+            Atualiza só o calendário abaixo. Use Salvar alterações para gravar
+            na folha.
+          </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Tipo</span>
               <select
                 className="ui-select text-xs"
                 value={batchKind}
-                disabled={pending || readOnly}
+                disabled={locked}
                 onChange={(event) =>
                   setBatchKind(event.target.value as EditableAttendanceKind)
                 }
@@ -385,7 +507,7 @@ export function PayrollAttendancePanel({
                 type="date"
                 className="ui-input text-xs"
                 value={rangeStart}
-                disabled={pending || readOnly}
+                disabled={locked}
                 min={bounds?.start}
                 max={bounds?.end}
                 onChange={(event) => setRangeStart(event.target.value)}
@@ -397,7 +519,7 @@ export function PayrollAttendancePanel({
                 type="date"
                 className="ui-input text-xs"
                 value={rangeEnd}
-                disabled={pending || readOnly}
+                disabled={locked}
                 min={bounds?.start}
                 max={bounds?.end}
                 onChange={(event) => setRangeEnd(event.target.value)}
@@ -408,7 +530,7 @@ export function PayrollAttendancePanel({
               <select
                 className="ui-select text-xs"
                 value={batchMode}
-                disabled={pending || readOnly}
+                disabled={locked}
                 onChange={(event) =>
                   setBatchMode(event.target.value as BatchApplyMode)
                 }
@@ -429,7 +551,7 @@ export function PayrollAttendancePanel({
                 <button
                   key={weekday.value}
                   type="button"
-                  disabled={pending || readOnly}
+                  disabled={locked}
                   className={cn(
                     "rounded-[calc(var(--radius-sm)-2px)] border px-2 py-1 text-xs font-medium transition-colors",
                     active
@@ -444,19 +566,11 @@ export function PayrollAttendancePanel({
             })}
             <button
               type="button"
-              className="ui-btn-primary ml-auto text-xs"
-              disabled={pending || readOnly || batchWeekdays.length === 0}
-              onClick={() => {
-                runBatch({
-                  dayKind: batchKind,
-                  weekdays: batchWeekdays,
-                  rangeStart: rangeStart || null,
-                  rangeEnd: rangeEnd || null,
-                  mode: batchMode,
-                });
-              }}
+              className="ui-btn-secondary ml-auto text-xs"
+              disabled={locked || batchWeekdays.length === 0}
+              onClick={applyCustomBatch}
             >
-              {pending ? "Aplicando..." : "Aplicar lote"}
+              Aplicar no calendário
             </button>
           </div>
         </div>
@@ -479,6 +593,8 @@ export function PayrollAttendancePanel({
           const holidayName = holidayOverlay.byDate.get(day.day_on);
           const isHolidayOverlay = holidayName != null;
           const isLegacyHolidayKind = day.day_kind === "holiday";
+          const saved = baseline.find((row) => row.day_on === day.day_on);
+          const isDirty = saved == null || !isSameDayState(day, saved);
           return (
             <div
               key={day.id}
@@ -492,6 +608,7 @@ export function PayrollAttendancePanel({
                   ? "ring-1 ring-violet-500/25"
                   : null,
                 isHolidayOverlay ? HOLIDAY_OVERLAY_RING_CLASS : null,
+                isDirty ? "ring-2 ring-brand/50" : null,
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
@@ -517,11 +634,11 @@ export function PayrollAttendancePanel({
               <select
                 className="ui-select text-xs"
                 value={day.day_kind}
-                disabled={pending || readOnly}
+                disabled={locked}
                 onChange={(event) => {
                   const nextKind = event.target
                     .value as PayrollAttendanceKind;
-                  saveDay({
+                  updateDay({
                     dayOn: day.day_on,
                     dayKind: nextKind,
                     chargesMeal: nextKind === "presencial",
@@ -543,9 +660,9 @@ export function PayrollAttendancePanel({
                     type="checkbox"
                     className="size-3.5 accent-[var(--brand)]"
                     checked={day.charges_meal}
-                    disabled={pending || readOnly}
+                    disabled={locked}
                     onChange={(event) => {
-                      saveDay({
+                      updateDay({
                         dayOn: day.day_on,
                         dayKind: day.day_kind,
                         chargesMeal: event.target.checked,
@@ -559,6 +676,36 @@ export function PayrollAttendancePanel({
           );
         })}
       </div>
+
+      {dirtyCount > 0 || saving ? (
+        <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-[var(--radius-sm)] border border-brand/30 bg-card/95 p-3 shadow-[var(--shadow-md)] backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-foreground">
+            {saving
+              ? "Gravando na folha…"
+              : `${dirtyCount} dia(s) com alteração ainda não salva.`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="ui-btn-secondary text-sm"
+              disabled={saving || readOnly}
+              onClick={discardDraft}
+            >
+              Descartar
+            </button>
+            <button
+              type="button"
+              className="ui-btn-primary text-sm"
+              disabled={saving || readOnly || dirtyCount === 0}
+              onClick={() => {
+                void saveDraft();
+              }}
+            >
+              {saving ? "Salvando..." : "Salvar alterações"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

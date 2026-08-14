@@ -1043,6 +1043,7 @@ export async function batchUpsertPayrollAttendanceDays(input: {
     dayOn: string;
     dayKind: PayrollAttendanceKind;
     hours: number;
+    chargesMeal?: boolean;
   }>;
 }): Promise<{ updatedCount: number }> {
   if (input.patches.length === 0) {
@@ -1058,7 +1059,9 @@ export async function batchUpsertPayrollAttendanceDays(input: {
       patch.dayKind === "presencial" || patch.dayKind === "home"
         ? Math.max(0, patch.hours)
         : 0,
-    charges_meal: patch.dayKind === "presencial",
+    charges_meal:
+      patch.dayKind === "presencial" &&
+      (patch.chargesMeal ?? true),
   }));
 
   const { error } = await supabase

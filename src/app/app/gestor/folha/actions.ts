@@ -193,6 +193,91 @@ export async function upsertAttendanceDayAction(input: {
   return { ok: true };
 }
 
+export async function commitAttendanceDraftAction(input: {
+  itemId: string;
+  patches: Array<{
+    dayOn: string;
+    dayKind: string;
+    hours?: number;
+    chargesMeal?: boolean;
+  }>;
+}): Promise<
+  { ok: true; updatedCount: number } | { ok: false; error: string }
+> {
+  await requireTeamAccess();
+
+  if (!Array.isArray(input.patches) || input.patches.length === 0) {
+    return { ok: true, updatedCount: 0 };
+  }
+
+  try {
+    await assertPayrollItemEditable(input.itemId);
+    const existing = await listAttendanceForItem(input.itemId);
+    if (existing.length === 0) {
+      return { ok: false, error: "Calendário de presença ainda não gerado." };
+    }
+    const allowedDates = new Set(existing.map((day) => day.day_on));
+    const payrollItem = await getPayrollItem(input.itemId);
+    if (!payrollItem) {
+      return { ok: false, error: "Item da folha não encontrado." };
+    }
+
+    const patches: Array<{
+      dayOn: string;
+      dayKind: PayrollAttendanceKind;
+      hours: number;
+      chargesMeal: boolean;
+    }> = [];
+
+    for (const patch of input.patches) {
+      if (!allowedDates.has(patch.dayOn)) {
+        return { ok: false, error: "Data fora do calendário do mês." };
+      }
+      if (
+        !(PAYROLL_ATTENDANCE_KINDS as readonly string[]).includes(patch.dayKind)
+      ) {
+        return { ok: false, error: "Tipo de dia inválido." };
+      }
+      if (patch.dayKind === "holiday") {
+        return {
+          ok: false,
+          error:
+            "Feriado é só referência visual. Use Presencial, Home, Falta ou Fim de semana.",
+        };
+      }
+      const dayKind = patch.dayKind as PayrollAttendanceKind;
+      const hours =
+        patch.hours != null && Number.isFinite(patch.hours)
+          ? Math.max(0, patch.hours)
+          : dayKind === "presencial" || dayKind === "home"
+            ? Math.max(0, payrollItem.contracted_hours_per_day)
+            : 0;
+      patches.push({
+        dayOn: patch.dayOn,
+        dayKind,
+        hours,
+        chargesMeal:
+          patch.chargesMeal ?? dayKind === "presencial",
+      });
+    }
+
+    const result = await batchUpsertPayrollAttendanceDays({
+      itemId: input.itemId,
+      patches,
+    });
+    revalidateFolha();
+    return { ok: true, updatedCount: result.updatedCount };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a presença.",
+    };
+  }
+}
+
 export async function batchApplyAttendanceAction(input: {
   itemId: string;
   shortcut?:
