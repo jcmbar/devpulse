@@ -5,7 +5,7 @@ import {
   type JiraLogicalFieldKey,
   type ResolvedJiraFieldMappings,
 } from "@/lib/jira/field-mappings";
-import { jiraEstimateSecondsToHours } from "@/lib/metrics/hours";
+import { jiraEstimateFieldToHours } from "@/lib/metrics/hours";
 import type { JiraFieldMappings } from "@/types/jira-integration";
 
 export type RawJiraIssue = {
@@ -191,7 +191,7 @@ function readParentKey(value: unknown): string | null {
 }
 
 function readEstimateHours(value: unknown): number | null {
-  return jiraEstimateSecondsToHours(asNumber(value));
+  return jiraEstimateFieldToHours(value);
 }
 
 function readIssueType(value: unknown): string | null {

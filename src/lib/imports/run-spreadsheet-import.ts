@@ -162,10 +162,17 @@ export async function runSpreadsheetImport(
     }
 
     const inserted = await insertJiraCards(cardRows);
-    await copyJustificationsFromTeamHistory({
-      teamId: teamResolution.team.id,
-      toImportId: importRecord.id,
-    });
+    try {
+      await copyJustificationsFromTeamHistory({
+        teamId: teamResolution.team.id,
+        toImportId: importRecord.id,
+      });
+    } catch (copyError) {
+      console.error(
+        "[runSpreadsheetImport] justification copy failed",
+        copyError,
+      );
+    }
 
     const snapshotsCreated = await buildSnapshotsForImport({
       importId: importRecord.id,

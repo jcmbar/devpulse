@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { estimateHoursFromPersistedJiraIssue } from "@/lib/metrics/hours";
 import {
   assignDeveloperTeamIfEmpty,
   findDevelopersByJiraAccountIds,
@@ -87,7 +88,8 @@ async function loadIssuesForIntegration(
         unit_test_delivery_on,
         due_on,
         estimate_hours,
-        parent_key
+        parent_key,
+        original_estimate_seconds:raw_payload->fields->>timeoriginalestimate
       `,
       )
       .eq("integration_id", integrationId)
@@ -116,8 +118,13 @@ async function loadIssuesForIntegration(
         unit_test_delivery_on:
           (row.unit_test_delivery_on as string | null) ?? null,
         due_on: (row.due_on as string | null) ?? null,
-        estimate_hours:
-          row.estimate_hours == null ? null : Number(row.estimate_hours),
+        estimate_hours: estimateHoursFromPersistedJiraIssue({
+          estimateHours:
+            row.estimate_hours == null ? null : Number(row.estimate_hours),
+          originalEstimateSeconds: (
+            row as { original_estimate_seconds?: unknown }
+          ).original_estimate_seconds,
+        }),
         parent_key: (row.parent_key as string | null) ?? null,
       });
     }
@@ -346,13 +353,23 @@ export async function materializeJiraCompiladoSnapshot(
 
     const inserted = await insertJiraCards(cardRows);
 
-    const copied = await copyJustificationsFromTeamHistory({
-      teamId: integration.team_id,
-      toImportId: importRecord.id,
-    });
-    const justificationsCopied = copied.copied;
-    const justificationsUpdated = copied.updated;
-    const justificationsSkippedNoCard = copied.skippedNoCard;
+    let justificationsCopied = 0;
+    let justificationsUpdated = 0;
+    let justificationsSkippedNoCard = 0;
+    try {
+      const copied = await copyJustificationsFromTeamHistory({
+        teamId: integration.team_id,
+        toImportId: importRecord.id,
+      });
+      justificationsCopied = copied.copied;
+      justificationsUpdated = copied.updated;
+      justificationsSkippedNoCard = copied.skippedNoCard;
+    } catch (copyError) {
+      console.error(
+        "[materializeJiraCompiladoSnapshot] justification copy failed",
+        copyError,
+      );
+    }
 
     if (deliveryMin && deliveryMax) {
       await buildSnapshotsForImport({

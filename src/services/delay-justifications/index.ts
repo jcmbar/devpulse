@@ -519,59 +519,82 @@ async function listCompletedImportIdsForTeam(
   return (data ?? []).map((row) => String(row.id));
 }
 
-async function listCardsForImport(importId: string): Promise<
-  Array<{
-    id: string;
-    jira_key: string;
-    developer_id: string | null;
-    due_on: string | null;
-    unit_test_delivery_on: string | null;
-    delay_days: number | null;
-  }>
-> {
-  const admin = createAdminClient();
-  const rows: Array<{
-    id: string;
-    jira_key: string;
-    developer_id: string | null;
-    due_on: string | null;
-    unit_test_delivery_on: string | null;
-    delay_days: number | null;
-  }> = [];
-  const pageSize = 1000;
-  let from = 0;
+const IN_FILTER_CHUNK = 80;
 
-  for (;;) {
-    const to = from + pageSize - 1;
+type DestCardRow = {
+  id: string;
+  jira_key: string;
+  developer_id: string | null;
+  due_on: string | null;
+  unit_test_delivery_on: string | null;
+  delay_days: number | null;
+};
+
+function mapDestCard(card: Record<string, unknown>): DestCardRow {
+  return {
+    id: String(card.id),
+    jira_key: String(card.jira_key),
+    developer_id: (card.developer_id as string | null) ?? null,
+    due_on: (card.due_on as string | null) ?? null,
+    unit_test_delivery_on:
+      (card.unit_test_delivery_on as string | null) ?? null,
+    delay_days: card.delay_days == null ? null : Number(card.delay_days),
+  };
+}
+
+async function listDestCardsByKeys(
+  importId: string,
+  jiraKeys: string[],
+): Promise<DestCardRow[]> {
+  const keys = [
+    ...new Set(jiraKeys.map(normalizeJiraKey).filter(Boolean)),
+  ];
+  if (keys.length === 0) {
+    return [];
+  }
+
+  const admin = createAdminClient();
+  const rows: DestCardRow[] = [];
+  for (let index = 0; index < keys.length; index += IN_FILTER_CHUNK) {
+    const chunk = keys.slice(index, index + IN_FILTER_CHUNK);
     const { data, error } = await admin
       .from("jira_cards")
       .select("id, jira_key, developer_id, due_on, unit_test_delivery_on, delay_days")
       .eq("import_id", importId)
-      .order("id", { ascending: true })
-      .range(from, to);
+      .in("jira_key", chunk);
     if (error) {
       throw new Error(
         `Falha ao ler cards do lote novo para copiar justificativas: ${error.message}`,
       );
     }
-    const page = data ?? [];
-    for (const card of page) {
-      rows.push({
-        id: String(card.id),
-        jira_key: String(card.jira_key),
-        developer_id: (card.developer_id as string | null) ?? null,
-        due_on: (card.due_on as string | null) ?? null,
-        unit_test_delivery_on:
-          (card.unit_test_delivery_on as string | null) ?? null,
-        delay_days: card.delay_days == null ? null : Number(card.delay_days),
-      });
+    for (const card of data ?? []) {
+      rows.push(mapDestCard(card as Record<string, unknown>));
     }
-    if (page.length < pageSize) {
-      break;
-    }
-    from += pageSize;
   }
+  return rows;
+}
 
+async function listJustificationRowsForImports(
+  importIds: string[],
+): Promise<DelayJustificationRequest[]> {
+  const admin = createAdminClient();
+  const rows: DelayJustificationRequest[] = [];
+  for (let index = 0; index < importIds.length; index += IN_FILTER_CHUNK) {
+    const chunk = importIds.slice(index, index + IN_FILTER_CHUNK);
+    const { data, error } = await admin
+      .from("delay_justification_requests")
+      .select("*")
+      .in("import_id", chunk)
+      .in("status", ["pending", "accepted", "rejected"]);
+    if (error) {
+      throw new Error(
+        `Falha ao ler justificativas dos lotes anteriores: ${error.message}`,
+      );
+    }
+    for (const row of data ?? []) {
+      rows.push(mapRow(row as Record<string, unknown>));
+    }
+  }
   return rows;
 }
 
@@ -612,26 +635,15 @@ export async function copyJustificationsOntoImport(input: {
   }
 
   const admin = createAdminClient();
-  const { data: sourceData, error: sourceError } = await admin
-    .from("delay_justification_requests")
-    .select("*")
-    .in("import_id", fromImportIds)
-    .in("status", ["pending", "accepted", "rejected"]);
-
-  if (sourceError) {
-    throw new Error(
-      `Falha ao ler justificativas dos lotes anteriores: ${sourceError.message}`,
-    );
-  }
-
-  const sourceRows = (sourceData ?? []).map((row) =>
-    mapRow(row as Record<string, unknown>),
-  );
+  const sourceRows = await listJustificationRowsForImports(fromImportIds);
   if (sourceRows.length === 0) {
     return { ...EMPTY_COPY_RESULT };
   }
 
-  const destCards = await listCardsForImport(input.toImportId);
+  const destCards = await listDestCardsByKeys(
+    input.toImportId,
+    sourceRows.map((row) => row.jira_key),
+  );
 
   const { data: existingDest, error: existingError } = await admin
     .from("delay_justification_requests")
