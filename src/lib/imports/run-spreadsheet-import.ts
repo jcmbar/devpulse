@@ -20,6 +20,7 @@ import {
   createImport,
   updateImportStatus,
 } from "@/services/imports";
+import { copyJustificationsFromTeamHistory } from "@/services/delay-justifications";
 import { archiveOlderImportsForTeam } from "@/services/imports/retention";
 import { insertJiraCards } from "@/services/jira-cards";
 import { buildSnapshotsForImport } from "@/services/productivity-snapshots";
@@ -161,6 +162,10 @@ export async function runSpreadsheetImport(
     }
 
     const inserted = await insertJiraCards(cardRows);
+    await copyJustificationsFromTeamHistory({
+      teamId: teamResolution.team.id,
+      toImportId: importRecord.id,
+    });
 
     const snapshotsCreated = await buildSnapshotsForImport({
       importId: importRecord.id,

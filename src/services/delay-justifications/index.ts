@@ -2,6 +2,15 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  normalizeJustificationJiraKey,
+  pickLatestJustifications,
+  planJustificationCopies,
+  type JustificationCopyInsert,
+  type JustificationCopyPlan,
+  type JustificationCopySource,
+  type JustificationCopyUpdate,
+} from "@/lib/metrics/delay-justification-copy";
 import type {
   DelayJustificationDecisionInput,
   DelayJustificationKind,
@@ -38,16 +47,12 @@ function mapRow(row: Record<string, unknown>): DelayJustificationRequest {
 }
 
 function normalizeJiraKey(value: string): string {
-  return value.trim().toUpperCase();
-}
-
-function compositeKey(jiraKey: string, kind: DelayJustificationKind): string {
-  return `${normalizeJiraKey(jiraKey)}::${kind}`;
+  return normalizeJustificationJiraKey(value);
 }
 
 /**
  * Latest request per (jira_key, kind) for a developer within one Compilado batch.
- * Preference: accepted > pending > rejected (by requested_at within same status).
+ * Preference: accepted > rejected > pending (by requested_at within same status).
  */
 export async function listDelayJustificationsForDeveloperImport(input: {
   importId: string;
@@ -63,7 +68,7 @@ export async function listDelayJustificationsForDeveloperImport(input: {
 
 /**
  * Latest request per (jira_key, kind) across one or more Compilado batches.
- * Prefer accepted > pending > rejected (then newest requested_at).
+ * Prefer accepted > rejected > pending (then newest requested_at).
  */
 export async function listDelayJustificationsForDeveloperImports(input: {
   importIds: string[];
@@ -256,29 +261,7 @@ export async function listDelayJustificationsForImportKeys(input: {
 function pickLatestPerKeyAndKind(
   rows: DelayJustificationRequest[],
 ): DelayJustificationRequest[] {
-  const rank: Record<DelayJustificationStatus, number> = {
-    accepted: 3,
-    pending: 2,
-    rejected: 1,
-  };
-  const best = new Map<string, DelayJustificationRequest>();
-  for (const row of rows) {
-    const key = compositeKey(row.jira_key, row.kind);
-    const current = best.get(key);
-    if (!current) {
-      best.set(key, row);
-      continue;
-    }
-    const byStatus = rank[row.status] - rank[current.status];
-    if (byStatus > 0) {
-      best.set(key, row);
-      continue;
-    }
-    if (byStatus === 0 && row.requested_at > current.requested_at) {
-      best.set(key, row);
-    }
-  }
-  return [...best.values()];
+  return pickLatestJustifications(rows);
 }
 
 export async function submitDelayJustification(
@@ -339,7 +322,16 @@ export async function submitDelayJustification(
     throw new Error(`Falha ao criar justificativa: ${error.message}`);
   }
 
-  return mapRow(data as Record<string, unknown>);
+  const created = mapRow(data as Record<string, unknown>);
+  try {
+    await mirrorJustificationsToLiveTeamImports(created.import_id);
+  } catch (mirrorError) {
+    console.error(
+      "[delay-justifications] falha ao espelhar envio nos lotes ativos",
+      mirrorError,
+    );
+  }
+  return created;
 }
 
 export async function decideDelayJustification(
@@ -384,137 +376,267 @@ export async function decideDelayJustification(
     throw new Error(`Falha ao registrar decisão: ${error.message}`);
   }
 
-  return mapRow(data as Record<string, unknown>);
-}
-
-function developerKeyKind(
-  developerId: string,
-  jiraKey: string,
-  kind: DelayJustificationKind,
-): string {
-  return `${developerId}::${normalizeJiraKey(jiraKey)}::${kind}`;
-}
-
-function pickLatestPerDeveloperKeyKind(
-  rows: DelayJustificationRequest[],
-): DelayJustificationRequest[] {
-  const rank: Record<DelayJustificationStatus, number> = {
-    accepted: 3,
-    pending: 2,
-    rejected: 1,
-  };
-  const best = new Map<string, DelayJustificationRequest>();
-  for (const row of rows) {
-    const key = developerKeyKind(row.developer_id, row.jira_key, row.kind);
-    const current = best.get(key);
-    if (!current) {
-      best.set(key, row);
-      continue;
-    }
-    const byStatus = rank[row.status] - rank[current.status];
-    if (byStatus > 0) {
-      best.set(key, row);
-      continue;
-    }
-    if (byStatus === 0 && row.requested_at > current.requested_at) {
-      best.set(key, row);
-    }
+  const decided = mapRow(data as Record<string, unknown>);
+  try {
+    await mirrorJustificationsToLiveTeamImports(decided.import_id);
+  } catch (mirrorError) {
+    console.error(
+      "[delay-justifications] falha ao espelhar decisão nos lotes ativos",
+      mirrorError,
+    );
   }
-  return [...best.values()];
+  return decided;
 }
 
 export type CopyJustificationsBetweenImportsResult = {
   considered: number;
   copied: number;
+  updated: number;
   skippedNoCard: number;
   skippedAlreadyPresent: number;
 };
 
-/**
- * Copy pending/accepted/rejected justifications from one Compilado batch to
- * another (e.g. after Jira rematerialize). Matches on
- * `(developer_id, jira_key, kind)` when the card still exists on the destination
- * batch. Uses the service role to bypass insert RLS (developers-only).
- */
-export async function copyJustificationsBetweenImports(input: {
-  fromImportId: string;
+const EMPTY_COPY_RESULT: CopyJustificationsBetweenImportsResult = {
+  considered: 0,
+  copied: 0,
+  updated: 0,
+  skippedNoCard: 0,
+  skippedAlreadyPresent: 0,
+};
+
+function toCopySource(row: DelayJustificationRequest): JustificationCopySource {
+  return {
+    developer_id: row.developer_id,
+    jira_key: row.jira_key,
+    kind: row.kind,
+    status: row.status,
+    requested_at: row.requested_at,
+    developer_note: row.developer_note,
+    requester_profile_id: row.requester_profile_id,
+    reviewer_profile_id: row.reviewer_profile_id,
+    reviewer_note: row.reviewer_note,
+    reviewed_at: row.reviewed_at,
+    due_on: row.due_on,
+    unit_test_delivery_on: row.unit_test_delivery_on,
+    delay_days: row.delay_days,
+  };
+}
+
+function insertPayload(
+  toImportId: string,
+  row: JustificationCopyInsert,
+): Record<string, unknown> {
+  return {
+    import_id: toImportId,
+    jira_card_id: row.jira_card_id,
+    jira_key: row.jira_key,
+    developer_id: row.developer_id,
+    kind: row.kind,
+    due_on: row.due_on,
+    unit_test_delivery_on: row.unit_test_delivery_on,
+    delay_days: row.delay_days,
+    requester_profile_id: row.requester_profile_id,
+    developer_note: row.developer_note,
+    requested_at: row.requested_at,
+    status: row.status,
+    reviewer_profile_id: row.reviewer_profile_id,
+    reviewer_note: row.reviewer_note,
+    reviewed_at: row.reviewed_at,
+  };
+}
+
+function updatePayload(row: JustificationCopyUpdate): Record<string, unknown> {
+  return {
+    jira_card_id: row.jira_card_id,
+    due_on: row.due_on,
+    unit_test_delivery_on: row.unit_test_delivery_on,
+    delay_days: row.delay_days,
+    requester_profile_id: row.requester_profile_id,
+    developer_note: row.developer_note,
+    requested_at: row.requested_at,
+    status: row.status,
+    reviewer_profile_id: row.reviewer_profile_id,
+    reviewer_note: row.reviewer_note,
+    reviewed_at: row.reviewed_at,
+  };
+}
+
+async function applyJustificationCopyPlan(input: {
   toImportId: string;
+  plan: JustificationCopyPlan;
 }): Promise<CopyJustificationsBetweenImportsResult> {
-  if (input.fromImportId === input.toImportId) {
-    return {
-      considered: 0,
-      copied: 0,
-      skippedNoCard: 0,
-      skippedAlreadyPresent: 0,
-    };
+  const admin = createAdminClient();
+
+  if (input.plan.inserts.length > 0) {
+    const { error: insertError } = await admin
+      .from("delay_justification_requests")
+      .insert(
+        input.plan.inserts.map((row) => insertPayload(input.toImportId, row)),
+      );
+    if (insertError) {
+      throw new Error(
+        `Falha ao copiar justificativas para o lote novo: ${insertError.message}`,
+      );
+    }
+  }
+
+  for (const row of input.plan.updates) {
+    const { error: updateError } = await admin
+      .from("delay_justification_requests")
+      .update(updatePayload(row))
+      .eq("id", row.id)
+      .eq("import_id", input.toImportId);
+    if (updateError) {
+      throw new Error(
+        `Falha ao atualizar justificativa copiada: ${updateError.message}`,
+      );
+    }
+  }
+
+  return {
+    considered: input.plan.considered,
+    copied: input.plan.inserts.length,
+    updated: input.plan.updates.length,
+    skippedNoCard: input.plan.skippedNoCard,
+    skippedAlreadyPresent: input.plan.skippedAlreadyPresent,
+  };
+}
+
+async function listCompletedImportIdsForTeam(
+  teamId: string,
+): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("imports")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("status", "completed");
+  if (error) {
+    throw new Error(
+      `Falha ao listar lotes do time para copiar justificativas: ${error.message}`,
+    );
+  }
+  return (data ?? []).map((row) => String(row.id));
+}
+
+async function listCardsForImport(importId: string): Promise<
+  Array<{
+    id: string;
+    jira_key: string;
+    developer_id: string | null;
+    due_on: string | null;
+    unit_test_delivery_on: string | null;
+    delay_days: number | null;
+  }>
+> {
+  const admin = createAdminClient();
+  const rows: Array<{
+    id: string;
+    jira_key: string;
+    developer_id: string | null;
+    due_on: string | null;
+    unit_test_delivery_on: string | null;
+    delay_days: number | null;
+  }> = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  for (;;) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("jira_cards")
+      .select("id, jira_key, developer_id, due_on, unit_test_delivery_on, delay_days")
+      .eq("import_id", importId)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      throw new Error(
+        `Falha ao ler cards do lote novo para copiar justificativas: ${error.message}`,
+      );
+    }
+    const page = data ?? [];
+    for (const card of page) {
+      rows.push({
+        id: String(card.id),
+        jira_key: String(card.jira_key),
+        developer_id: (card.developer_id as string | null) ?? null,
+        due_on: (card.due_on as string | null) ?? null,
+        unit_test_delivery_on:
+          (card.unit_test_delivery_on as string | null) ?? null,
+        delay_days: card.delay_days == null ? null : Number(card.delay_days),
+      });
+    }
+    if (page.length < pageSize) {
+      break;
+    }
+    from += pageSize;
+  }
+
+  return rows;
+}
+
+async function listLiveImportIdsForTeam(teamId: string): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("imports")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("status", "completed")
+    .is("archived_at", null);
+  if (error) {
+    throw new Error(
+      `Falha ao listar lotes ativos do time: ${error.message}`,
+    );
+  }
+  return (data ?? []).map((row) => String(row.id));
+}
+
+/**
+ * Copy the strongest justification per card from prior Compilado lotes onto
+ * `toImportId`. Passing several `fromImportIds` recovers rows submitted or
+ * decided on an older lote after the previous rematerialize already ran.
+ */
+export async function copyJustificationsOntoImport(input: {
+  toImportId: string;
+  fromImportIds: string[];
+}): Promise<CopyJustificationsBetweenImportsResult> {
+  const fromImportIds = [
+    ...new Set(
+      input.fromImportIds
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0 && id !== input.toImportId),
+    ),
+  ];
+  if (fromImportIds.length === 0) {
+    return { ...EMPTY_COPY_RESULT };
   }
 
   const admin = createAdminClient();
-
   const { data: sourceData, error: sourceError } = await admin
     .from("delay_justification_requests")
     .select("*")
-    .eq("import_id", input.fromImportId)
+    .in("import_id", fromImportIds)
     .in("status", ["pending", "accepted", "rejected"]);
 
   if (sourceError) {
     throw new Error(
-      `Falha ao ler justificativas do lote anterior: ${sourceError.message}`,
+      `Falha ao ler justificativas dos lotes anteriores: ${sourceError.message}`,
     );
   }
 
-  const sourceRows = pickLatestPerDeveloperKeyKind(
-    (sourceData ?? []).map((row) => mapRow(row as Record<string, unknown>)),
+  const sourceRows = (sourceData ?? []).map((row) =>
+    mapRow(row as Record<string, unknown>),
   );
-
   if (sourceRows.length === 0) {
-    return {
-      considered: 0,
-      copied: 0,
-      skippedNoCard: 0,
-      skippedAlreadyPresent: 0,
-    };
+    return { ...EMPTY_COPY_RESULT };
   }
 
-  const { data: destCards, error: cardsError } = await admin
-    .from("jira_cards")
-    .select("id, jira_key, developer_id, due_on, unit_test_delivery_on, delay_days")
-    .eq("import_id", input.toImportId)
-    .not("developer_id", "is", null);
-
-  if (cardsError) {
-    throw new Error(
-      `Falha ao ler cards do lote novo para copiar justificativas: ${cardsError.message}`,
-    );
-  }
-
-  const cardByDeveloperKey = new Map<
-    string,
-    {
-      id: string;
-      due_on: string | null;
-      unit_test_delivery_on: string | null;
-      delay_days: number | null;
-    }
-  >();
-  for (const card of destCards ?? []) {
-    if (!card.developer_id) {
-      continue;
-    }
-    const key = `${String(card.developer_id)}::${normalizeJiraKey(String(card.jira_key))}`;
-    cardByDeveloperKey.set(key, {
-      id: String(card.id),
-      due_on: (card.due_on as string | null) ?? null,
-      unit_test_delivery_on: (card.unit_test_delivery_on as string | null) ?? null,
-      delay_days: card.delay_days == null ? null : Number(card.delay_days),
-    });
-  }
+  const destCards = await listCardsForImport(input.toImportId);
 
   const { data: existingDest, error: existingError } = await admin
     .from("delay_justification_requests")
-    .select("developer_id, jira_key, kind, status")
-    .eq("import_id", input.toImportId)
-    .in("status", ["pending", "accepted"]);
+    .select("id, developer_id, jira_key, kind, status, requested_at")
+    .eq("import_id", input.toImportId);
 
   if (existingError) {
     throw new Error(
@@ -522,85 +644,81 @@ export async function copyJustificationsBetweenImports(input: {
     );
   }
 
-  const blockedKeys = new Set<string>();
-  for (const row of existingDest ?? []) {
-    blockedKeys.add(
-      developerKeyKind(
-        String(row.developer_id),
-        String(row.jira_key),
-        row.kind === "rework" ? "rework" : "delay",
-      ),
-    );
-  }
+  const plan = planJustificationCopies({
+    sourceRows: sourceRows.map(toCopySource),
+    destCards: destCards,
+    destExisting: (existingDest ?? []).map((row) => ({
+      id: String(row.id),
+      developer_id: String(row.developer_id),
+      jira_key: String(row.jira_key),
+      kind: row.kind === "rework" ? "rework" : "delay",
+      status: row.status as DelayJustificationStatus,
+      requested_at: String(row.requested_at),
+    })),
+  });
 
-  const inserts: Record<string, unknown>[] = [];
-  let skippedNoCard = 0;
-  let skippedAlreadyPresent = 0;
+  return applyJustificationCopyPlan({
+    toImportId: input.toImportId,
+    plan,
+  });
+}
 
-  for (const row of sourceRows) {
-    const identity = developerKeyKind(row.developer_id, row.jira_key, row.kind);
-    const cardKey = `${row.developer_id}::${normalizeJiraKey(row.jira_key)}`;
-    const card = cardByDeveloperKey.get(cardKey);
-    if (!card) {
-      skippedNoCard += 1;
-      continue;
-    }
+export async function copyJustificationsFromTeamHistory(input: {
+  teamId: string;
+  toImportId: string;
+}): Promise<CopyJustificationsBetweenImportsResult> {
+  const fromImportIds = await listCompletedImportIdsForTeam(input.teamId);
+  return copyJustificationsOntoImport({
+    toImportId: input.toImportId,
+    fromImportIds,
+  });
+}
 
-    if (
-      (row.status === "pending" || row.status === "accepted") &&
-      blockedKeys.has(identity)
-    ) {
-      skippedAlreadyPresent += 1;
-      continue;
-    }
-
-    inserts.push({
-      import_id: input.toImportId,
-      jira_card_id: card.id,
-      jira_key: normalizeJiraKey(row.jira_key),
-      developer_id: row.developer_id,
-      kind: row.kind,
-      due_on: card.due_on ?? row.due_on,
-      unit_test_delivery_on:
-        card.unit_test_delivery_on ?? row.unit_test_delivery_on,
-      delay_days: card.delay_days ?? row.delay_days,
-      requester_profile_id: row.requester_profile_id,
-      developer_note: row.developer_note,
-      requested_at: row.requested_at,
-      status: row.status,
-      reviewer_profile_id: row.reviewer_profile_id,
-      reviewer_note: row.reviewer_note,
-      reviewed_at: row.reviewed_at,
-    });
-
-    if (row.status === "pending" || row.status === "accepted") {
-      blockedKeys.add(identity);
-    }
-  }
-
-  if (inserts.length === 0) {
-    return {
-      considered: sourceRows.length,
-      copied: 0,
-      skippedNoCard,
-      skippedAlreadyPresent,
-    };
-  }
-
-  const { error: insertError } = await admin
-    .from("delay_justification_requests")
-    .insert(inserts);
-
-  if (insertError) {
+/**
+ * After a submit/decision on a stale lote, copy onto every live Compilado
+ * snapshot of the same team so the next sync is not required to see it.
+ */
+export async function mirrorJustificationsToLiveTeamImports(
+  fromImportId: string,
+): Promise<void> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("imports")
+    .select("team_id")
+    .eq("id", fromImportId)
+    .maybeSingle();
+  if (error) {
     throw new Error(
-      `Falha ao copiar justificativas para o lote novo: ${insertError.message}`,
+      `Falha ao localizar o time do lote para espelhar justificativas: ${error.message}`,
     );
   }
+  const teamId = data?.team_id ? String(data.team_id) : "";
+  if (!teamId) {
+    return;
+  }
 
-  return {
-    considered: sourceRows.length,
-    copied: inserts.length,
-    skippedNoCard,
-    skippedAlreadyPresent,
-  };
+  const liveIds = await listLiveImportIdsForTeam(teamId);
+  for (const toImportId of liveIds) {
+    if (toImportId === fromImportId) {
+      continue;
+    }
+    await copyJustificationsOntoImport({
+      toImportId,
+      fromImportIds: [fromImportId],
+    });
+  }
+}
+
+/**
+ * Copy pending/accepted/rejected justifications from one Compilado batch to
+ * another (e.g. after Jira rematerialize).
+ */
+export async function copyJustificationsBetweenImports(input: {
+  fromImportId: string;
+  toImportId: string;
+}): Promise<CopyJustificationsBetweenImportsResult> {
+  return copyJustificationsOntoImport({
+    toImportId: input.toImportId,
+    fromImportIds: [input.fromImportId],
+  });
 }

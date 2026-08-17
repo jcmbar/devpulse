@@ -161,7 +161,7 @@ export async function runJiraPipelineStepAction(input: {
         return {
           ok: true,
           step: "compilado",
-          message: `Compilado · ${materialized.cardsInserted} cards · ${materialized.developersLinked} devs · ${materialized.justificationsCopied} justificativa(s) preservada(s) · ${materialized.deliveryMin ?? "—"} → ${materialized.deliveryMax ?? "—"}`,
+          message: `Compilado · ${materialized.cardsInserted} cards · ${materialized.developersLinked} devs · ${materialized.justificationsCopied} justificativa(s) copiada(s)${materialized.justificationsUpdated ? ` · ${materialized.justificationsUpdated} atualizada(s)` : ""}${materialized.justificationsSkippedNoCard ? ` · ${materialized.justificationsSkippedNoCard} sem card no lote novo` : ""} · ${materialized.deliveryMin ?? "—"} → ${materialized.deliveryMax ?? "—"}`,
           syncRunId: input.syncRunId ?? null,
         };
       }
