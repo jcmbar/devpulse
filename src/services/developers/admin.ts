@@ -130,14 +130,13 @@ function sanitizeSearchTerm(value: string): string {
 }
 
 function mapDeveloperListRow(row: Record<string, unknown>): DeveloperListItem {
-  const cardsRelation = row.jira_cards as { count: number }[] | null;
   const developer = mapDeveloperRow(
     row as Parameters<typeof mapDeveloperRow>[0],
   );
   return {
     ...developer,
     profile: row.profile as DeveloperListItem["profile"],
-    cards_count: cardsRelation?.[0]?.count ?? 0,
+    cards_count: 0,
   };
 }
 
@@ -151,17 +150,63 @@ const DEVELOPER_LIST_SELECT = `
   )
 `;
 
-/** Only for paged admin UI / detail — counting all jira_cards per developer is expensive. */
-const DEVELOPER_LIST_SELECT_WITH_CARDS = `
-  *,
-  profile:profiles!profile_id (
-    id,
-    email,
-    full_name,
-    role
-  ),
-  jira_cards (count)
-`;
+/**
+ * Count cards on live Compilado batches only. Embedding `jira_cards (count)`
+ * scans every historical lote and times out (justificativa / Gestor drill-down).
+ */
+async function countCardsOnActiveImports(
+  developerIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  for (const id of developerIds) {
+    counts.set(id, 0);
+  }
+  if (developerIds.length === 0) {
+    return counts;
+  }
+
+  const supabase = await createClient();
+  const { data: imports, error: importError } = await supabase
+    .from("imports")
+    .select("id")
+    .eq("status", "completed")
+    .is("archived_at", null);
+
+  if (importError) {
+    throw new Error(`Failed to list active imports: ${importError.message}`);
+  }
+
+  const importIds = (imports ?? []).map((row) => String(row.id));
+  if (importIds.length === 0) {
+    return counts;
+  }
+
+  await Promise.all(
+    developerIds.map(async (developerId) => {
+      const { count, error } = await supabase
+        .from("jira_cards")
+        .select("id", { count: "exact", head: true })
+        .eq("developer_id", developerId)
+        .in("import_id", importIds);
+      if (error) {
+        throw new Error(`Failed to count jira cards: ${error.message}`);
+      }
+      counts.set(developerId, count ?? 0);
+    }),
+  );
+
+  return counts;
+}
+
+function withCardCounts(
+  items: DeveloperListItem[],
+  counts: Map<string, number>,
+): DeveloperListItem[] {
+  return items.map((item) => ({
+    ...item,
+    cards_count: counts.get(item.id) ?? 0,
+  }));
+}
 
 function applyDeveloperFilters(
   // PostgREST builder chain (filter methods).
@@ -253,7 +298,7 @@ export async function listDevelopersAdminPaged(
 
   let query = supabase
     .from("developers")
-    .select(DEVELOPER_LIST_SELECT_WITH_CARDS)
+    .select(DEVELOPER_LIST_SELECT)
     .order("full_name", { ascending: true })
     .range(from, to);
 
@@ -264,10 +309,18 @@ export async function listDevelopersAdminPaged(
     throw new Error(`Failed to list developers: ${error.message}`);
   }
 
+  const items = (data ?? []).map((row) =>
+    mapDeveloperListRow(row as Record<string, unknown>),
+  );
+  let counts = new Map<string, number>();
+  try {
+    counts = await countCardsOnActiveImports(items.map((item) => item.id));
+  } catch {
+    counts = new Map();
+  }
+
   return toPaginatedList({
-    items: (data ?? []).map((row) =>
-      mapDeveloperListRow(row as Record<string, unknown>),
-    ),
+    items: withCardCounts(items, counts),
     total,
     page,
     pageSize,
@@ -281,18 +334,7 @@ export async function getDeveloperAdmin(
 
   const { data, error } = await supabase
     .from("developers")
-    .select(
-      `
-      *,
-      profile:profiles!profile_id (
-        id,
-        email,
-        full_name,
-        role
-      ),
-      jira_cards (count)
-    `,
-    )
+    .select(DEVELOPER_LIST_SELECT)
     .eq("id", developerId)
     .maybeSingle();
 
@@ -304,14 +346,7 @@ export async function getDeveloperAdmin(
     return null;
   }
 
-  const cardsRelation = data.jira_cards as { count: number }[] | null;
-  const developer = mapDeveloperRow(data);
-
-  return {
-    ...developer,
-    profile: data.profile as DeveloperListItem["profile"],
-    cards_count: cardsRelation?.[0]?.count ?? 0,
-  };
+  return mapDeveloperListRow(data as Record<string, unknown>);
 }
 
 export async function createDeveloperAdmin(
