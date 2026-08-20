@@ -250,9 +250,18 @@ Regras:
 Além do Gestor, `GET|POST /api/cron/jira-auto-sync` agenda as mesmas integrações
 elegíveis com `trigger_source = auto_cron` (sem sessão de usuário).
 
+**Importante:** abrir o DevPulse / Gestor só dispara `auto_gestor_load`. Sem um
+agendador externo batendo no endpoint, **não há sync com o app fechado**.
+
 - Auth: `Authorization: Bearer $CRON_SECRET` ou header `x-cron-secret`.
-- Agendamento Vercel: `vercel.json` → `0 * * * *` (toda hora, UTC).
-- Em host sem Vercel Cron, aponte um cron externo para a mesma URL com o secret.
+  Sem `CRON_SECRET` no host, o endpoint responde `401` e nada roda.
+- Agendamento Vercel: `vercel.json` → `0 * * * *` (toda hora, UTC). No plano
+  Hobby o cron horário pode ser limitado — use o workflow abaixo se necessário.
+- GitHub Actions (host-agnóstico, ex. Render):
+  `.github/workflows/jira-auto-sync.yml` — secrets `DEVPULSE_SITE_URL` +
+  `CRON_SECRET` (mesmo valor do host).
+- Render Cron Job (alternativa): `POST`/`GET` na URL
+  `{NEXT_PUBLIC_SITE_URL}/api/cron/jira-auto-sync` com o header Bearer.
 - Respeita o mesmo cooldown/locks do auto-sync do Gestor.
 - Sem sessão de usuário: o caminho `auto_cron` usa `SUPABASE_SERVICE_ROLE_KEY`
   (via `runWithServiceRole`) para atravessar RLS.

@@ -1,9 +1,16 @@
 import { scheduleEligibleJiraAutoSyncs } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
 import { NextResponse, type NextRequest } from "next/server";
 
+/** Vercel Cron / long syncs — ignored on hosts without the limit. */
+export const maxDuration = 300;
+export const runtime = "nodejs";
+
 function isAuthorizedCronRequest(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET?.trim();
   if (!cronSecret) {
+    console.error(
+      "[cron/jira-auto-sync] CRON_SECRET is not set — scheduled sync cannot run",
+    );
     return false;
   }
 

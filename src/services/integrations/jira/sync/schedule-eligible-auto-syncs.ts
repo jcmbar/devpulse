@@ -47,32 +47,43 @@ async function scheduleEligibleJiraAutoSyncsInner(input: {
   if (eligibleIds.length > 0) {
     const { trigger, actorUserId } = input;
     const useServiceRole = trigger === "auto_cron";
-    after(async () => {
-      const runPipelines = async () => {
-        for (const integrationId of eligibleIds) {
-          try {
-            await triggerJiraSync({
-              integrationId,
-              force: false,
-              trigger,
-              actorUserId,
-              forceFull: false,
-            });
-          } catch (error) {
-            console.error(
-              "[scheduleEligibleJiraAutoSyncs] pipeline failed",
-              trigger,
-              integrationId,
-              error,
-            );
-          }
+
+    const runPipelines = async () => {
+      for (const integrationId of eligibleIds) {
+        try {
+          await triggerJiraSync({
+            integrationId,
+            force: false,
+            trigger,
+            actorUserId,
+            forceFull: false,
+          });
+        } catch (error) {
+          console.error(
+            "[scheduleEligibleJiraAutoSyncs] pipeline failed",
+            trigger,
+            integrationId,
+            error,
+          );
         }
-      };
-      if (useServiceRole) {
-        await runWithServiceRole(runPipelines);
-      } else {
-        await runPipelines();
       }
+    };
+
+    // One shared task: Next `after()` (Vercel) + void retain (Render/Node).
+    // Do not start two pipelines — both paths await the same promise.
+    const task = useServiceRole
+      ? runWithServiceRole(runPipelines)
+      : runPipelines();
+
+    after(async () => {
+      await task;
+    });
+    void task.catch((error) => {
+      console.error(
+        "[scheduleEligibleJiraAutoSyncs] background task failed",
+        trigger,
+        error,
+      );
     });
   }
 

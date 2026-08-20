@@ -1,0 +1,51 @@
+# Hourly Jira auto-sync for hosts that do not run vercel.json crons
+# (e.g. Render). Also works as a backup when Vercel Hobby cannot run hourly.
+#
+# Required repository secrets:
+#   DEVPULSE_SITE_URL  — production origin, no trailing slash
+#                        (e.g. https://devpulse.onrender.com)
+#   CRON_SECRET        — same value as CRON_SECRET on the host
+name: Jira auto-sync
+
+on:
+  schedule:
+    # Every hour at minute 5 (UTC). Cooldown default is 60 min.
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/jira-auto-sync
+        env:
+          SITE_URL: ${{ secrets.DEVPULSE_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing DEVPULSE_SITE_URL or CRON_SECRET repository secrets."
+            exit 1
+          fi
+          url="${SITE_URL%/}/api/cron/jira-auto-sync"
+          echo "POST $url"
+          curl -fsS -X POST "$url" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            --max-time 120 \
+            -o /tmp/jira-auto-sync.json \
+            -w "\nHTTP %{http_code}\n"
+          cat /tmp/jira-auto-sync.json
+          echo
+          python3 - <<'PY'
+          import json, sys
+          data = json.load(open("/tmp/jira-auto-sync.json"))
+          if not data.get("ok"):
+              print("Cron endpoint returned ok=false:", data, file=sys.stderr)
+              sys.exit(1)
+          print(
+              f"scheduled={data.get('scheduled')} skipped={data.get('skipped')} "
+              f"ids={data.get('integrationIds')}"
+          )
+          PY
