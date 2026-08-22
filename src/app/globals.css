@@ -227,9 +227,24 @@ body {
   }
 }
 
+@keyframes catalog-save-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklab, var(--accent) 50%, transparent),
+      var(--shadow-sm);
+  }
+  55% {
+    box-shadow:
+      0 0 0 6px color-mix(in oklab, var(--accent) 0%, transparent),
+      var(--shadow-sm);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-closing-attention,
-  .ui-closing-attention-btn {
+  .ui-closing-attention-btn,
+  .ui-btn-save-pending {
     animation: none !important;
   }
 }
@@ -237,6 +252,11 @@ body {
 @layer components {
   .ui-btn-primary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+  }
+
+  .ui-btn-save-pending {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+    animation: catalog-save-pulse 1.6s ease-in-out infinite;
   }
 
   .ui-btn-secondary {

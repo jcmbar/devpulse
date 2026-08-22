@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   removeStgDefaultParticipantAction,
   setStgDefaultParticipantAction,
@@ -16,10 +17,12 @@ import {
   FormFeedback,
   FormField,
 } from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 import type {
   StgApprovalPolicy,
   StgDefaultParticipant,
   StgModuleWithScenarios,
+  StgScenario,
 } from "@/types/stg";
 import type { Team } from "@/types/team";
 
@@ -36,6 +39,262 @@ type CatalogPanelProps = {
   defaultParticipants: StgDefaultParticipant[];
   developers: Array<{ id: string; full_name: string }>;
 };
+
+function DirtySaveButton({
+  dirty,
+  pending,
+}: {
+  dirty: boolean;
+  pending: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      name="intent"
+      value="save"
+      disabled={pending || !dirty}
+      className={cn(dirty ? "ui-btn-save-pending" : "ui-btn-secondary")}
+      aria-live="polite"
+    >
+      {pending ? "Salvando..." : dirty ? "Salvar" : "Salvo"}
+    </button>
+  );
+}
+
+function CatalogScenarioRow({
+  scenario,
+  moduleId,
+  scenarioAction,
+  scenarioPending,
+}: {
+  scenario: StgScenario;
+  moduleId: string;
+  scenarioAction: (payload: FormData) => void;
+  scenarioPending: boolean;
+}) {
+  const [name, setName] = useState(scenario.name);
+  const [summary, setSummary] = useState(scenario.summary ?? "");
+
+  useEffect(() => {
+    setName(scenario.name);
+    setSummary(scenario.summary ?? "");
+  }, [scenario.id, scenario.name, scenario.summary, scenario.updated_at]);
+
+  const dirty =
+    name.trim() !== scenario.name.trim() ||
+    summary.trim() !== (scenario.summary ?? "").trim();
+
+  return (
+    <li>
+      <form
+        action={scenarioAction}
+        className={cn(
+          "grid gap-2 sm:grid-cols-[1fr_1fr_auto]",
+          !scenario.is_active && "opacity-70",
+        )}
+      >
+        <input type="hidden" name="id" value={scenario.id} />
+        <input type="hidden" name="moduleId" value={moduleId} />
+        <input type="hidden" name="sortOrder" value={scenario.sort_order} />
+        <input
+          type="hidden"
+          name="isActive"
+          value={scenario.is_active ? "true" : "false"}
+        />
+        <input
+          name="name"
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          aria-label={`Nome do cenário ${scenario.name}`}
+          className="ui-input"
+        />
+        <input
+          name="summary"
+          value={summary}
+          onChange={(event) => setSummary(event.target.value)}
+          placeholder="Resumo (opcional)"
+          aria-label={`Resumo do cenário ${scenario.name}`}
+          className="ui-input"
+        />
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <DirtySaveButton dirty={dirty} pending={scenarioPending} />
+          <button
+            type="submit"
+            name="intent"
+            value={scenario.is_active ? "deactivate" : "activate"}
+            className="ui-btn-ghost"
+            disabled={scenarioPending}
+          >
+            {scenario.is_active ? "Desativar" : "Ativar"}
+          </button>
+        </div>
+      </form>
+    </li>
+  );
+}
+
+function CatalogModuleCard({
+  module,
+  teamId,
+  moduleAction,
+  modulePending,
+  scenarioAction,
+  scenarioPending,
+}: {
+  module: StgModuleWithScenarios;
+  teamId: string;
+  moduleAction: (payload: FormData) => void;
+  modulePending: boolean;
+  scenarioAction: (payload: FormData) => void;
+  scenarioPending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(module.name);
+  const panelId = useId();
+
+  useEffect(() => {
+    setName(module.name);
+  }, [module.id, module.name, module.updated_at]);
+
+  const dirty = name.trim() !== module.name.trim();
+  const activeScenarios = module.scenarios.filter((row) => row.is_active).length;
+
+  return (
+    <div
+      className={cn(
+        "ui-dashboard-panel space-y-3",
+        !module.is_active && "opacity-70",
+      )}
+    >
+      <div className="flex flex-wrap items-start gap-2">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-start gap-2 rounded-[var(--radius-sm)] px-1 py-0.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <ChevronDown
+            className={cn(
+              "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+              open ? "rotate-0" : "-rotate-90",
+            )}
+            strokeWidth={2}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <p className="font-medium text-foreground">{module.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {module.scenarios.length} cenário(s)
+              {activeScenarios !== module.scenarios.length
+                ? ` · ${activeScenarios} ativo(s)`
+                : null}
+              {!module.is_active ? " · inativo" : null}
+              {dirty ? " · alterações pendentes" : null}
+            </p>
+          </div>
+        </button>
+      </div>
+
+      <div
+        id={panelId}
+        hidden={!open}
+        className={cn("space-y-3", !open && "hidden")}
+      >
+          <form
+            action={moduleAction}
+            className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          >
+            <input type="hidden" name="id" value={module.id} />
+            <input type="hidden" name="teamId" value={teamId} />
+            <input type="hidden" name="sortOrder" value={module.sort_order} />
+            <input
+              type="hidden"
+              name="isActive"
+              value={module.is_active ? "true" : "false"}
+            />
+            <FormField
+              label="Módulo"
+              htmlFor={`module-name-${module.id}`}
+              className="min-w-0 flex-1"
+            >
+              <input
+                id={`module-name-${module.id}`}
+                name="name"
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="ui-input"
+              />
+            </FormField>
+            <div className="flex flex-wrap gap-2">
+              <DirtySaveButton dirty={dirty} pending={modulePending} />
+              <button
+                type="submit"
+                name="intent"
+                value={module.is_active ? "deactivate" : "activate"}
+                className="ui-btn-ghost"
+                disabled={modulePending}
+              >
+                {module.is_active ? "Desativar" : "Ativar"}
+              </button>
+            </div>
+          </form>
+          {!module.is_active ? (
+            <p className="text-xs text-muted-foreground">
+              Módulo inativo — não entra em novas sessões.
+            </p>
+          ) : null}
+
+          <ul className="space-y-3 border-t border-border/60 pt-3">
+            {module.scenarios.length === 0 ? (
+              <li className="text-sm text-muted-foreground">
+                Nenhum cenário ainda.
+              </li>
+            ) : (
+              module.scenarios.map((scenario) => (
+                <CatalogScenarioRow
+                  key={scenario.id}
+                  scenario={scenario}
+                  moduleId={module.id}
+                  scenarioAction={scenarioAction}
+                  scenarioPending={scenarioPending}
+                />
+              ))
+            )}
+          </ul>
+
+          <form
+            action={scenarioAction}
+            className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-[1fr_1fr_auto]"
+          >
+            <input type="hidden" name="moduleId" value={module.id} />
+            <input
+              name="name"
+              required
+              placeholder="Novo cenário"
+              className="ui-input"
+            />
+            <input
+              name="summary"
+              placeholder="Resumo (opcional)"
+              className="ui-input"
+            />
+            <button
+              type="submit"
+              name="intent"
+              value="save"
+              className="ui-btn-secondary"
+              disabled={scenarioPending}
+            >
+              Adicionar
+            </button>
+          </form>
+      </div>
+    </div>
+  );
+}
 
 export function StgCatalogPanel({
   team,
@@ -95,6 +354,9 @@ export function StgCatalogPanel({
 
       <section className="space-y-3">
         <h2 className="text-base font-semibold">Módulos e cenários</h2>
+        <p className="text-sm text-muted-foreground">
+          Expanda um módulo para editar. Alterações ficam pendentes até salvar.
+        </p>
         <FormFeedback error={moduleState.error} success={moduleState.success} />
         <FormFeedback
           error={scenarioState.error}
@@ -107,171 +369,15 @@ export function StgCatalogPanel({
         ) : (
           <div className="space-y-3">
             {catalog.map((module) => (
-              <div
+              <CatalogModuleCard
                 key={module.id}
-                className={
-                  module.is_active
-                    ? "ui-dashboard-panel space-y-3"
-                    : "ui-dashboard-panel space-y-3 opacity-70"
-                }
-              >
-                <form
-                  action={moduleAction}
-                  className="flex flex-col gap-2 sm:flex-row sm:items-end"
-                >
-                  <input type="hidden" name="id" value={module.id} />
-                  <input type="hidden" name="teamId" value={team.id} />
-                  <input
-                    type="hidden"
-                    name="sortOrder"
-                    value={module.sort_order}
-                  />
-                  <input
-                    type="hidden"
-                    name="isActive"
-                    value={module.is_active ? "true" : "false"}
-                  />
-                  <FormField
-                    label="Módulo"
-                    htmlFor={`module-name-${module.id}`}
-                    className="min-w-0 flex-1"
-                  >
-                    <input
-                      id={`module-name-${module.id}`}
-                      name="name"
-                      required
-                      defaultValue={module.name}
-                      className="ui-input"
-                    />
-                  </FormField>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="submit"
-                      name="intent"
-                      value="save"
-                      className="ui-btn-secondary"
-                      disabled={modulePending}
-                    >
-                      Salvar
-                    </button>
-                    <button
-                      type="submit"
-                      name="intent"
-                      value={module.is_active ? "deactivate" : "activate"}
-                      className="ui-btn-ghost"
-                      disabled={modulePending}
-                    >
-                      {module.is_active ? "Desativar" : "Ativar"}
-                    </button>
-                  </div>
-                </form>
-                {!module.is_active ? (
-                  <p className="text-xs text-muted-foreground">
-                    Módulo inativo — não entra em novas sessões.
-                  </p>
-                ) : null}
-
-                <ul className="space-y-3 border-t border-border/60 pt-3">
-                  {module.scenarios.length === 0 ? (
-                    <li className="text-sm text-muted-foreground">
-                      Nenhum cenário ainda.
-                    </li>
-                  ) : (
-                    module.scenarios.map((scenario) => (
-                      <li key={scenario.id}>
-                        <form
-                          action={scenarioAction}
-                          className={
-                            scenario.is_active
-                              ? "grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
-                              : "grid gap-2 opacity-70 sm:grid-cols-[1fr_1fr_auto]"
-                          }
-                        >
-                          <input type="hidden" name="id" value={scenario.id} />
-                          <input
-                            type="hidden"
-                            name="moduleId"
-                            value={module.id}
-                          />
-                          <input
-                            type="hidden"
-                            name="sortOrder"
-                            value={scenario.sort_order}
-                          />
-                          <input
-                            type="hidden"
-                            name="isActive"
-                            value={scenario.is_active ? "true" : "false"}
-                          />
-                          <input
-                            name="name"
-                            required
-                            defaultValue={scenario.name}
-                            aria-label={`Nome do cenário ${scenario.name}`}
-                            className="ui-input"
-                          />
-                          <input
-                            name="summary"
-                            defaultValue={scenario.summary ?? ""}
-                            placeholder="Resumo (opcional)"
-                            aria-label={`Resumo do cenário ${scenario.name}`}
-                            className="ui-input"
-                          />
-                          <div className="flex flex-wrap gap-2 sm:justify-end">
-                            <button
-                              type="submit"
-                              name="intent"
-                              value="save"
-                              className="ui-btn-secondary"
-                              disabled={scenarioPending}
-                            >
-                              Salvar
-                            </button>
-                            <button
-                              type="submit"
-                              name="intent"
-                              value={
-                                scenario.is_active ? "deactivate" : "activate"
-                              }
-                              className="ui-btn-ghost"
-                              disabled={scenarioPending}
-                            >
-                              {scenario.is_active ? "Desativar" : "Ativar"}
-                            </button>
-                          </div>
-                        </form>
-                      </li>
-                    ))
-                  )}
-                </ul>
-
-                <form
-                  action={scenarioAction}
-                  className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-[1fr_1fr_auto]"
-                >
-                  <input type="hidden" name="moduleId" value={module.id} />
-                  <input
-                    name="name"
-                    required
-                    placeholder="Novo cenário"
-                    className="ui-input"
-                  />
-                  <input
-                    name="summary"
-                    placeholder="Resumo (opcional)"
-                    className="ui-input"
-                  />
-                  <button
-                    type="submit"
-                    name="intent"
-                    value="save"
-                    className="ui-btn-secondary"
-                    disabled={scenarioPending}
-                  >
-                    Adicionar
-                  </button>
-                </form>
-              </div>
+                module={module}
+                teamId={team.id}
+                moduleAction={moduleAction}
+                modulePending={modulePending}
+                scenarioAction={scenarioAction}
+                scenarioPending={scenarioPending}
+              />
             ))}
           </div>
         )}
