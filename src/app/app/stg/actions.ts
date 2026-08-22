@@ -227,21 +227,66 @@ export async function deleteStgFindingAction(
   }
 }
 
+function optionalFormId(formData: FormData, key = "id"): string | undefined {
+  const value = String(formData.get(key) ?? "").trim();
+  return value || undefined;
+}
+
+function optionalFormBool(
+  formData: FormData,
+  key: string,
+): boolean | undefined {
+  const raw = formData.get(key);
+  if (raw === null || String(raw) === "") {
+    return undefined;
+  }
+  const value = String(raw);
+  return value === "true" || value === "on" || value === "1";
+}
+
+function optionalFormNumber(
+  formData: FormData,
+  key: string,
+): number | undefined {
+  const raw = formData.get(key);
+  if (raw === null || String(raw).trim() === "") {
+    return undefined;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 export async function upsertStgModuleAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
   await requirePermission("stg", "edit");
   const teamId = String(formData.get("teamId") ?? "");
+  const id = optionalFormId(formData);
+  const intent = String(formData.get("intent") ?? "save");
+  const isActive =
+    intent === "deactivate"
+      ? false
+      : intent === "activate"
+        ? true
+        : optionalFormBool(formData, "isActive");
 
   try {
     await upsertStgModule({
+      id,
       teamId,
       name: String(formData.get("name") ?? ""),
-      sortOrder: Number(formData.get("sortOrder") ?? 0),
+      sortOrder: optionalFormNumber(formData, "sortOrder"),
+      isActive,
     });
     revalidateStg();
     revalidatePath("/app/stg/catalog");
+    if (intent === "deactivate") {
+      return { error: null, success: "Módulo desativado." };
+    }
+    if (intent === "activate") {
+      return { error: null, success: "Módulo ativado." };
+    }
     return { error: null, success: "Módulo salvo." };
   } catch (error) {
     return fail(error, "Não foi possível salvar o módulo.");
@@ -253,16 +298,32 @@ export async function upsertStgScenarioAction(
   formData: FormData,
 ): Promise<StgActionState> {
   await requirePermission("stg", "edit");
+  const id = optionalFormId(formData);
+  const intent = String(formData.get("intent") ?? "save");
+  const isActive =
+    intent === "deactivate"
+      ? false
+      : intent === "activate"
+        ? true
+        : optionalFormBool(formData, "isActive");
 
   try {
     await upsertStgScenario({
+      id,
       moduleId: String(formData.get("moduleId") ?? ""),
       name: String(formData.get("name") ?? ""),
       summary: String(formData.get("summary") ?? "") || null,
-      sortOrder: Number(formData.get("sortOrder") ?? 0),
+      sortOrder: optionalFormNumber(formData, "sortOrder"),
+      isActive,
     });
     revalidatePath("/app/stg/catalog");
     revalidatePath("/app/stg/new");
+    if (intent === "deactivate") {
+      return { error: null, success: "Cenário desativado." };
+    }
+    if (intent === "activate") {
+      return { error: null, success: "Cenário ativado." };
+    }
     return { error: null, success: "Cenário salvo." };
   } catch (error) {
     return fail(error, "Não foi possível salvar o cenário.");

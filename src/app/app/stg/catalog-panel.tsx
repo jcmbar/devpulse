@@ -95,6 +95,11 @@ export function StgCatalogPanel({
 
       <section className="space-y-3">
         <h2 className="text-base font-semibold">Módulos e cenários</h2>
+        <FormFeedback error={moduleState.error} success={moduleState.success} />
+        <FormFeedback
+          error={scenarioState.error}
+          success={scenarioState.success}
+        />
         {catalog.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Catálogo vazio. Adicione o primeiro módulo abaixo.
@@ -102,26 +107,144 @@ export function StgCatalogPanel({
         ) : (
           <div className="space-y-3">
             {catalog.map((module) => (
-              <div key={module.id} className="ui-dashboard-panel space-y-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="font-medium">{module.name}</h3>
-                  <span className="text-xs text-muted-foreground">
-                    {module.scenarios.length} cenário(s)
-                  </span>
-                </div>
-                <ul className="space-y-1 text-sm">
-                  {module.scenarios.map((scenario) => (
-                    <li key={scenario.id}>
-                      <span className="font-medium">{scenario.name}</span>
-                      {scenario.summary ? (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          — {scenario.summary}
-                        </span>
-                      ) : null}
+              <div
+                key={module.id}
+                className={
+                  module.is_active
+                    ? "ui-dashboard-panel space-y-3"
+                    : "ui-dashboard-panel space-y-3 opacity-70"
+                }
+              >
+                <form
+                  action={moduleAction}
+                  className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                >
+                  <input type="hidden" name="id" value={module.id} />
+                  <input type="hidden" name="teamId" value={team.id} />
+                  <input
+                    type="hidden"
+                    name="sortOrder"
+                    value={module.sort_order}
+                  />
+                  <input
+                    type="hidden"
+                    name="isActive"
+                    value={module.is_active ? "true" : "false"}
+                  />
+                  <FormField
+                    label="Módulo"
+                    htmlFor={`module-name-${module.id}`}
+                    className="min-w-0 flex-1"
+                  >
+                    <input
+                      id={`module-name-${module.id}`}
+                      name="name"
+                      required
+                      defaultValue={module.name}
+                      className="ui-input"
+                    />
+                  </FormField>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      name="intent"
+                      value="save"
+                      className="ui-btn-secondary"
+                      disabled={modulePending}
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type="submit"
+                      name="intent"
+                      value={module.is_active ? "deactivate" : "activate"}
+                      className="ui-btn-ghost"
+                      disabled={modulePending}
+                    >
+                      {module.is_active ? "Desativar" : "Ativar"}
+                    </button>
+                  </div>
+                </form>
+                {!module.is_active ? (
+                  <p className="text-xs text-muted-foreground">
+                    Módulo inativo — não entra em novas sessões.
+                  </p>
+                ) : null}
+
+                <ul className="space-y-3 border-t border-border/60 pt-3">
+                  {module.scenarios.length === 0 ? (
+                    <li className="text-sm text-muted-foreground">
+                      Nenhum cenário ainda.
                     </li>
-                  ))}
+                  ) : (
+                    module.scenarios.map((scenario) => (
+                      <li key={scenario.id}>
+                        <form
+                          action={scenarioAction}
+                          className={
+                            scenario.is_active
+                              ? "grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                              : "grid gap-2 opacity-70 sm:grid-cols-[1fr_1fr_auto]"
+                          }
+                        >
+                          <input type="hidden" name="id" value={scenario.id} />
+                          <input
+                            type="hidden"
+                            name="moduleId"
+                            value={module.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="sortOrder"
+                            value={scenario.sort_order}
+                          />
+                          <input
+                            type="hidden"
+                            name="isActive"
+                            value={scenario.is_active ? "true" : "false"}
+                          />
+                          <input
+                            name="name"
+                            required
+                            defaultValue={scenario.name}
+                            aria-label={`Nome do cenário ${scenario.name}`}
+                            className="ui-input"
+                          />
+                          <input
+                            name="summary"
+                            defaultValue={scenario.summary ?? ""}
+                            placeholder="Resumo (opcional)"
+                            aria-label={`Resumo do cenário ${scenario.name}`}
+                            className="ui-input"
+                          />
+                          <div className="flex flex-wrap gap-2 sm:justify-end">
+                            <button
+                              type="submit"
+                              name="intent"
+                              value="save"
+                              className="ui-btn-secondary"
+                              disabled={scenarioPending}
+                            >
+                              Salvar
+                            </button>
+                            <button
+                              type="submit"
+                              name="intent"
+                              value={
+                                scenario.is_active ? "deactivate" : "activate"
+                              }
+                              className="ui-btn-ghost"
+                              disabled={scenarioPending}
+                            >
+                              {scenario.is_active ? "Desativar" : "Ativar"}
+                            </button>
+                          </div>
+                        </form>
+                      </li>
+                    ))
+                  )}
                 </ul>
+
                 <form
                   action={scenarioAction}
                   className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-[1fr_1fr_auto]"
@@ -140,6 +263,8 @@ export function StgCatalogPanel({
                   />
                   <button
                     type="submit"
+                    name="intent"
+                    value="save"
                     className="ui-btn-secondary"
                     disabled={scenarioPending}
                   >
@@ -163,11 +288,6 @@ export function StgCatalogPanel({
               placeholder="Ex.: PDV"
             />
           </FormField>
-          <FormFeedback error={moduleState.error} success={moduleState.success} />
-          <FormFeedback
-            error={scenarioState.error}
-            success={scenarioState.success}
-          />
           <FormActions
             primary={{
               label: "Salvar módulo",

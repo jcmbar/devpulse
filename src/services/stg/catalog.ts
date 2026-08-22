@@ -174,12 +174,27 @@ export async function upsertStgModule(
   }
 
   const supabase = await createClient();
-  const payload = {
+  const payload: {
+    team_id: string;
+    name: string;
+    sort_order?: number;
+    is_active?: boolean;
+  } = {
     team_id: input.teamId,
     name,
-    sort_order: input.sortOrder ?? 0,
-    is_active: input.isActive ?? true,
   };
+
+  if (input.sortOrder !== undefined) {
+    payload.sort_order = input.sortOrder;
+  } else if (!input.id) {
+    payload.sort_order = 0;
+  }
+
+  if (input.isActive !== undefined) {
+    payload.is_active = input.isActive;
+  } else if (!input.id) {
+    payload.is_active = true;
+  }
 
   const query = input.id
     ? supabase.from("stg_modules").update(payload).eq("id", input.id)
@@ -204,13 +219,29 @@ export async function upsertStgScenario(
   }
 
   const supabase = await createClient();
-  const payload = {
+  const payload: {
+    module_id: string;
+    name: string;
+    summary: string | null;
+    sort_order?: number;
+    is_active?: boolean;
+  } = {
     module_id: input.moduleId,
     name,
     summary: input.summary?.trim() || null,
-    sort_order: input.sortOrder ?? 0,
-    is_active: input.isActive ?? true,
   };
+
+  if (input.sortOrder !== undefined) {
+    payload.sort_order = input.sortOrder;
+  } else if (!input.id) {
+    payload.sort_order = 0;
+  }
+
+  if (input.isActive !== undefined) {
+    payload.is_active = input.isActive;
+  } else if (!input.id) {
+    payload.is_active = true;
+  }
 
   const query = input.id
     ? supabase.from("stg_scenarios").update(payload).eq("id", input.id)
