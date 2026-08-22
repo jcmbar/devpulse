@@ -107,7 +107,6 @@ export default async function EditDeveloperPage({
   const showLinkHint = Boolean(
     access?.suggestedActions.includes("link_profile"),
   );
-  const showAccessActions = showInvite || showResend;
 
   return (
     <PageShell size="lg">
@@ -190,8 +189,8 @@ export default async function EditDeveloperPage({
       ) : null}
 
       {activeTab === "acesso" ? (
-        <>
-          <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
+          <div className="flex flex-col gap-5 lg:col-span-5">
             <SectionShell
               title="Status de acesso"
               description="Login, convite e senha."
@@ -202,12 +201,12 @@ export default async function EditDeveloperPage({
                     <DeveloperAccessSummary access={access} />
                     {showLinkHint ? (
                       <p className="text-sm text-muted-foreground">
-                        Próximo passo: vincule o profile ao lado.
+                        Próximo passo: vincule o profile na seção abaixo.
                       </p>
                     ) : null}
                     {access.suggestedActions.includes("invite") ? (
                       <p className="text-sm text-muted-foreground">
-                        Próximo passo: convidar usuário para criar o acesso.
+                        Próximo passo: convidar o usuário para criar o acesso.
                       </p>
                     ) : null}
                     {access.suggestedActions.includes("resend_invite") ? (
@@ -217,8 +216,8 @@ export default async function EditDeveloperPage({
                     ) : null}
                     {access.suggestedActions.includes("reset_password") ? (
                       <p className="text-sm text-muted-foreground">
-                        Acesso ativo. Redefina a senha na seção de e-mail, se
-                        precisar.
+                        Acesso ativo. Use a seção de e-mail abaixo se precisar
+                        redefinir a senha.
                       </p>
                     ) : null}
                   </>
@@ -230,39 +229,6 @@ export default async function EditDeveloperPage({
               </div>
             </SectionShell>
 
-            <SectionShell
-              title="Privilégios de acesso"
-              description={
-                developer.profile
-                  ? `Papel (RLS): ${getRoleLabel(developer.profile.role)}. Matriz por módulo abaixo.`
-                  : "Disponível após vincular profile ou convidar."
-              }
-            >
-              <div className="ui-dashboard-panel">
-                {developer.profile ? (
-                  <AccessPermissionsPanel
-                    developerId={developer.id}
-                    profileId={developer.profile.id}
-                    currentRole={developer.profile.role}
-                    initialGrants={accessGrants}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Sem profile vinculado. Convide o usuário (escolhe a role
-                    inicial) ou vincule um profile existente abaixo.
-                  </p>
-                )}
-              </div>
-            </SectionShell>
-          </div>
-
-          <div
-            className={
-              showAccessActions
-                ? "grid gap-5 lg:grid-cols-2 lg:items-start"
-                : undefined
-            }
-          >
             <SectionShell
               title="Vínculo com profile"
               description="Profile = login. Cadastro = produtividade."
@@ -310,7 +276,33 @@ export default async function EditDeveloperPage({
               </SectionShell>
             ) : null}
           </div>
-        </>
+
+          <div className="lg:col-span-7 lg:sticky lg:top-24">
+            <SectionShell
+              title="Privilégios de acesso"
+              description={
+                developer.profile
+                  ? `Papel (RLS): ${getRoleLabel(developer.profile.role)}. Defina o que esta pessoa vê e altera em cada módulo.`
+                  : "Disponível após vincular profile ou convidar."
+              }
+            >
+              <div className="ui-dashboard-panel">
+                {developer.profile ? (
+                  <AccessPermissionsPanel
+                    developerId={developer.id}
+                    profileId={developer.profile.id}
+                    initialGrants={accessGrants}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Sem profile vinculado. Convide o usuário (com role inicial)
+                    ou vincule um profile existente na coluna ao lado.
+                  </p>
+                )}
+              </div>
+            </SectionShell>
+          </div>
+        </div>
       ) : null}
 
       {activeTab === "valores" ? (

@@ -35,14 +35,12 @@ const PRESET_OPTIONS: Array<{ value: "" | UserRole; label: string }> = [
 type AccessPermissionsPanelProps = {
   developerId: string;
   profileId: string;
-  currentRole: UserRole;
   initialGrants: ModuleGrantsMap;
 };
 
 export function AccessPermissionsPanel({
   developerId,
   profileId,
-  currentRole,
   initialGrants,
 }: AccessPermissionsPanelProps) {
   const router = useRouter();
@@ -109,7 +107,7 @@ export function AccessPermissionsPanel({
       <FormField
         label="Preset"
         htmlFor="accessPreset"
-        hint={`Papel atual: ${getRoleLabel(currentRole)}. O preset preenche a matriz; Salvar grava e sincroniza o role para o RLS.`}
+        hint="Preenche a matriz; use Salvar para gravar e sincronizar o papel (RLS)."
       >
         <select
           id="accessPreset"
@@ -117,7 +115,7 @@ export function AccessPermissionsPanel({
           onChange={(event) =>
             applyPreset(event.target.value as "" | UserRole)
           }
-          className="ui-select w-full sm:max-w-sm"
+          className="ui-select w-full"
         >
           {PRESET_OPTIONS.map((option) => (
             <option key={option.label} value={option.value}>
@@ -127,14 +125,14 @@ export function AccessPermissionsPanel({
         </select>
       </FormField>
 
-      <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-border">
-        <table className="w-full min-w-[28rem] border-collapse text-sm">
+      <div className="rounded-[var(--radius-sm)] border border-border">
+        <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="px-3 py-2 font-medium">Módulo</th>
-              <th className="px-3 py-2 text-center font-medium">Acesso</th>
-              <th className="px-3 py-2 text-center font-medium">Edição</th>
-              <th className="px-3 py-2 text-center font-medium">Excluir</th>
+              <th className="w-20 px-2 py-2 text-center font-medium">Acesso</th>
+              <th className="w-20 px-2 py-2 text-center font-medium">Edição</th>
+              <th className="w-20 px-2 py-2 text-center font-medium">Excluir</th>
             </tr>
           </thead>
           <tbody>
@@ -145,7 +143,7 @@ export function AccessPermissionsPanel({
                   key={module.key}
                   className="border-b border-border/70 last:border-0"
                 >
-                  <td className="px-3 py-2.5 font-medium text-foreground">
+                  <td className="px-3 py-2 font-medium text-foreground">
                     {module.label}
                   </td>
                   {(
@@ -155,8 +153,11 @@ export function AccessPermissionsPanel({
                       ["can_delete", "Excluir"],
                     ] as const
                   ).map(([field, label]) => (
-                    <td key={field} className="px-3 py-2.5 text-center">
-                      <label className="inline-flex cursor-pointer items-center justify-center gap-1.5">
+                    <td key={field} className="px-2 py-2 text-center">
+                      <label
+                        className="inline-flex cursor-pointer items-center justify-center"
+                        title={`${module.label}: ${label} — ${row[field] ? "sim" : "não"}`}
+                      >
                         <input
                           type="checkbox"
                           className="size-4 rounded border-border"
@@ -166,9 +167,6 @@ export function AccessPermissionsPanel({
                           }
                           aria-label={`${module.label}: ${label}`}
                         />
-                        <span className="sr-only sm:not-sr-only sm:text-xs sm:text-muted-foreground">
-                          {row[field] ? "sim" : "não"}
-                        </span>
                       </label>
                     </td>
                   ))}
