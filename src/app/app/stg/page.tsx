@@ -5,7 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
 import { TeamFilterForm } from "@/components/team-filter";
 import { FilterBar } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { loadStgOrMissing, stgResultLabel, stgStatusLabel } from "@/lib/stg/ui";
 import { listStgSessions } from "@/services/stg";
 import { listTeamsAdmin } from "@/services/teams";
@@ -15,7 +15,7 @@ type PageProps = {
 };
 
 export default async function StgSessionsPage({ searchParams }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("stg", "access");
   const params = searchParams ? await searchParams : {};
   const teams = await listTeamsAdmin();
   const teamId =

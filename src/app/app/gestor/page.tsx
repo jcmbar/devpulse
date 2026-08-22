@@ -24,7 +24,7 @@ import { PerformanceBandsLegend } from "@/components/performance-bands-legend";
 import { DataTable } from "@/components/surface";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
   formatDateRangeLabel,
@@ -145,7 +145,7 @@ function EstimateVsActualCell({
 export default async function GestorDashboardPage({
   searchParams,
 }: GestorPageProps) {
-  await requireTeamAccess();
+  await requirePermission("gestor", "access");
   const params = await searchParams;
   await restorePersistedFiltersOrRedirect({
     scope: "gestor-dashboard",

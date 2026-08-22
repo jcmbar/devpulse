@@ -5,7 +5,7 @@ import { FilterPersistenceSync } from "@/components/filters/filter-persistence-s
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildFechamentoOpsCell,
   FECHAMENTO_OPS_STATUS_ORDER,
@@ -58,7 +58,7 @@ function parseOpsStatus(
 }
 
 export default async function GestorFechamentosPage({ searchParams }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("gestor", "access");
   const params = await searchParams;
   await restorePersistedFiltersOrRedirect({
     scope: "gestor-fechamentos",

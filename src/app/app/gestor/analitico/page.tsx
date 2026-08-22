@@ -7,7 +7,7 @@ import { GestorSourceFilter } from "@/components/gestor-source-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
   formatDateRangeLabel,
@@ -49,7 +49,7 @@ function parseClassification(
 }
 
 export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("gestor", "access");
   const params = await searchParams;
   await restorePersistedFiltersOrRedirect({
     scope: "gestor-analitico",

@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { FilterBar } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { buildGestorNavTabs } from "@/lib/gestor/nav-tabs";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
@@ -69,7 +69,7 @@ function buildFolhaHref(input: {
 }
 
 export default async function GestorFolhaPage({ searchParams }: PageProps) {
-  const { profile } = await requireTeamAccess();
+  const { profile } = await requirePermission("gestor", "access");
   const params = await searchParams;
   await restorePersistedFiltersOrRedirect({
     scope: "gestor-folha",

@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
+import {
+  presetGrantsForRole,
+  roleCeilingFromGrants,
+} from "@/lib/auth/capabilities";
 import {
   normalizeJiraAccountId,
   validateJiraAccountId,
@@ -29,6 +33,10 @@ import {
   isUserRole,
   updateProfileRoleAdmin,
 } from "@/services/profiles/admin";
+import {
+  isValidGrantsPayload,
+  replaceModuleGrantsAdmin,
+} from "@/services/profiles/module-grants";
 import { recordSensitiveAccessAudit } from "@/services/security/sensitive-access-audit";
 import {
   isCompensationBaseType,
@@ -54,6 +62,8 @@ export type AccessRoleFormState = {
   error: string | null;
   success: string | null;
 };
+
+export type AccessPermissionsFormState = AccessRoleFormState;
 
 function readOptionalString(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -98,7 +108,7 @@ export async function createDeveloperAction(
   _prev: DeveloperFormState,
   formData: FormData,
 ): Promise<DeveloperFormState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const fullName = String(formData.get("fullName") ?? "").trim();
   if (!fullName) {
@@ -151,7 +161,7 @@ export async function updateDeveloperAction(
   _prev: DeveloperFormState,
   formData: FormData,
 ): Promise<DeveloperFormState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
@@ -208,7 +218,7 @@ export async function upsertDeveloperCompensationAction(
   _prev: CompensationFormState,
   formData: FormData,
 ): Promise<CompensationFormState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   if (!developerId) {
@@ -326,7 +336,7 @@ export async function updateDeveloperIsActiveAction(
   developerId: string,
   isActive: boolean,
 ): Promise<DeveloperListPatchState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const id = developerId.trim();
   if (!id) {
@@ -353,7 +363,7 @@ export async function updateDeveloperTeamAction(
   developerId: string,
   teamId: string | null,
 ): Promise<DeveloperListPatchState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const id = developerId.trim();
   if (!id) {
@@ -383,7 +393,7 @@ export async function updateDeveloperJiraAccountAction(
   developerId: string,
   jiraAccountId: string | null,
 ): Promise<DeveloperListPatchState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const id = developerId.trim();
   if (!id) {
@@ -422,7 +432,7 @@ export async function updateDeveloperJiraAccountAction(
 export async function syncDeveloperAvatarAction(
   developerId: string,
 ): Promise<{ error: string | null; success: string | null }> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
   const id = developerId.trim();
   if (!id) {
     return { error: "Developer inválido.", success: null };
@@ -455,7 +465,7 @@ export async function lookupDeveloperJiraAccountAction(
   developerId: string,
   options?: { force?: boolean },
 ): Promise<JiraAccountLookupResult> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const id = developerId.trim();
   if (!id) {
@@ -493,7 +503,7 @@ export async function batchLookupDeveloperJiraAccountsAction(
     error: number;
   };
 }> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const results = await batchLookupDeveloperJiraAccounts({
     developerIds,
@@ -543,7 +553,7 @@ export async function linkDeveloperProfileAction(
   _prev: DeveloperFormState,
   formData: FormData,
 ): Promise<DeveloperFormState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   const profileId = String(formData.get("profileId") ?? "").trim();
@@ -570,7 +580,7 @@ export async function linkDeveloperProfileAction(
 export async function unlinkDeveloperProfileAction(
   developerId: string,
 ): Promise<{ error: string | null }> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   try {
     await unlinkDeveloperProfileAdmin(developerId);
@@ -591,7 +601,7 @@ export async function unlinkDeveloperProfileAction(
 export async function deleteDeveloperAction(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("pessoas", "delete");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   const deleteAuthUser = formData.get("deleteAuthUser") === "on";
@@ -618,12 +628,122 @@ export async function deleteDeveloperAction(
   }
 }
 
-/** Updates login privileges (`profiles.role`) for the developer’s linked profile. */
+/** Updates per-module privilege matrix (+ syncs profiles.role ceiling). */
+export async function updateDeveloperAccessPermissionsAction(
+  _prev: AccessPermissionsFormState,
+  formData: FormData,
+): Promise<AccessPermissionsFormState> {
+  const context = await requirePermission("pessoas", "edit");
+
+  const developerId = String(formData.get("developerId") ?? "").trim();
+  const profileId = String(formData.get("profileId") ?? "").trim();
+  const grantsRaw = String(formData.get("grantsJson") ?? "").trim();
+
+  if (!developerId || !profileId) {
+    return { error: "Developer ou profile inválido.", success: null };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(grantsRaw);
+  } catch {
+    return { error: "Matriz de privilégios inválida.", success: null };
+  }
+
+  if (!isValidGrantsPayload(parsed)) {
+    return { error: "Matriz de privilégios incompleta.", success: null };
+  }
+
+  try {
+    const developer = await getDeveloperAdmin(developerId);
+    if (!developer?.profile || developer.profile.id !== profileId) {
+      return {
+        error: "Profile vinculado não confere com o cadastro.",
+        success: null,
+      };
+    }
+
+    const previousRole = developer.profile.role;
+    const nextRoleProbe = roleCeilingFromGrants(parsed, previousRole);
+
+    if (
+      developer.profile.id === context.user.id &&
+      previousRole === "admin" &&
+      nextRoleProbe !== "admin"
+    ) {
+      return {
+        error:
+          "Você não pode remover o próprio privilégio de administrador.",
+        success: null,
+      };
+    }
+
+    if (
+      developer.profile.id === context.user.id &&
+      !parsed.pessoas?.can_access
+    ) {
+      return {
+        error:
+          "Você não pode remover o próprio acesso ao módulo Pessoas.",
+        success: null,
+      };
+    }
+
+    const { role } = await replaceModuleGrantsAdmin({
+      profileId,
+      grants: parsed,
+      previousRole,
+    });
+
+    await recordSensitiveAccessAudit({
+      actorUserId: context.profile.id,
+      action: "profile_permissions_change",
+      resourceType: "profile",
+      resourceId: profileId,
+      result: "success",
+      origin: "updateDeveloperAccessPermissionsAction",
+      metadata: {
+        role_from: previousRole,
+        role_to: role,
+        developer_id: developerId,
+      },
+    });
+
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${developerId}`);
+    return {
+      error: null,
+      success: "Privilégios de acesso atualizados.",
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível atualizar os privilégios.";
+    try {
+      await recordSensitiveAccessAudit({
+        actorUserId: context.profile.id,
+        action: "profile_permissions_change",
+        resourceType: "profile",
+        resourceId: profileId || null,
+        result: "error",
+        errorCode: "permissions_change_failed",
+        origin: "updateDeveloperAccessPermissionsAction",
+        metadata: { developer_id: developerId || null },
+      });
+    } catch {
+      // ignore
+    }
+    return { error: message, success: null };
+  }
+}
+
+/** @deprecated Prefer updateDeveloperAccessPermissionsAction */
 export async function updateDeveloperAccessRoleAction(
   _prev: AccessRoleFormState,
   formData: FormData,
 ): Promise<AccessRoleFormState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("pessoas", "edit");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   const roleRaw = String(formData.get("role") ?? "").trim();
@@ -659,10 +779,18 @@ export async function updateDeveloperAccessRoleAction(
     }
 
     const previousRole = developer.profile.role;
-    await updateProfileRoleAdmin({
+    const grants = presetGrantsForRole(roleRaw);
+    await replaceModuleGrantsAdmin({
       profileId: developer.profile.id,
-      role: roleRaw,
+      grants,
+      previousRole: roleRaw === "admin" ? "admin" : previousRole,
     });
+    if (roleRaw === "admin") {
+      await updateProfileRoleAdmin({
+        profileId: developer.profile.id,
+        role: "admin",
+      });
+    }
 
     await recordSensitiveAccessAudit({
       actorUserId: context.profile.id,
@@ -689,19 +817,6 @@ export async function updateDeveloperAccessRoleAction(
       error instanceof Error
         ? error.message
         : "Não foi possível atualizar os privilégios.";
-    try {
-      const context = await requireTeamAccess();
-      await recordSensitiveAccessAudit({
-        actorUserId: context.profile.id,
-        action: "profile_role_change",
-        resourceType: "profile",
-        result: "error",
-        errorCode: "role_change_failed",
-        origin: "updateDeveloperAccessRoleAction",
-      });
-    } catch {
-      // ignore
-    }
     return {
       error: message,
       success: null,
@@ -712,7 +827,7 @@ export async function updateDeveloperAccessRoleAction(
 export async function searchProfilesAction(
   query: string,
 ): Promise<Pick<Profile, "id" | "email" | "full_name" | "role">[]> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
   return searchProfilesAdmin(query);
 }
 
@@ -720,7 +835,7 @@ export async function inviteUserForDeveloperAction(
   _prev: InviteUserFormState,
   formData: FormData,
 ): Promise<InviteUserFormState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("pessoas", "edit");
 
   const email = String(formData.get("email") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
@@ -778,7 +893,7 @@ export async function resendInviteForDeveloperAction(
   _prev: InviteUserFormState,
   formData: FormData,
 ): Promise<InviteUserFormState> {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
 
   const developerId = readOptionalString(formData, "developerId");
   const email = readOptionalString(formData, "email");

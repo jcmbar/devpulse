@@ -4,7 +4,7 @@ import { ClosingJiraPostFinalizeDiffPanel } from "@/components/monthly-closing/c
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { SectionShell } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { getDeveloperAdmin } from "@/services/developers/admin";
 import {
@@ -17,7 +17,7 @@ type PageProps = {
 };
 
 export default async function ClosingJiraChangesPage({ params }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("gestor", "access");
   const { closingId } = await params;
   const closing = await getMonthlyClosingById(closingId);
   if (!closing) {

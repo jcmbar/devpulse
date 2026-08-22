@@ -7,7 +7,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   getSanitationSummary,
   listTeamAssignmentReviews,
@@ -15,7 +15,7 @@ import {
 import { listTeamsAdmin } from "@/services/teams";
 
 export default async function TeamSanitationPage() {
-  await requireTeamAccess();
+  await requirePermission("times", "access");
 
   const [summary, teams, pending, assigned] = await Promise.all([
     getSanitationSummary(),

@@ -11,7 +11,7 @@ import {
   type CompiladoSourceMode,
 } from "@/lib/metrics/gestor-data-source";
 import { parseJiraKeys } from "@/lib/metrics/gestor-key-compare";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   getGestorDeveloperCardsAudit,
   type GestorDeveloperCardsAudit,
@@ -37,7 +37,7 @@ export async function loadGestorDeveloperCardsAuditAction(
   input: LoadGestorDeveloperCardsAuditInput,
 ): Promise<LoadGestorDeveloperCardsAuditResult> {
   try {
-    await requireTeamAccess();
+    await requirePermission("gestor", "access");
 
     if (!input.developerId.trim()) {
       return { ok: false, error: "Developer inválido." };
@@ -113,7 +113,7 @@ export async function lookupGestorKeysOutsidePeriodAction(input: {
   keysText: string;
 }): Promise<LookupGestorKeysOutsidePeriodResult> {
   try {
-    await requireTeamAccess();
+    await requirePermission("gestor", "access");
 
     const keys = parseJiraKeys(input.keysText);
     if (keys.length === 0) {

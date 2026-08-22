@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteDeveloperControl } from "@/app/app/developers/delete-developer-control";
-import { AccessRolePanel } from "@/app/app/developers/access-role-panel";
+import { AccessPermissionsPanel } from "@/app/app/developers/access-role-panel";
 import { DeveloperCompensationForm } from "@/app/app/developers/developer-compensation-form";
 import { DeveloperForm } from "@/app/app/developers/developer-form";
 import { InviteUserPanel } from "@/app/app/developers/invite-user-panel";
@@ -13,7 +13,9 @@ import { PageShell } from "@/components/page-shell";
 import { PersonAvatar } from "@/components/person-avatar";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { SectionShell } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
+import { listModuleGrantsForProfile } from "@/services/profiles/module-grants";
+import { emptyModuleGrants } from "@/lib/auth/capabilities";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import { resolveDeveloperAccessInfo } from "@/services/auth/developer-access";
 import {
@@ -50,7 +52,7 @@ export default async function EditDeveloperPage({
   params,
   searchParams,
 }: EditDeveloperPageProps) {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "access");
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
   const activeTab = parseTab(tabParam);
@@ -64,6 +66,12 @@ export default async function EditDeveloperPage({
   if (!developer) {
     notFound();
   }
+
+  const accessGrants = developer.profile
+    ? await listModuleGrantsForProfile(developer.profile.id).catch(() =>
+        emptyModuleGrants(),
+      )
+    : emptyModuleGrants();
 
   let timeBankBalance = 0;
   if (activeTab === "valores" && compensation?.time_bank_enabled) {
@@ -226,15 +234,17 @@ export default async function EditDeveloperPage({
               title="Privilégios de acesso"
               description={
                 developer.profile
-                  ? `Atual: ${getRoleLabel(developer.profile.role)}.`
+                  ? `Papel (RLS): ${getRoleLabel(developer.profile.role)}. Matriz por módulo abaixo.`
                   : "Disponível após vincular profile ou convidar."
               }
             >
               <div className="ui-dashboard-panel">
                 {developer.profile ? (
-                  <AccessRolePanel
+                  <AccessPermissionsPanel
                     developerId={developer.id}
+                    profileId={developer.profile.id}
                     currentRole={developer.profile.role}
+                    initialGrants={accessGrants}
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">

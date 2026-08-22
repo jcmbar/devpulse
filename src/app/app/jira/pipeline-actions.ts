@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   recomputeJiraFlowDailyFacts,
   recomputeJiraFlowMetrics,
@@ -54,7 +54,7 @@ export async function runJiraPipelineStepAction(input: {
   forceFull?: boolean;
   syncRunId?: string | null;
 }): Promise<JiraPipelineStepResult> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("jira", "edit");
 
   try {
     const integration = await requireIntegrationPair({
@@ -203,7 +203,7 @@ export async function triggerJiraSyncAction(input: {
   teamId: string;
   forceFull?: boolean;
 }): Promise<TriggerJiraSyncActionResult> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("jira", "edit");
   await requireIntegrationPair({
     integrationId: input.integrationId,
     teamId: input.teamId,
@@ -259,7 +259,7 @@ export async function requestGestorAutoSyncAction(input: {
   /** When set, only that team's integration. When null, all enabled. */
   teamId: string | null;
 }): Promise<RequestGestorAutoSyncResult> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("gestor", "access");
   return scheduleEligibleJiraAutoSyncs({
     teamId: input.teamId,
     trigger: "auto_gestor_load",
@@ -270,7 +270,7 @@ export async function requestGestorAutoSyncAction(input: {
 export async function getGestorSyncStatusAction(input: {
   integrationIds: string[];
 }): Promise<JiraSyncStatusSummary[]> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "access");
   const summaries: JiraSyncStatusSummary[] = [];
   for (const id of input.integrationIds) {
     const summary = await getJiraSyncStatusSummary(id);

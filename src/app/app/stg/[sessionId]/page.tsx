@@ -3,7 +3,7 @@ import { StgSessionHub } from "@/app/app/stg/session-hub";
 import { StgSchemaMissingNotice } from "@/components/stg/stg-result-banner";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { loadStgOrMissing } from "@/lib/stg/ui";
 import { listDevelopersAdmin } from "@/services/developers";
 import { getStgSessionDetail } from "@/services/stg";
@@ -15,7 +15,7 @@ type PageProps = {
 };
 
 export default async function StgSessionPage({ params }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("stg", "access");
   const { sessionId } = await params;
 
   const loaded = await loadStgOrMissing(() => getStgSessionDetail(sessionId));

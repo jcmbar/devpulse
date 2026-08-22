@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   manuallyAssignDeveloperTeam,
   manuallyAssignImportTeam,
@@ -17,7 +17,7 @@ export async function runSanitationBackfillAction(
   _prev: SanitationActionState,
   _formData: FormData,
 ): Promise<SanitationActionState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("times", "edit");
 
   try {
     const result = await runTeamSanitationBackfill({
@@ -47,7 +47,7 @@ export async function assignImportTeamManualAction(
   _prev: SanitationActionState,
   formData: FormData,
 ): Promise<SanitationActionState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("times", "edit");
   const importId = String(formData.get("importId") ?? "").trim();
   const teamId = String(formData.get("teamId") ?? "").trim();
 
@@ -80,7 +80,7 @@ export async function assignDeveloperTeamManualAction(
   _prev: SanitationActionState,
   formData: FormData,
 ): Promise<SanitationActionState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("times", "edit");
   const developerId = String(formData.get("developerId") ?? "").trim();
   const teamId = String(formData.get("teamId") ?? "").trim();
 

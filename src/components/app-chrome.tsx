@@ -6,7 +6,12 @@ import { BrandMark } from "@/components/brand-mark";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth/actions";
-import { canManageTeam } from "@/lib/auth/roles";
+import {
+  hasAnyTeamModuleAccess,
+  hasPermission,
+  type ModuleGrantsMap,
+} from "@/lib/auth/capabilities";
+import { APP_MODULES, type AppModuleKey } from "@/lib/auth/modules";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/types/profile";
@@ -41,6 +46,7 @@ import {
 
 type AppChromeProps = {
   profile: Profile;
+  grants: ModuleGrantsMap;
   /** Public avatar URL of the linked developer, when available. */
   avatarUrl?: string | null;
   idleMinutes?: number | null;
@@ -53,9 +59,51 @@ type NavItem = {
   href: string;
   label: string;
   icon: NavIcon;
-  /** Cor do ícone (mantém contraste no item ativo e no hover). */
   iconClass: string;
   match?: (pathname: string) => boolean;
+  module?: AppModuleKey;
+};
+
+const MODULE_ICONS: Record<
+  AppModuleKey,
+  { icon: NavIcon; iconClass: string }
+> = {
+  gestor: {
+    icon: LayoutDashboard,
+    iconClass: "text-teal-600 dark:text-teal-400",
+  },
+  pessoas: {
+    icon: Users,
+    iconClass: "text-amber-600 dark:text-amber-400",
+  },
+  jira: {
+    icon: Cable,
+    iconClass: "text-indigo-600 dark:text-indigo-400",
+  },
+  stg: {
+    icon: CalendarCheck2,
+    iconClass: "text-violet-600 dark:text-violet-400",
+  },
+  emails: {
+    icon: Mail,
+    iconClass: "text-orange-600 dark:text-orange-400",
+  },
+  empresas: {
+    icon: Building2,
+    iconClass: "text-lime-600 dark:text-lime-400",
+  },
+  feriados: {
+    icon: CalendarDays,
+    iconClass: "text-yellow-600 dark:text-yellow-400",
+  },
+  imports: {
+    icon: Upload,
+    iconClass: "text-cyan-600 dark:text-cyan-400",
+  },
+  times: {
+    icon: FolderKanban,
+    iconClass: "text-emerald-600 dark:text-emerald-400",
+  },
 };
 
 function isActive(pathname: string, item: NavItem): boolean {
@@ -97,8 +145,22 @@ function NavLink({
   );
 }
 
+function navItemForModule(key: AppModuleKey): NavItem {
+  const meta = APP_MODULES.find((row) => row.key === key)!;
+  const icons = MODULE_ICONS[key];
+  return {
+    href: meta.href,
+    label: meta.label,
+    icon: icons.icon,
+    iconClass: icons.iconClass,
+    match: meta.matchPath,
+    module: key,
+  };
+}
+
 export function AppChrome({
   profile,
+  grants,
   avatarUrl = null,
   idleMinutes = null,
   children,
@@ -108,7 +170,7 @@ export function AppChrome({
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreMenuId = useId();
-  const team = canManageTeam(profile.role);
+  const hasTeamNav = hasAnyTeamModuleAccess(grants);
 
   const contaItem: NavItem = {
     href: "/app/conta",
@@ -118,6 +180,16 @@ export function AppChrome({
     match: (path) => path.startsWith("/app/conta"),
   };
 
+  const primaryModules = APP_MODULES.filter(
+    (row) =>
+      row.navGroup === "primary" && hasPermission(grants, row.key, "access"),
+  ).map((row) => navItemForModule(row.key));
+
+  const moreModules = APP_MODULES.filter(
+    (row) =>
+      row.navGroup === "more" && hasPermission(grants, row.key, "access"),
+  ).map((row) => navItemForModule(row.key));
+
   const primary: NavItem[] = [
     {
       href: "/app",
@@ -126,90 +198,10 @@ export function AppChrome({
       iconClass: "text-sky-600 dark:text-sky-400",
       match: (path) => path === "/app",
     },
-    ...(team
-      ? [
-          {
-            href: "/app/gestor",
-            label: "Gestor",
-            icon: LayoutDashboard,
-            iconClass: "text-teal-600 dark:text-teal-400",
-            match: (path: string) =>
-              path.startsWith("/app/gestor") &&
-              !path.startsWith("/app/gestor/config/emails") &&
-              !path.startsWith("/app/gestor/folha/empresas") &&
-              path !== "/app/gestor/config" &&
-              !path.startsWith("/app/gestor/config?") &&
-              path !== "/app/gestor/config/capacidade" &&
-              !path.startsWith("/app/gestor/config/capacidade?"),
-          },
-          {
-            href: "/app/developers",
-            label: "Pessoas",
-            icon: Users,
-            iconClass: "text-amber-600 dark:text-amber-400",
-            match: (path: string) => path.startsWith("/app/developers"),
-          },
-          {
-            href: "/app/jira",
-            label: "Jira",
-            icon: Cable,
-            iconClass: "text-indigo-600 dark:text-indigo-400",
-            match: (path: string) => path.startsWith("/app/jira"),
-          },
-          {
-            href: "/app/stg",
-            label: "STG",
-            icon: CalendarCheck2,
-            iconClass: "text-violet-600 dark:text-violet-400",
-            match: (path: string) => path.startsWith("/app/stg"),
-          },
-        ]
-      : [contaItem]),
+    ...(hasTeamNav ? primaryModules : [contaItem]),
   ];
 
-  const more: NavItem[] = team
-    ? [
-        {
-          href: "/app/gestor/config/emails",
-          label: "E-mails",
-          icon: Mail,
-          iconClass: "text-orange-600 dark:text-orange-400",
-          match: (path: string) => path.startsWith("/app/gestor/config/emails"),
-        },
-        {
-          href: "/app/gestor/folha/empresas",
-          label: "Empresas",
-          icon: Building2,
-          iconClass: "text-lime-600 dark:text-lime-400",
-          match: (path: string) =>
-            path.startsWith("/app/gestor/folha/empresas"),
-        },
-        {
-          href: "/app/gestor/config#feriados",
-          label: "Feriados",
-          icon: CalendarDays,
-          iconClass: "text-yellow-600 dark:text-yellow-400",
-          match: (path: string) =>
-            path === "/app/gestor/config" ||
-            path.startsWith("/app/gestor/config?"),
-        },
-        {
-          href: "/app/imports",
-          label: "Imports",
-          icon: Upload,
-          iconClass: "text-cyan-600 dark:text-cyan-400",
-          match: (path: string) => path.startsWith("/app/imports"),
-        },
-        {
-          href: "/app/teams",
-          label: "Times",
-          icon: FolderKanban,
-          iconClass: "text-emerald-600 dark:text-emerald-400",
-          match: (path: string) => path.startsWith("/app/teams"),
-        },
-        contaItem,
-      ]
-    : [];
+  const more: NavItem[] = hasTeamNav ? [...moreModules, contaItem] : [];
 
   const drawerItems = [...primary, ...more];
   const moreActive = more.some((item) => isActive(pathname, item));

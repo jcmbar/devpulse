@@ -12,7 +12,7 @@ import { OldestOpenTable } from "@/components/jira-analytics/oldest-open-table";
 import { StatusGroupBars } from "@/components/jira-analytics/status-group-bars";
 import { ThroughputChart } from "@/components/jira-analytics/throughput-chart";
 import { WipAgingPanel } from "@/components/jira-analytics/wip-aging-panel";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import type { JiraStatusGroup } from "@/types/jira-flow-analytics";
 import {
@@ -47,7 +47,7 @@ const STATUS_GROUP_VALUES = new Set([
 ]);
 
 export default async function JiraAnalyticsPage({ searchParams }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("jira", "access");
   const params = searchParams ? await searchParams : {};
   await restorePersistedFiltersOrRedirect({
     scope: "jira-analytics",

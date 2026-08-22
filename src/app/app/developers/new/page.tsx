@@ -2,11 +2,11 @@ import Link from "next/link";
 import { DeveloperForm } from "@/app/app/developers/developer-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { listTeamsAdmin } from "@/services/teams";
 
 export default async function NewDeveloperPage() {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "edit");
   const teams = await listTeamsAdmin({ includeInactive: true });
 
   return (

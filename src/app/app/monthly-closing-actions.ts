@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/auth/app-context";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { enforceSensitiveRateLimit } from "@/lib/security/enforce-sensitive-rate-limit";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { assertClosingValuesMatchFolha } from "@/services/closing-folha-compare";
@@ -226,7 +226,7 @@ export async function approveMonthlyClosingAction(input: {
   managerInvoiceNotes?: string | null;
 }): Promise<MonthlyClosingActionResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
     await assertClosingValuesMatchFolha(input.closingId);
     const closing = await approveMonthlyClosing({
       closingId: input.closingId,
@@ -254,7 +254,7 @@ export async function rejectMonthlyClosingAction(input: {
   managerRejectionNotes: string;
 }): Promise<MonthlyClosingActionResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
     const closing = await rejectMonthlyClosing({
       closingId: input.closingId,
       managerRejectionNotes: input.managerRejectionNotes,
@@ -279,7 +279,7 @@ export async function restoreMonthlyClosingToInReviewAction(input: {
   closingId: string;
 }): Promise<MonthlyClosingActionResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
     if (!input.closingId.trim()) {
       return { ok: false, error: "Fechamento inválido." };
     }
@@ -307,7 +307,7 @@ export async function finalizeMonthlyClosingAction(input: {
   closingId: string;
 }): Promise<MonthlyClosingActionResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
     await assertClosingValuesMatchFolha(input.closingId);
     const closing = await finalizeMonthlyClosing({
       closingId: input.closingId,
@@ -332,7 +332,7 @@ export async function revertMonthlyClosingStatusAction(input: {
   closingId: string;
 }): Promise<MonthlyClosingActionResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
     if (!input.closingId.trim()) {
       return { ok: false, error: "Fechamento inválido." };
     }
@@ -519,7 +519,7 @@ export async function reviewMealPixReceiptAction(input: {
   reviewNotes?: string | null;
 }): Promise<MonthlyClosingActionResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
 
     const closingId = input.closingId.trim();
     if (!closingId) {

@@ -10,7 +10,7 @@ import {
   JIRA_LOGICAL_FIELD_KEYS,
   syntheticJiraIdentityFieldOptions,
 } from "@/lib/jira/field-mappings";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { resolveJiraApiToken } from "@/services/integrations/jira/auth";
 import { JiraClient } from "@/services/integrations/jira/client";
 import {
@@ -78,7 +78,7 @@ export async function saveJiraIntegrationAction(
   _prev: JiraFormState,
   formData: FormData,
 ): Promise<JiraFormState> {
-  await requireTeamAccess();
+  await requirePermission("jira", "edit");
 
   const teamId = String(formData.get("teamId") ?? "");
   try {
@@ -119,7 +119,7 @@ export async function testJiraConnectionAction(
   _prev: JiraFormState,
   formData: FormData,
 ): Promise<JiraFormState> {
-  await requireTeamAccess();
+  await requirePermission("jira", "edit");
 
   try {
     const integration = await requireIntegrationInTeamContext(formData);
@@ -151,7 +151,7 @@ export async function listJiraFieldsAction(input: {
   | { ok: false; error: string }
 > {
   try {
-    await requireTeamAccess();
+    await requirePermission("jira", "edit");
     const integration = await getJiraIntegration(input.integrationId);
     if (!integration) {
       return { ok: false, error: "Integração não encontrada." };
@@ -195,7 +195,7 @@ export async function saveJiraScopeFieldMappingsAction(
   _prev: JiraFormState,
   formData: FormData,
 ): Promise<JiraFormState> {
-  await requireTeamAccess();
+  await requirePermission("jira", "edit");
 
   try {
     const integration = await requireIntegrationInTeamContext(formData);
@@ -260,7 +260,7 @@ export async function applyRecommendedJiraFieldMappingsAction(
   _prev: JiraFormState,
   formData: FormData,
 ): Promise<JiraFormState> {
-  await requireTeamAccess();
+  await requirePermission("jira", "edit");
 
   try {
     const integration = await requireIntegrationInTeamContext(formData);

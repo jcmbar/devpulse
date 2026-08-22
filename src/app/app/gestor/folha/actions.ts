@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { upsertInvoiceIssuer } from "@/services/invoice-issuers";
 import {
   batchUpsertPayrollAttendanceDays,
@@ -64,7 +64,7 @@ export async function updatePayrollItemAction(
   _prev: PayrollFormState,
   formData: FormData,
 ): Promise<PayrollFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   const itemId = String(formData.get("itemId") ?? "").trim();
   if (!itemId) {
@@ -139,7 +139,7 @@ export async function upsertAttendanceDayAction(input: {
   hours?: number;
   chargesMeal?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   if (
     !(PAYROLL_ATTENDANCE_KINDS as readonly string[]).includes(input.dayKind)
@@ -204,7 +204,7 @@ export async function commitAttendanceDraftAction(input: {
 }): Promise<
   { ok: true; updatedCount: number } | { ok: false; error: string }
 > {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   if (!Array.isArray(input.patches) || input.patches.length === 0) {
     return { ok: true, updatedCount: 0 };
@@ -296,7 +296,7 @@ export async function batchApplyAttendanceAction(input: {
   | { ok: true; updatedCount: number }
   | { ok: false; error: string }
 > {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   try {
     await assertPayrollItemEditable(input.itemId);
@@ -414,7 +414,7 @@ export async function listAttendanceAction(
   | { ok: true; days: PayrollAttendanceDay[] }
   | { ok: false; error: string }
 > {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
   try {
     const days = await listAttendanceForItem(itemId);
     return { ok: true, days };
@@ -433,7 +433,7 @@ export async function setPayrollItemReviewedAction(input: {
   itemId: string;
   reviewed: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { profile } = await requireTeamAccess();
+  const { profile } = await requirePermission("gestor", "edit");
 
   const itemId = input.itemId.trim();
   if (!itemId) {
@@ -465,7 +465,7 @@ export async function restorePayrollItemCalculatedAction(input: {
   itemId: string;
   fields?: PayrollAutoAmountField;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   const itemId = input.itemId.trim();
   if (!itemId) {
@@ -505,7 +505,7 @@ export async function syncPayrollFromCompensationAction(input: {
 }): Promise<
   { ok: true; syncedCount: number } | { ok: false; error: string }
 > {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   if (!/^\d{4}-\d{2}$/.test(input.yearMonth)) {
     return { ok: false, error: "Mês inválido." };
@@ -535,7 +535,7 @@ export async function updatePayrollMonthStatusAction(input: {
   closingId: string;
   status: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   if (
     !(PAYROLL_CLOSING_STATUSES as readonly string[]).includes(input.status)
@@ -566,7 +566,7 @@ export async function upsertInvoiceIssuerAction(
   _prev: PayrollFormState,
   formData: FormData,
 ): Promise<PayrollFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   const id = String(formData.get("id") ?? "").trim() || undefined;
   const legalName = String(formData.get("legalName") ?? "").trim();

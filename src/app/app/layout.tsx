@@ -13,13 +13,14 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { profile, developer } = await getAppContext();
+  const { profile, developer, grants } = await getAppContext();
   const avatarUrl = developerAvatarPublicUrl(developer?.avatar_path);
 
   return (
     <InspectionDeterrent>
       <AppChrome
         profile={profile}
+        grants={grants}
         avatarUrl={avatarUrl}
         idleMinutes={getSessionIdleMinutes()}
       >

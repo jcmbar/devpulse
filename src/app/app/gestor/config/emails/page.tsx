@@ -3,7 +3,7 @@ import { OperationalEmailsAdminPanel } from "@/app/app/gestor/config/emails/emai
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { resolveOperationalEmailEnvelope } from "@/lib/email/defaults";
 import { getZeptoMailSmtpPublicStatus } from "@/lib/email/zeptomail-smtp-config";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/services/operational-emails";
 
 export default async function GestorEmailsConfigPage() {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("emails", "access");
 
   const [sendTypes, templates] = await Promise.all([
     listEmailSendTypes(),

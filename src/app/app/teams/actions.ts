@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   createTeam,
   setTeamActive,
@@ -22,7 +22,7 @@ export async function createTeamAction(
   _prev: TeamFormState,
   formData: FormData,
 ): Promise<TeamFormState> {
-  await requireTeamAccess();
+  await requirePermission("times", "edit");
 
   try {
     await createTeam({
@@ -51,7 +51,7 @@ export async function updateTeamAction(
   _prev: TeamFormState,
   formData: FormData,
 ): Promise<TeamFormState> {
-  await requireTeamAccess();
+  await requirePermission("times", "edit");
 
   try {
     await updateTeam(String(formData.get("teamId") ?? ""), {
@@ -83,7 +83,7 @@ export async function toggleTeamActiveAction(
   _prev: TeamFormState,
   formData: FormData,
 ): Promise<TeamFormState> {
-  await requireTeamAccess();
+  await requirePermission("times", "edit");
   const nextActive = formData.get("nextActive") === "true";
 
   try {

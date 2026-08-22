@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { sanitizeSmtpErrorMessage } from "@/lib/email/zeptomail-smtp";
 import { ZEPTOMAIL_SMTP_PASSWORD_HINT } from "@/lib/email/zeptomail-smtp-config";
@@ -69,7 +69,7 @@ export async function upsertEmailTemplateAction(
   formData: FormData,
 ): Promise<OperationalEmailActionResult> {
   try {
-    await requireTeamAccess();
+    await requirePermission("emails", "edit");
     const id = String(formData.get("id") ?? "").trim() || undefined;
     const sendTypeId = String(formData.get("sendTypeId") ?? "").trim();
     if (!sendTypeId) {
@@ -110,7 +110,7 @@ export async function addEmailTypeRecipientAction(
   formData: FormData,
 ): Promise<OperationalEmailActionResult> {
   try {
-    await requireTeamAccess();
+    await requirePermission("emails", "edit");
     const sendTypeId = String(formData.get("sendTypeId") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     const roleRaw = String(formData.get("role") ?? "to").trim();
@@ -141,7 +141,7 @@ export async function deleteEmailTypeRecipientAction(
   id: string,
 ): Promise<OperationalEmailActionResult> {
   try {
-    await requireTeamAccess();
+    await requirePermission("emails", "edit");
     if (!id.trim()) {
       return { ok: false, error: "Destinatário inválido." };
     }
@@ -165,7 +165,7 @@ export async function sendFinanceiroClosingEmailAction(input: {
   const closingId = input.closingId.trim();
   let actorUserId: string | null = null;
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("emails", "edit");
     actorUserId = profile.id;
     if (!closingId) {
       return { ok: false, error: "Fechamento inválido." };
@@ -234,7 +234,7 @@ export async function sendOperationalEmailByTypeAction(input: {
   const closingId = input.closingId.trim();
   let actorUserId: string | null = null;
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("emails", "edit");
     actorUserId = profile.id;
     if (!isEmailSendTypeCode(input.typeCode)) {
       return { ok: false, error: "Tipo de envio inválido." };
@@ -308,7 +308,7 @@ export async function loadClosingOpsDetailAction(input: {
   closingId: string;
 }): Promise<ClosingOpsDetailResult> {
   try {
-    await requireTeamAccess();
+    await requirePermission("emails", "edit");
     const closingId = input.closingId.trim();
     if (!closingId) {
       return { ok: false, error: "Fechamento inválido." };
@@ -345,7 +345,7 @@ export async function listOperationalSendTypeIdsAction(): Promise<
   | { ok: false; error: string }
 > {
   try {
-    await requireTeamAccess();
+    await requirePermission("emails", "edit");
     const [financeiro, rh, colaborador] = await Promise.all([
       getEmailSendTypeByCode("financeiro"),
       getEmailSendTypeByCode("rh"),
@@ -375,7 +375,7 @@ export async function sendOperationalEmailTestAction(
 ): Promise<SendOperationalEmailTestActionResult> {
   let actorUserId: string | null = null;
   try {
-    const context = await requireTeamAccess();
+    const context = await requirePermission("emails", "edit");
     actorUserId = context.profile.id;
     if (context.profile.role !== "admin") {
       await recordSensitiveAccessAudit({
@@ -462,7 +462,7 @@ export async function listEmailAttachmentBackupsAction(input?: {
   | { ok: false; error: string }
 > {
   try {
-    await requireTeamAccess();
+    await requirePermission("emails", "edit");
     const [rows, months] = await Promise.all([
       listEmailAttachmentBackups({
         yearMonth: input?.yearMonth,
@@ -490,7 +490,7 @@ export async function downloadEmailAttachmentBackupAction(input: {
 > {
   let actorUserId: string | null = null;
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("emails", "edit");
     actorUserId = profile.id;
 
     const rate = await enforceSensitiveRateLimit({
@@ -551,7 +551,7 @@ export async function downloadEmailAttachmentBackupZipAction(input: {
 > {
   let actorUserId: string | null = null;
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("emails", "edit");
     actorUserId = profile.id;
     const yearMonth = input.yearMonth.trim();
     if (!/^\d{4}-\d{2}$/.test(yearMonth)) {

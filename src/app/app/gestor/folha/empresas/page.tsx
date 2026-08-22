@@ -3,11 +3,11 @@ import { InvoiceIssuerForm } from "@/components/folha/invoice-issuer-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, EmptyState } from "@/components/surface";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { listInvoiceIssuers } from "@/services/invoice-issuers";
 
 export default async function GestorFolhaEmpresasPage() {
-  await requireTeamAccess();
+  await requirePermission("empresas", "access");
   const issuers = await listInvoiceIssuers();
 
   return (

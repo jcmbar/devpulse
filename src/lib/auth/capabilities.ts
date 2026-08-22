@@ -1,0 +1,114 @@
+import {
+  APP_MODULE_KEYS,
+  type AppModuleKey,
+  type PermissionAction,
+} from "@/lib/auth/modules";
+import type { UserRole } from "@/types/profile";
+
+export type ModuleGrantFlags = {
+  can_access: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+};
+
+export type ModuleGrantsMap = Record<AppModuleKey, ModuleGrantFlags>;
+
+export function emptyModuleGrants(): ModuleGrantsMap {
+  const map = {} as ModuleGrantsMap;
+  for (const key of APP_MODULE_KEYS) {
+    map[key] = { can_access: false, can_edit: false, can_delete: false };
+  }
+  return map;
+}
+
+/** Normalize cascade: delete ⇒ edit ⇒ access. */
+export function normalizeGrantFlags(input: ModuleGrantFlags): ModuleGrantFlags {
+  const can_delete = Boolean(input.can_delete);
+  const can_edit = can_delete || Boolean(input.can_edit);
+  const can_access = can_edit || Boolean(input.can_access);
+  return { can_access, can_edit, can_delete };
+}
+
+export function presetGrantsForRole(role: UserRole): ModuleGrantsMap {
+  const map = emptyModuleGrants();
+  if (role === "dev") {
+    return map;
+  }
+  const withDelete = role === "admin";
+  for (const key of APP_MODULE_KEYS) {
+    map[key] = {
+      can_access: true,
+      can_edit: true,
+      can_delete: withDelete,
+    };
+  }
+  return map;
+}
+
+/**
+ * Ceiling role for RLS:
+ * - no module access → dev
+ * - delete on every module → admin
+ * - otherwise keep admin if already admin, else gestor
+ */
+export function roleCeilingFromGrants(
+  grants: ModuleGrantsMap,
+  currentRole: UserRole,
+): UserRole {
+  const anyAccess = APP_MODULE_KEYS.some((key) => grants[key]?.can_access);
+  if (!anyAccess) {
+    return "dev";
+  }
+  const fullAdmin = APP_MODULE_KEYS.every((key) => grants[key]?.can_delete);
+  if (fullAdmin) {
+    return "admin";
+  }
+  if (currentRole === "admin") {
+    return "admin";
+  }
+  return "gestor";
+}
+
+export function hasPermission(
+  grants: ModuleGrantsMap,
+  module: AppModuleKey,
+  action: PermissionAction,
+): boolean {
+  const row = grants[module];
+  if (!row) {
+    return false;
+  }
+  if (action === "access") {
+    return row.can_access;
+  }
+  if (action === "edit") {
+    return row.can_edit;
+  }
+  return row.can_delete;
+}
+
+export function hasAnyTeamModuleAccess(grants: ModuleGrantsMap): boolean {
+  return APP_MODULE_KEYS.some((key) => grants[key]?.can_access);
+}
+
+export function grantsFromRows(
+  rows: Array<{
+    module: string;
+    can_access: boolean;
+    can_edit: boolean;
+    can_delete: boolean;
+  }>,
+): ModuleGrantsMap {
+  const map = emptyModuleGrants();
+  for (const row of rows) {
+    if (!(APP_MODULE_KEYS as readonly string[]).includes(row.module)) {
+      continue;
+    }
+    map[row.module as AppModuleKey] = normalizeGrantFlags({
+      can_access: row.can_access,
+      can_edit: row.can_edit,
+      can_delete: row.can_delete,
+    });
+  }
+  return map;
+}

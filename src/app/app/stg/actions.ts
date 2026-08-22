@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { getAppContext } from "@/lib/auth/app-context";
 import { isStgSchemaMissingError } from "@/lib/stg/ui";
 import type { JiraStatusGroup } from "@/types/jira-flow-analytics";
@@ -61,7 +61,7 @@ export async function openStgSessionAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("stg", "edit");
 
   const teamId = String(formData.get("teamId") ?? "").trim();
   const scheduledOn = String(formData.get("scheduledOn") ?? "").trim();
@@ -126,7 +126,7 @@ export async function updateStgRunAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
   const runId = String(formData.get("runId") ?? "");
   const sessionId = String(formData.get("sessionId") ?? "");
   const status = String(formData.get("status") ?? "") as StgRunStatus;
@@ -144,7 +144,7 @@ export async function updateStgSessionStatusAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
   const sessionId = String(formData.get("sessionId") ?? "");
   const status = String(formData.get("status") ?? "") as StgSessionStatus;
 
@@ -161,7 +161,7 @@ export async function waiveStgSessionAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  const context = await requireTeamAccess();
+  const context = await requirePermission("stg", "edit");
   const sessionId = String(formData.get("sessionId") ?? "");
   const reason = String(formData.get("reason") ?? "");
 
@@ -183,7 +183,7 @@ export async function upsertStgFindingAction(
   formData: FormData,
 ): Promise<StgActionState> {
   const context = await getAppContext();
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
 
   const sessionId = String(formData.get("sessionId") ?? "");
   const foundBy =
@@ -214,7 +214,7 @@ export async function deleteStgFindingAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "delete");
   const findingId = String(formData.get("findingId") ?? "");
   const sessionId = String(formData.get("sessionId") ?? "");
 
@@ -231,7 +231,7 @@ export async function upsertStgModuleAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
   const teamId = String(formData.get("teamId") ?? "");
 
   try {
@@ -252,7 +252,7 @@ export async function upsertStgScenarioAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
 
   try {
     await upsertStgScenario({
@@ -273,7 +273,7 @@ export async function setStgDefaultParticipantAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
   const teamId = String(formData.get("teamId") ?? "");
   const developerId = String(formData.get("developerId") ?? "");
   const role = String(formData.get("role") ?? "required") as StgDefaultParticipantRole;
@@ -294,7 +294,7 @@ export async function removeStgDefaultParticipantAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
   try {
     await removeStgDefaultParticipant({
       teamId: String(formData.get("teamId") ?? ""),
@@ -311,7 +311,7 @@ export async function updateStgApprovalPolicyAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requireTeamAccess();
+  await requirePermission("stg", "edit");
   const teamId = String(formData.get("teamId") ?? "");
   const groups = formData
     .getAll("safeStatusGroup")

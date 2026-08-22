@@ -7,10 +7,12 @@ import {
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
+import { presetGrantsForRole } from "@/lib/auth/capabilities";
 import {
   isUserRole,
   upsertProfileAdmin,
 } from "@/services/profiles/admin";
+import { replaceModuleGrantsAdmin } from "@/services/profiles/module-grants";
 import type { Profile, UserRole } from "@/types/profile";
 
 export type InviteAccessUserInput = {
@@ -117,6 +119,20 @@ export async function inviteAccessUser(
     fullName,
     role,
   });
+
+  await replaceModuleGrantsAdmin({
+    profileId: profile.id,
+    grants: presetGrantsForRole(role),
+    previousRole: role,
+  });
+  if (role === "admin") {
+    await upsertProfileAdmin({
+      id: profile.id,
+      email: profile.email,
+      fullName: profile.full_name,
+      role: "admin",
+    });
+  }
 
   const emailsMatch =
     Boolean(input.developerEmail) &&

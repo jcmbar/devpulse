@@ -2,13 +2,13 @@ import Link from "next/link";
 import { TeamsAdminPanel } from "@/app/app/teams/teams-admin-panel";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { listJiraIntegrations } from "@/services/integrations/jira";
 import { listTeamsAdmin } from "@/services/teams";
 import type { TeamJiraIntegrationSummary } from "@/types/team";
 
 export default async function TeamsPage() {
-  await requireTeamAccess();
+  await requirePermission("times", "access");
   const [teams, integrations] = await Promise.all([
     listTeamsAdmin({ includeInactive: true }),
     listJiraIntegrations(),

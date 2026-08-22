@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import { cn } from "@/lib/utils";
@@ -103,7 +103,7 @@ function JustStatus({
 }
 
 export default async function GestorClosingDetailPage({ params }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("gestor", "access");
   const { closingId } = await params;
   const closing = await getMonthlyClosingById(closingId);
   if (!closing) {

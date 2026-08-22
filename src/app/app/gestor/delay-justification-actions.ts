@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { decideDelayJustification } from "@/services/delay-justifications";
 
 export type DecideDelayJustificationResult =
@@ -14,7 +14,7 @@ export async function decideDelayJustificationAction(input: {
   reviewerNote: string;
 }): Promise<DecideDelayJustificationResult> {
   try {
-    const { profile } = await requireTeamAccess();
+    const { profile } = await requirePermission("gestor", "edit");
 
     const note = input.reviewerNote.trim();
     if (!note) {

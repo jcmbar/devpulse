@@ -8,7 +8,7 @@ import { PageShell } from "@/components/page-shell";
 import { PersonAvatar } from "@/components/person-avatar";
 import { TeamFilterForm } from "@/components/team-filter";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import {
   adminListHref,
@@ -116,7 +116,7 @@ function filterSummaryLabel(input: {
 export default async function DevelopersAdminPage({
   searchParams,
 }: DevelopersAdminPageProps) {
-  await requireTeamAccess();
+  await requirePermission("pessoas", "access");
   const params = await searchParams;
   await restorePersistedFiltersOrRedirect({
     scope: "admin-developers",

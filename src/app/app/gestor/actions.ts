@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   deleteDeveloperMonthlyCapacity,
   updateCapacityWeekdayHours,
@@ -42,7 +42,7 @@ export async function updateThresholdsAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   try {
     await updatePerformanceThresholds({
@@ -73,7 +73,7 @@ export async function updateWeekdayCapacityAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   try {
     const rows = [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({
@@ -103,7 +103,7 @@ export async function upsertDeveloperCapacityAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   const year = Number(formData.get("year"));
@@ -143,7 +143,7 @@ export async function deleteDeveloperCapacityAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   const developerId = String(formData.get("developerId") ?? "").trim();
   const year = Number(formData.get("year"));
@@ -177,7 +177,7 @@ export async function createHolidayAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   try {
     await createHoliday({
@@ -207,7 +207,7 @@ export async function updateHolidayAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   try {
     await updateHoliday({
@@ -238,7 +238,7 @@ export async function toggleHolidayActiveAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   const id = String(formData.get("holidayId") ?? "").trim();
   const nextActive = formData.get("nextActive") === "true";
@@ -268,7 +268,7 @@ export async function deleteHolidayAction(
   _prev: ConfigFormState,
   formData: FormData,
 ): Promise<ConfigFormState> {
-  await requireTeamAccess();
+  await requirePermission("gestor", "edit");
 
   try {
     await deleteHoliday(String(formData.get("holidayId") ?? ""));

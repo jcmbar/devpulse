@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { FilterPersistenceSync } from "@/components/filters/filter-persistence-sync";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import { JiraAdminPanel } from "@/app/app/jira/jira-admin-panel";
 import {
@@ -27,7 +27,7 @@ type PageProps = {
 };
 
 export default async function JiraIntegrationsPage({ searchParams }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("jira", "access");
   const params = searchParams ? await searchParams : {};
   await restorePersistedFiltersOrRedirect({
     scope: "jira-admin",

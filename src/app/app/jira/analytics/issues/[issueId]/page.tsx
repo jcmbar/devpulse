@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   formatDurationMs,
   inspectIssueFlow,
@@ -27,7 +27,7 @@ export default async function JiraIssueFlowInspectionPage({
   params,
   searchParams,
 }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("jira", "access");
   const { issueId } = await params;
   const query = searchParams ? await searchParams : {};
   const integrationId = firstParam(query.integrationId);

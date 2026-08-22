@@ -3,7 +3,7 @@ import { StgCatalogPanel } from "@/app/app/stg/catalog-panel";
 import { StgSchemaMissingNotice } from "@/components/stg/stg-result-banner";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { requireTeamAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { loadStgOrMissing } from "@/lib/stg/ui";
 import { listDevelopersAdmin } from "@/services/developers";
 import {
@@ -18,7 +18,7 @@ type PageProps = {
 };
 
 export default async function StgCatalogPage({ searchParams }: PageProps) {
-  await requireTeamAccess();
+  await requirePermission("stg", "access");
   const params = searchParams ? await searchParams : {};
   const teams = await listTeamsAdmin();
   const team =
