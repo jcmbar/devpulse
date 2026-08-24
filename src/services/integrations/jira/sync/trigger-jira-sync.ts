@@ -7,9 +7,11 @@ import {
 import {
   findActiveJiraSyncRun,
   getJiraIntegration,
+  markActiveJiraSyncRunsFailed,
 } from "@/services/integrations/jira/repositories/integrations";
 import {
   hasPipelineLock,
+  recoverStaleSyncState,
   releasePipelineLock,
   tryAcquirePipelineLock,
 } from "@/services/integrations/jira/sync/pipeline-lock";
@@ -110,6 +112,17 @@ export async function triggerJiraSync(
                   ? "Já existe uma sincronização em andamento."
                   : "Sync automático ignorado.",
       };
+    }
+  } else {
+    // Manual force: clear leftover pending/running so a stuck row cannot block.
+    await recoverStaleSyncState(input.integrationId);
+    const active = await findActiveJiraSyncRun(input.integrationId);
+    if (active) {
+      await markActiveJiraSyncRunsFailed({
+        integrationId: input.integrationId,
+        reason: "superseded_by_manual_force",
+        message: "Sync anterior substituído por sync manual (force).",
+      });
     }
   }
 

@@ -13,6 +13,11 @@ import {
   runJiraSync,
   triggerJiraSync,
 } from "@/services/integrations/jira";
+import {
+  findActiveJiraSyncRun,
+  markActiveJiraSyncRunsFailed,
+} from "@/services/integrations/jira/repositories/integrations";
+import { recoverStaleSyncState } from "@/services/integrations/jira/sync/pipeline-lock";
 import type { JiraSyncStatusSummary } from "@/types/jira-sync-status";
 import { scheduleEligibleJiraAutoSyncs } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
 import type {
@@ -41,6 +46,19 @@ function revalidateJiraSurfaces() {
   revalidatePath("/app/jira/analytics");
   revalidatePath("/app/gestor");
   revalidatePath("/app");
+}
+
+function isUniqueActiveRunConflict(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("jira_sync_runs_one_active_per_integration") ||
+    (message.includes("duplicate key") && message.includes("jira_sync_runs")) ||
+    (message.includes("unique constraint") &&
+      message.includes("one_active_per_integration"))
+  );
 }
 
 /**
@@ -73,13 +91,40 @@ export async function runJiraPipelineStepAction(input: {
           };
         }
 
-        const result = await runJiraSync({
-          integrationId: integration.id,
-          createdBy: context.profile.id,
-          forceFull: input.forceFull === true,
-          triggerSource: "manual",
-          cooldownBypassed: true,
-        });
+        // UI step bypasses triggerJiraSync lock; clear abandoned/stuck active
+        // runs so "Rodar sync agora" is not blocked by a leftover pending/running row.
+        await recoverStaleSyncState(integration.id);
+        const active = await findActiveJiraSyncRun(integration.id);
+        if (active) {
+          await markActiveJiraSyncRunsFailed({
+            integrationId: integration.id,
+            reason: "superseded_by_manual_ui",
+            message:
+              "Sync anterior substituído por execução manual na tela Jira.",
+          });
+        }
+
+        let result;
+        try {
+          result = await runJiraSync({
+            integrationId: integration.id,
+            createdBy: context.profile.id,
+            forceFull: input.forceFull === true,
+            triggerSource: "manual",
+            cooldownBypassed: true,
+          });
+        } catch (error) {
+          if (isUniqueActiveRunConflict(error)) {
+            return {
+              ok: false,
+              step: "sync",
+              message: "Já existe uma sincronização em andamento.",
+              error:
+                "Outro sync deste time ainda está ativo (manual, cron ou auto). Aguarde alguns segundos e tente de novo.",
+            };
+          }
+          throw error;
+        }
 
         revalidatePath("/app/jira");
         revalidatePath("/app/jira/analytics");

@@ -428,6 +428,34 @@ export async function markStaleJiraSyncRunsFailed(input: {
   return data?.length ?? 0;
 }
 
+/**
+ * Force-closes every pending/running run for an integration (manual UI recovery).
+ */
+export async function markActiveJiraSyncRunsFailed(input: {
+  integrationId: string;
+  reason: string;
+  message: string;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jira_sync_runs")
+    .update({
+      status: "failed" satisfies JiraSyncRunStatus,
+      finished_at: new Date().toISOString(),
+      error_message: input.message,
+      error_details: { reason: input.reason },
+    })
+    .eq("integration_id", input.integrationId)
+    .in("status", ["pending", "running"])
+    .select("id");
+
+  if (error) {
+    throw new Error(`Falha ao encerrar sync runs ativos: ${error.message}`);
+  }
+
+  return data?.length ?? 0;
+}
+
 export async function updateJiraIntegrationSettings(input: {
   integrationId: string;
   settings: Record<string, unknown>;
