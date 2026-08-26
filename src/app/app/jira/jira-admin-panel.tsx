@@ -23,7 +23,12 @@ import {
   resolveJiraFieldMappings,
   type JiraMappingReadiness,
 } from "@/lib/jira/field-mappings";
-import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
+import {
+  formatDateBrazil,
+  formatTimeBrazil,
+  type InstantInput,
+} from "@/lib/datetime/format-brazil";
+import { cn } from "@/lib/utils";
 import { resolveJiraAutoSyncCooldownMinutes } from "@/services/integrations/jira/constants";
 import { useActionState, useCallback, useMemo, useState } from "react";
 import {
@@ -42,6 +47,35 @@ import type { Team } from "@/types/team";
 
 const initialState: JiraFormState = { error: null, success: null };
 const TABLE_PAGE_SIZE = 8;
+
+function InstantDateTimeCells({
+  value,
+  className,
+}: {
+  value: InstantInput;
+  className?: string;
+}) {
+  return (
+    <>
+      <td
+        className={cn(
+          "whitespace-nowrap tabular-nums text-muted-foreground",
+          className,
+        )}
+      >
+        {formatDateBrazil(value)}
+      </td>
+      <td
+        className={cn(
+          "whitespace-nowrap tabular-nums text-muted-foreground",
+          className,
+        )}
+      >
+        {formatTimeBrazil(value)}
+      </td>
+    </>
+  );
+}
 
 function formatDurationMs(ms: number | null): string {
   if (ms == null) {
@@ -223,12 +257,9 @@ export function JiraAdminPanel({
           <KpiMetricCard
             variant="hero"
             label="Último sync OK"
-            value={
-              lastOkSync
-                ? formatDateTimeShortBrazil(lastOkSync)
-                : "—"
-            }
+            value={lastOkSync ? formatDateBrazil(lastOkSync) : "—"}
             tone={lastOkSync ? "success" : "neutral"}
+            hint={lastOkSync ? formatTimeBrazil(lastOkSync) : undefined}
           />
         </div>
       </CollapsibleSection>
@@ -573,7 +604,8 @@ function IntegrationsTable({
             <th>Nome</th>
             <th className="hidden sm:table-cell">Projetos</th>
             <th>Status</th>
-            <th className="hidden md:table-cell">Último sync OK</th>
+            <th className="hidden md:table-cell">Data sync</th>
+            <th className="hidden md:table-cell">Hora sync</th>
             <th />
           </tr>
         </thead>
@@ -597,9 +629,10 @@ function IntegrationsTable({
                     : "todos"}
                 </td>
                 <td>{row.is_enabled ? "Habilitada" : "Off"}</td>
-                <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
-                  {row.last_successful_sync_at ?? "—"}
-                </td>
+                <InstantDateTimeCells
+                  value={row.last_successful_sync_at}
+                  className="hidden md:table-cell"
+                />
                 <td className="text-right">
                   <Link
                     href={`/app/jira?teamId=${row.team_id}`}
@@ -649,7 +682,8 @@ function RecentRunsTable({
         <thead>
           <tr>
             <th>Time / Jira</th>
-            <th>Quando</th>
+            <th>Data</th>
+            <th>Hora</th>
             <th>Modo</th>
             <th>Status</th>
             <th>Issues</th>
@@ -695,9 +729,7 @@ function RecentRunsTable({
                       : ""}
                   </div>
                 </td>
-                <td className="whitespace-nowrap text-muted-foreground">
-                  {run.created_at}
-                </td>
+                <InstantDateTimeCells value={run.created_at} />
                 <td>{run.mode}</td>
                 <td>{run.status}</td>
                 <td className="tabular-nums">
@@ -749,7 +781,8 @@ function SampleIssuesTable({ sampleIssues }: { sampleIssues: JiraIssue[] }) {
             <th>Key</th>
             <th>Resumo</th>
             <th className="hidden sm:table-cell">Status</th>
-            <th className="hidden md:table-cell">Updated</th>
+            <th className="hidden md:table-cell">Data</th>
+            <th className="hidden md:table-cell">Hora</th>
           </tr>
         </thead>
         <tbody>
@@ -762,9 +795,10 @@ function SampleIssuesTable({ sampleIssues }: { sampleIssues: JiraIssue[] }) {
                 {issue.summary ?? "—"}
               </td>
               <td className="hidden sm:table-cell">{issue.status ?? "—"}</td>
-              <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
-                {issue.updated_at_jira ?? "—"}
-              </td>
+              <InstantDateTimeCells
+                value={issue.updated_at_jira}
+                className="hidden md:table-cell"
+              />
             </tr>
           ))}
         </tbody>
