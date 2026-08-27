@@ -2,17 +2,27 @@
 
 import { useTheme } from "@/components/theme-provider";
 import { LOGIN_MESH, loginMeshPoints } from "@/lib/login-graph";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const SHELL_CLOCK = LOGIN_MESH.cycleMs * 0.2;
 
 export function AppShellMesh() {
+  const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const light = resolvedTheme === "light";
   const points = useMemo(
     () => loginMeshPoints(resolvedTheme, false, SHELL_CLOCK, "shell"),
     [resolvedTheme],
   );
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <svg

@@ -38,13 +38,19 @@ export {
   getStgSession,
   getStgSessionDetail,
   openStgSession,
+  getStgScenarioRunById,
   updateStgScenarioRunStatus,
   updateStgSessionStatus,
+  updateStgSessionMeta,
+  deleteStgSession,
   waiveStgSession,
   recalculateStgSessionResult,
   computeStgCoverage,
 } from "@/services/stg/sessions";
-export type { StgSessionDetail } from "@/services/stg/sessions";
+export type {
+  StgSessionDetail,
+  StgFindingJiraDetail,
+} from "@/services/stg/sessions";
 
 export {
   upsertStgFinding,

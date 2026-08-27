@@ -16,6 +16,8 @@ export type ResolvedStgJiraIssue = {
   status: string | null;
   statusGroup: JiraStatusGroup;
   matchedBy: string;
+  summary: string | null;
+  assigneeDisplayName: string | null;
 };
 
 /**
@@ -41,7 +43,7 @@ export async function resolveStgJiraIssueForTeam(input: {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("jira_issues")
-    .select("id, jira_key, status")
+    .select("id, jira_key, status, summary, assignee_display_name")
     .eq("integration_id", integration.id)
     .eq("jira_key", key)
     .maybeSingle();
@@ -63,5 +65,7 @@ export async function resolveStgJiraIssueForTeam(input: {
     status: (data.status as string | null) ?? null,
     statusGroup: classification.group,
     matchedBy: classification.matchedBy,
+    summary: (data.summary as string | null) ?? null,
+    assigneeDisplayName: (data.assignee_display_name as string | null) ?? null,
   };
 }

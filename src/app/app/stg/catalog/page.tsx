@@ -18,7 +18,7 @@ type PageProps = {
 };
 
 export default async function StgCatalogPage({ searchParams }: PageProps) {
-  await requirePermission("stg", "access");
+  await requirePermission("stg", "edit");
   const params = searchParams ? await searchParams : {};
   const teams = await listTeamsAdmin();
   const team =

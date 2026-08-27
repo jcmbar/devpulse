@@ -15,11 +15,14 @@ import type {
 } from "@/types/stg";
 import {
   deleteStgFinding,
+  deleteStgSession,
   openStgSession,
   removeStgDefaultParticipant,
   setStgDefaultParticipant,
+  getStgScenarioRunById,
   updateStgScenarioRunStatus,
   updateStgSessionStatus,
+  updateStgSessionMeta,
   updateStgTeamDefaults,
   upsertStgFinding,
   upsertStgModule,
@@ -126,12 +129,33 @@ export async function updateStgRunAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requirePermission("stg", "edit");
+  const context = await getAppContext();
+  await requirePermission("stg", "access");
   const runId = String(formData.get("runId") ?? "");
   const sessionId = String(formData.get("sessionId") ?? "");
   const status = String(formData.get("status") ?? "") as StgRunStatus;
+  const actingDeveloperId = context.developer?.id;
+
+  if (!actingDeveloperId) {
+    return {
+      error:
+        "Seu login não está vinculado a um cadastro de pessoa. Peça para vincular o profile antes de marcar execuções.",
+      success: null,
+    };
+  }
 
   try {
+    const run = await getStgScenarioRunById(runId);
+    if (!run) {
+      return { error: "Execução não encontrada.", success: null };
+    }
+    if (run.developer_id !== actingDeveloperId) {
+      return {
+        error: "Você só pode atualizar a execução da sua própria pessoa.",
+        success: null,
+      };
+    }
+
     await updateStgScenarioRunStatus({ runId, status });
     revalidateStg(sessionId);
     return { error: null, success: "Execução atualizada." };
@@ -154,6 +178,56 @@ export async function updateStgSessionStatusAction(
     return { error: null, success: "Status da sessão atualizado." };
   } catch (error) {
     return fail(error, "Não foi possível atualizar o status.");
+  }
+}
+
+export async function updateStgSessionMetaAction(
+  _prev: StgActionState,
+  formData: FormData,
+): Promise<StgActionState> {
+  await requirePermission("stg", "edit");
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+
+  try {
+    const session = await updateStgSessionMeta({
+      sessionId,
+      teamId: String(formData.get("teamId") ?? ""),
+      scheduledOn: String(formData.get("scheduledOn") ?? ""),
+      versionLabel: String(formData.get("versionLabel") ?? ""),
+      environment: String(formData.get("environment") ?? "") || undefined,
+    });
+    revalidateStg(session.id);
+    return { error: null, success: "Sessão atualizada." };
+  } catch (error) {
+    return fail(error, "Não foi possível atualizar a sessão.");
+  }
+}
+
+export async function deleteStgSessionAction(
+  _prev: StgActionState,
+  formData: FormData,
+): Promise<StgActionState> {
+  await requirePermission("stg", "delete");
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+
+  try {
+    const session = await deleteStgSession(sessionId);
+    revalidateStg();
+    redirect(
+      `/app/stg?teamId=${encodeURIComponent(session.team_id)}&deleted=1`,
+    );
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "digest" in error &&
+      String((error as { digest?: string }).digest ?? "").startsWith(
+        "NEXT_REDIRECT",
+      )
+    ) {
+      throw error;
+    }
+    return fail(error, "Não foi possível excluir a sessão.");
   }
 }
 
@@ -183,24 +257,45 @@ export async function upsertStgFindingAction(
   formData: FormData,
 ): Promise<StgActionState> {
   const context = await getAppContext();
-  await requirePermission("stg", "edit");
+  await requirePermission("stg", "access");
 
   const sessionId = String(formData.get("sessionId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const jiraKey = String(formData.get("jiraKey") ?? "").trim();
   const foundBy =
     String(formData.get("foundByDeveloperId") ?? "").trim() ||
     context.developer?.id ||
     "";
 
+  if (!foundBy) {
+    return {
+      error:
+        "Seu login não está vinculado a um cadastro de pessoa. Peça para vincular o profile antes de registrar apontamentos.",
+      success: null,
+    };
+  }
+
+  if (!title) {
+    return { error: "Informe o título do apontamento.", success: null };
+  }
+  if (!jiraKey) {
+    return { error: "Informe o Card Jira (ex.: AP-1234).", success: null };
+  }
+  if (!description) {
+    return { error: "Informe a descrição do apontamento.", success: null };
+  }
+
   try {
     await upsertStgFinding({
       sessionId,
-      title: String(formData.get("title") ?? ""),
-      description: String(formData.get("description") ?? "") || null,
+      title,
+      description,
       foundByDeveloperId: foundBy,
       impact: String(formData.get("impact") ?? "medium") as StgFindingImpact,
       sessionScenarioId:
         String(formData.get("sessionScenarioId") ?? "").trim() || null,
-      jiraKey: String(formData.get("jiraKey") ?? "") || null,
+      jiraKey,
       notes: String(formData.get("notes") ?? "") || null,
     });
     revalidateStg(sessionId);

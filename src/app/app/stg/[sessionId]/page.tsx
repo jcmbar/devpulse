@@ -3,7 +3,10 @@ import { StgSessionHub } from "@/app/app/stg/session-hub";
 import { StgSchemaMissingNotice } from "@/components/stg/stg-result-banner";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
+import { getAppContext } from "@/lib/auth/app-context";
+import { hasPermission } from "@/lib/auth/capabilities";
 import { requirePermission } from "@/lib/auth/permissions";
+import { formatDateBrazil } from "@/lib/datetime/format-brazil";
 import { loadStgOrMissing } from "@/lib/stg/ui";
 import { listDevelopersAdmin } from "@/services/developers";
 import { getStgSessionDetail } from "@/services/stg";
@@ -16,6 +19,9 @@ type PageProps = {
 
 export default async function StgSessionPage({ params }: PageProps) {
   await requirePermission("stg", "access");
+  const context = await getAppContext();
+  const canEditStg = hasPermission(context.grants, "stg", "edit");
+  const canDeleteStg = hasPermission(context.grants, "stg", "delete");
   const { sessionId } = await params;
 
   const loaded = await loadStgOrMissing(() => getStgSessionDetail(sessionId));
@@ -53,12 +59,16 @@ export default async function StgSessionPage({ params }: PageProps) {
   const developerNames = Object.fromEntries(
     developers.map((row) => [row.id, row.full_name]),
   );
+  const loggedInDeveloperId = context.developer?.id ?? null;
+  const loggedInDeveloperName = loggedInDeveloperId
+    ? (developerNames[loggedInDeveloperId] ?? null)
+    : null;
 
   return (
     <PageShell size="full">
       <PageHeader
         eyebrow="STG Day"
-        title={`${detail.session.scheduled_on} · ${detail.session.version_label}`}
+        title={`${formatDateBrazil(detail.session.scheduled_on)} - Versão ${detail.session.version_label}`}
         description={
           detail.session.scope_notes?.trim() ||
           `${team?.name ?? "Time"} · ${detail.session.environment}`
@@ -68,12 +78,14 @@ export default async function StgSessionPage({ params }: PageProps) {
             <Link href="/app/stg" className="ui-btn-secondary">
               Lista
             </Link>
-            <Link
-              href={`/app/stg/catalog?teamId=${detail.session.team_id}`}
-              className="ui-btn-secondary"
-            >
-              Catálogo
-            </Link>
+            {canEditStg ? (
+              <Link
+                href={`/app/stg/catalog?teamId=${detail.session.team_id}`}
+                className="ui-btn-secondary"
+              >
+                Catálogo
+              </Link>
+            ) : null}
           </div>
         }
       />
@@ -81,6 +93,10 @@ export default async function StgSessionPage({ params }: PageProps) {
         detail={detail}
         team={team}
         developerNames={developerNames}
+        canEdit={canEditStg}
+        canDelete={canDeleteStg}
+        loggedInDeveloperId={loggedInDeveloperId}
+        loggedInDeveloperName={loggedInDeveloperName}
       />
     </PageShell>
   );

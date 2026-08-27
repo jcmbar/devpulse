@@ -144,7 +144,13 @@ export function AccessPermissionsPanel({
                   className="border-b border-border/70 last:border-0"
                 >
                   <td className="px-3 py-2 font-medium text-foreground">
-                    {module.label}
+                    <div>{module.label}</div>
+                    {module.key === "stg" ? (
+                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                        Acesso = participar · Edição = catálogo/abrir · Excluir
+                        = apagar sessão
+                      </p>
+                    ) : null}
                   </td>
                   {(
                     [

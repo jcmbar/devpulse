@@ -241,15 +241,44 @@ body {
   }
 }
 
+@keyframes stg-finding-pending-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--danger) 45%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--danger) 0%, transparent);
+    transform: scale(1.03);
+  }
+}
+
+@keyframes stg-traffic-glow {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-closing-attention,
   .ui-closing-attention-btn,
-  .ui-btn-save-pending {
+  .ui-btn-save-pending,
+  .ui-stg-finding-pending,
+  .ui-stg-traffic-active-dot {
     animation: none !important;
   }
 }
 
 @layer components {
+  .ui-stg-traffic-active-dot {
+    animation: stg-traffic-glow 1.8s ease-in-out infinite;
+  }
   .ui-btn-primary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
   }
@@ -275,6 +304,11 @@ body {
   .ui-closing-attention-btn {
     @apply border border-rose-500/50 bg-rose-600 text-rose-50 shadow-[var(--shadow-sm)] hover:bg-rose-500;
     animation: closing-attention-btn 1.7s ease-in-out infinite;
+  }
+
+  .ui-stg-finding-pending {
+    @apply inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[11px] font-semibold text-danger;
+    animation: stg-finding-pending-pulse 1.7s ease-in-out infinite;
   }
 
   /** Idle destructive trigger — muted until hover/focus (tables / inline). */

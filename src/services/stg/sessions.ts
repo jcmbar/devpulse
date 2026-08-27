@@ -31,6 +31,16 @@ import type {
   StgSessionStatus,
 } from "@/types/stg";
 
+export type StgFindingJiraDetail = {
+  jiraKey: string;
+  issueId: string | null;
+  status: string | null;
+  statusGroup: string | null;
+  summary: string | null;
+  assigneeDisplayName: string | null;
+  existsInJira: boolean;
+};
+
 export type StgSessionDetail = {
   session: StgSession;
   participants: StgSessionParticipant[];
@@ -39,6 +49,7 @@ export type StgSessionDetail = {
   findings: StgFinding[];
   coverage: StgCoverageStats;
   blockers: StgFindingBlocker[];
+  jiraByFindingId: Record<string, StgFindingJiraDetail>;
 };
 
 export async function listStgSessions(input?: {
@@ -181,7 +192,10 @@ export async function getStgSessionDetail(
     );
   }
 
-  const blockers = await evaluateSessionBlockers(session, findings);
+  const { blockers, jiraByFindingId } = await evaluateSessionBlockersAndJira(
+    session,
+    findings,
+  );
 
   return {
     session,
@@ -191,20 +205,28 @@ export async function getStgSessionDetail(
     findings,
     coverage: computeStgCoverage(runs),
     blockers,
+    jiraByFindingId,
   };
 }
 
-async function evaluateSessionBlockers(
+async function evaluateSessionBlockersAndJira(
   session: StgSession,
   findings: StgFinding[],
-): Promise<StgFindingBlocker[]> {
+): Promise<{
+  blockers: StgFindingBlocker[];
+  jiraByFindingId: Record<string, StgFindingJiraDetail>;
+}> {
   const policy = session.approval_policy_snapshot;
   const blockers: StgFindingBlocker[] = [];
+  const jiraByFindingId: Record<string, StgFindingJiraDetail> = {};
 
   for (const finding of findings) {
     let statusGroup = finding.status_group_cached;
     let jiraStatus = finding.jira_status_cached;
     let hasLinkedIssue = Boolean(finding.jira_issue_id);
+    let summary: string | null = null;
+    let assigneeDisplayName: string | null = null;
+    let existsInJira = false;
 
     if (finding.jira_key) {
       const resolved = await resolveStgJiraIssueForTeam({
@@ -215,9 +237,23 @@ async function evaluateSessionBlockers(
         statusGroup = resolved.statusGroup;
         jiraStatus = resolved.status;
         hasLinkedIssue = true;
+        existsInJira = true;
+        summary = resolved.summary;
+        assigneeDisplayName = resolved.assigneeDisplayName;
       } else {
         hasLinkedIssue = Boolean(finding.jira_issue_id);
+        existsInJira = false;
       }
+
+      jiraByFindingId[finding.id] = {
+        jiraKey: finding.jira_key,
+        issueId: resolved?.issueId ?? finding.jira_issue_id ?? null,
+        status: jiraStatus,
+        statusGroup,
+        summary,
+        assigneeDisplayName,
+        existsInJira,
+      };
     }
 
     const blocker = evaluateFindingBlocker({
@@ -232,7 +268,7 @@ async function evaluateSessionBlockers(
     }
   }
 
-  return blockers;
+  return { blockers, jiraByFindingId };
 }
 
 /**
@@ -372,6 +408,25 @@ export async function openStgSession(
   return session;
 }
 
+export async function getStgScenarioRunById(
+  runId: string,
+): Promise<StgScenarioRun | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stg_scenario_runs")
+    .select("*")
+    .eq("id", runId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao carregar execução STG: ${error.message}`);
+  }
+  if (!data) {
+    return null;
+  }
+  return mapStgScenarioRun(data as Record<string, unknown>);
+}
+
 export async function updateStgScenarioRunStatus(input: {
   runId: string;
   status: StgRunStatus;
@@ -427,6 +482,85 @@ export async function updateStgSessionStatus(input: {
 
   const session = mapStgSession(data as Record<string, unknown>);
   return recalculateStgSessionResult(session.id);
+}
+
+/** Update session identity fields (date / team / version / environment). */
+export async function updateStgSessionMeta(input: {
+  sessionId: string;
+  teamId: string;
+  scheduledOn: string;
+  versionLabel: string;
+  environment?: string;
+}): Promise<StgSession> {
+  const sessionId = input.sessionId.trim();
+  const teamId = input.teamId.trim();
+  const scheduledOn = input.scheduledOn.trim();
+  const versionLabel = input.versionLabel.trim();
+  const environment = (input.environment ?? "staging").trim() || "staging";
+
+  if (!sessionId) {
+    throw new Error("Sessão inválida.");
+  }
+  if (!teamId) {
+    throw new Error("Informe o time.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledOn)) {
+    throw new Error("Informe a data no formato AAAA-MM-DD.");
+  }
+  if (!versionLabel) {
+    throw new Error("Informe a versão.");
+  }
+
+  const existing = await getStgSession(sessionId);
+  if (!existing) {
+    throw new Error("Sessão STG não encontrada.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stg_sessions")
+    .update({
+      team_id: teamId,
+      scheduled_on: scheduledOn,
+      version_label: versionLabel,
+      environment,
+    })
+    .eq("id", sessionId)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(
+        "Já existe uma sessão deste time com a mesma data e versão.",
+      );
+    }
+    throw new Error(`Falha ao atualizar sessão STG: ${error.message}`);
+  }
+
+  return mapStgSession(data as Record<string, unknown>);
+}
+
+/** Hard-delete session; related rows cascade (scenarios, runs, findings). */
+export async function deleteStgSession(sessionId: string): Promise<StgSession> {
+  const id = sessionId.trim();
+  if (!id) {
+    throw new Error("Sessão inválida.");
+  }
+
+  const existing = await getStgSession(id);
+  if (!existing) {
+    throw new Error("Sessão STG não encontrada.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("stg_sessions").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(`Falha ao excluir sessão STG: ${error.message}`);
+  }
+
+  return existing;
 }
 
 export async function waiveStgSession(input: {

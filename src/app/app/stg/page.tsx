@@ -1,27 +1,33 @@
 import Link from "next/link";
+import { StgSessionsTable } from "@/app/app/stg/sessions-table";
 import { StgSchemaMissingNotice } from "@/components/stg/stg-result-banner";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { DataTable } from "@/components/surface";
 import { TeamFilterForm } from "@/components/team-filter";
 import { FilterBar } from "@/components/ui/section-shell";
+import { getAppContext } from "@/lib/auth/app-context";
+import { hasPermission } from "@/lib/auth/capabilities";
 import { requirePermission } from "@/lib/auth/permissions";
-import { loadStgOrMissing, stgResultLabel, stgStatusLabel } from "@/lib/stg/ui";
+import { loadStgOrMissing } from "@/lib/stg/ui";
 import { listStgSessions } from "@/services/stg";
 import { listTeamsAdmin } from "@/services/teams";
 
 type PageProps = {
-  searchParams?: Promise<{ teamId?: string }>;
+  searchParams?: Promise<{ teamId?: string; deleted?: string }>;
 };
 
 export default async function StgSessionsPage({ searchParams }: PageProps) {
   await requirePermission("stg", "access");
+  const context = await getAppContext();
+  const canEditStg = hasPermission(context.grants, "stg", "edit");
+  const canAccessJira = hasPermission(context.grants, "jira", "access");
   const params = searchParams ? await searchParams : {};
   const teams = await listTeamsAdmin();
   const teamId =
     params.teamId && teams.some((team) => team.id === params.teamId)
       ? params.teamId
       : undefined;
+  const deleted = params.deleted === "1";
 
   const loaded = await loadStgOrMissing(() =>
     listStgSessions({ teamId, limit: 40 }),
@@ -46,22 +52,28 @@ export default async function StgSessionsPage({ searchParams }: PageProps) {
         description="Sessões de teste geral por time, com catálogo reutilizável e decisão de produção."
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
-            <Link href="/app/stg/catalog" className="ui-btn-secondary">
-              Catálogo
-            </Link>
-            <Link href="/app/jira" className="ui-btn-secondary">
-              Mapeamento Jira
-            </Link>
-            <Link
-              href={
-                teamId
-                  ? `/app/stg/new?teamId=${encodeURIComponent(teamId)}`
-                  : "/app/stg/new"
-              }
-              className="ui-btn-primary"
-            >
-              Nova sessão
-            </Link>
+            {canEditStg ? (
+              <Link href="/app/stg/catalog" className="ui-btn-secondary">
+                Catálogo
+              </Link>
+            ) : null}
+            {canAccessJira ? (
+              <Link href="/app/jira" className="ui-btn-secondary">
+                Mapeamento Jira
+              </Link>
+            ) : null}
+            {canEditStg ? (
+              <Link
+                href={
+                  teamId
+                    ? `/app/stg/new?teamId=${encodeURIComponent(teamId)}`
+                    : "/app/stg/new"
+                }
+                className="ui-btn-primary"
+              >
+                Nova sessão
+              </Link>
+            ) : null}
           </div>
         }
       />
@@ -70,6 +82,11 @@ export default async function StgSessionsPage({ searchParams }: PageProps) {
       {loaded.error ? (
         <p className="ui-alert-error" role="alert">
           {loaded.error}
+        </p>
+      ) : null}
+      {deleted ? (
+        <p className="ui-alert-success" role="status">
+          Sessão excluída.
         </p>
       ) : null}
 
@@ -125,60 +142,11 @@ export default async function StgSessionsPage({ searchParams }: PageProps) {
               cadastre o catálogo do time.
             </div>
           ) : (
-            <DataTable minWidthClassName="min-w-[820px]" stickyFirstColumn>
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Time</th>
-                  <th>Versão</th>
-                  <th>Ambiente</th>
-                  <th>Status</th>
-                  <th>Resultado</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((session) => {
-                  const team = teams.find((row) => row.id === session.team_id);
-                  return (
-                    <tr key={session.id}>
-                      <td className="whitespace-nowrap font-medium">
-                        {session.scheduled_on}
-                      </td>
-                      <td>{team?.name ?? session.team_id.slice(0, 8)}</td>
-                      <td>{session.version_label}</td>
-                      <td className="text-muted-foreground">
-                        {session.environment}
-                      </td>
-                      <td>{stgStatusLabel(session.status)}</td>
-                      <td>
-                        <span
-                          className={
-                            session.result === "approved"
-                              ? "text-success"
-                              : session.result === "blocked"
-                                ? "text-danger font-medium"
-                                : session.result === "waived"
-                                  ? "text-warning"
-                                  : "text-muted-foreground"
-                          }
-                        >
-                          {stgResultLabel(session.result)}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        <Link
-                          href={`/app/stg/${session.id}`}
-                          className="ui-btn-ghost"
-                        >
-                          Abrir
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </DataTable>
+            <StgSessionsTable
+              sessions={sessions}
+              teams={teams}
+              canEdit={canEditStg}
+            />
           )}
         </>
       ) : null}
