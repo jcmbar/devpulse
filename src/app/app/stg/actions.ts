@@ -261,7 +261,7 @@ export async function upsertStgFindingAction(
 
   const sessionId = String(formData.get("sessionId") ?? "");
   const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
   const jiraKey = String(formData.get("jiraKey") ?? "").trim();
   const foundBy =
     String(formData.get("foundByDeveloperId") ?? "").trim() ||
@@ -281,9 +281,6 @@ export async function upsertStgFindingAction(
   }
   if (!jiraKey) {
     return { error: "Informe o Card Jira (ex.: AP-1234).", success: null };
-  }
-  if (!description) {
-    return { error: "Informe a descrição do apontamento.", success: null };
   }
 
   try {

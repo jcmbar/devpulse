@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ChevronDown,
@@ -11,12 +12,15 @@ import {
 } from "lucide-react";
 import {
   useActionState,
+  useCallback,
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { createClient } from "@/lib/supabase/client";
 import {
   deleteStgFindingAction,
   deleteStgSessionAction,
@@ -55,7 +59,7 @@ const PARTICIPATION_CONFIG: Record<
   required: {
     label: "Obrigatório",
     chipClass:
-      "border-brand/40 bg-brand/10 text-brand dark:text-cyan-300 font-semibold",
+      "border-brand/40 bg-brand/10 text-brand-dark font-semibold dark:text-cyan-300",
   },
   optional: {
     label: "Opcional",
@@ -114,6 +118,7 @@ export function StgSessionHub({
   loggedInDeveloperId,
   loggedInDeveloperName,
 }: SessionHubProps) {
+  const router = useRouter();
   const {
     session,
     participants,
@@ -125,6 +130,78 @@ export function StgSessionHub({
     jiraByFindingId = {},
   } = detail;
   const closed = session.status === "closed";
+
+  const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refreshSession = useCallback(() => {
+    if (refreshDebounceRef.current) {
+      clearTimeout(refreshDebounceRef.current);
+    }
+    refreshDebounceRef.current = setTimeout(() => {
+      router.refresh();
+    }, 150);
+  }, [router]);
+
+  // Realtime Supabase + Polling Fallback
+  useEffect(() => {
+    const supabase = createClient();
+    const sessionId = session.id;
+
+    // Supabase Realtime channel
+    const channel = supabase
+      .channel(`stg-session-${sessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stg_findings",
+          filter: `session_id=eq.${sessionId}`,
+        },
+        () => {
+          refreshSession();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stg_scenario_runs",
+        },
+        () => {
+          refreshSession();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stg_sessions",
+          filter: `id=eq.${sessionId}`,
+        },
+        () => {
+          refreshSession();
+        },
+      )
+      .subscribe();
+
+    // Polling fallback a cada 10s quando a aba estiver visível e a sessão não estiver fechada
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === "visible" && !closed) {
+        refreshSession();
+      }
+    }, 10000);
+
+    return () => {
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+      }
+      clearInterval(intervalId);
+      void supabase.removeChannel(channel);
+    };
+  }, [session.id, closed, refreshSession]);
 
   const [runState, runAction, runPending] = useActionState(
     updateStgRunAction,
@@ -593,7 +670,7 @@ export function StgSessionHub({
                 <th>Título</th>
                 <th>Cenário</th>
                 <th>Impacto</th>
-                <th>Descrição</th>
+                <th>Observação</th>
                 <th>Jira</th>
                 <th>Status Jira</th>
                 <th>Descrição Jira</th>
@@ -968,42 +1045,42 @@ const SCENARIO_ACCENTS = [
   {
     bar: "bg-cyan-500",
     progress: "bg-cyan-500",
-    chip: "bg-cyan-500/15 text-cyan-800 dark:text-cyan-200",
+    chip: "border border-cyan-500/30 bg-cyan-500/15 text-cyan-900 dark:text-cyan-200",
   },
   {
     bar: "bg-sky-500",
     progress: "bg-sky-500",
-    chip: "bg-sky-500/15 text-sky-800 dark:text-sky-200",
+    chip: "border border-sky-500/30 bg-sky-500/15 text-sky-900 dark:text-sky-200",
   },
   {
     bar: "bg-emerald-500",
     progress: "bg-emerald-500",
-    chip: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200",
+    chip: "border border-emerald-500/30 bg-emerald-500/15 text-emerald-900 dark:text-emerald-200",
   },
   {
     bar: "bg-amber-500",
     progress: "bg-amber-500",
-    chip: "bg-amber-500/15 text-amber-900 dark:text-amber-200",
+    chip: "border border-amber-500/30 bg-amber-500/15 text-amber-950 dark:text-amber-200",
   },
   {
     bar: "bg-orange-500",
     progress: "bg-orange-500",
-    chip: "bg-orange-500/15 text-orange-900 dark:text-orange-200",
+    chip: "border border-orange-500/30 bg-orange-500/15 text-orange-950 dark:text-orange-200",
   },
   {
     bar: "bg-rose-500",
     progress: "bg-rose-500",
-    chip: "bg-rose-500/15 text-rose-800 dark:text-rose-200",
+    chip: "border border-rose-500/30 bg-rose-500/15 text-rose-900 dark:text-rose-200",
   },
   {
     bar: "bg-violet-500",
     progress: "bg-violet-500",
-    chip: "bg-violet-500/15 text-violet-800 dark:text-violet-200",
+    chip: "border border-violet-500/30 bg-violet-500/15 text-violet-900 dark:text-violet-200",
   },
   {
     bar: "bg-teal-500",
     progress: "bg-teal-500",
-    chip: "bg-teal-500/15 text-teal-800 dark:text-teal-200",
+    chip: "border border-teal-500/30 bg-teal-500/15 text-teal-900 dark:text-teal-200",
   },
 ] as const;
 
@@ -1033,27 +1110,27 @@ function ImpactPill({ impact }: { impact: StgFindingImpact }) {
   > = {
     low: {
       label: "Baixo",
-      dot: "bg-emerald-500",
+      dot: "bg-emerald-600 dark:bg-emerald-400",
       glow: "shadow-[0_0_6px_rgba(16,185,129,0.7)]",
-      text: "text-emerald-300",
-      bg: "bg-emerald-500/15",
-      border: "border-emerald-500/40",
+      text: "text-emerald-900 dark:text-emerald-300",
+      bg: "bg-emerald-500/15 dark:bg-emerald-500/20",
+      border: "border-emerald-500/40 dark:border-emerald-500/50",
     },
     medium: {
       label: "Médio",
-      dot: "bg-amber-400",
+      dot: "bg-amber-600 dark:bg-amber-400",
       glow: "shadow-[0_0_6px_rgba(251,191,36,0.7)]",
-      text: "text-amber-200",
-      bg: "bg-amber-400/15",
-      border: "border-amber-400/40",
+      text: "text-amber-950 dark:text-amber-200",
+      bg: "bg-amber-500/15 dark:bg-amber-500/20",
+      border: "border-amber-500/40 dark:border-amber-500/50",
     },
     high: {
       label: "Alto",
-      dot: "bg-rose-500",
+      dot: "bg-rose-600 dark:bg-rose-400",
       glow: "shadow-[0_0_6px_rgba(244,63,94,0.7)]",
-      text: "text-rose-200",
-      bg: "bg-rose-500/15",
-      border: "border-rose-500/40",
+      text: "text-rose-950 dark:text-rose-200",
+      bg: "bg-rose-500/15 dark:bg-rose-500/20",
+      border: "border-rose-500/40 dark:border-rose-500/50",
     },
   };
 
@@ -1627,13 +1704,17 @@ function FindingModal({
             />
           </FormField>
 
-          <FormField label="Descrição" htmlFor={`${titleId}-description`}>
+          <FormField
+            label="Observação"
+            htmlFor={`${titleId}-description`}
+            hint="Opcional"
+          >
             <textarea
               id={`${titleId}-description`}
               name="description"
-              required
               rows={3}
               className="ui-input"
+              placeholder="Detalhes ou observações adicionais sobre o apontamento..."
             />
           </FormField>
           {error ? (
