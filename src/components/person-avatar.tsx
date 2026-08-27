@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 type PersonAvatarProps = {
   name: string;
   src?: string | null;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
 };
 
@@ -11,6 +11,8 @@ const SIZE_CLASS = {
   sm: "size-7 text-[10px]",
   md: "size-9 text-xs",
   lg: "size-12 text-sm",
+  xl: "size-14 text-base",
+  "2xl": "size-16 text-lg",
 } as const;
 
 function initialsFromName(name: string): string {

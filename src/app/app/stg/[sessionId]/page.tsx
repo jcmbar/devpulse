@@ -8,7 +8,7 @@ import { hasPermission } from "@/lib/auth/capabilities";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatDateBrazil } from "@/lib/datetime/format-brazil";
 import { loadStgOrMissing } from "@/lib/stg/ui";
-import { listDevelopersAdmin } from "@/services/developers";
+import { developerAvatarPublicUrl, listDevelopersAdmin } from "@/services/developers";
 import { getStgSessionDetail } from "@/services/stg";
 import { listTeamsAdmin } from "@/services/teams";
 import { notFound } from "next/navigation";
@@ -59,6 +59,12 @@ export default async function StgSessionPage({ params }: PageProps) {
   const developerNames = Object.fromEntries(
     developers.map((row) => [row.id, row.full_name]),
   );
+  const developerAvatarUrls = Object.fromEntries(
+    developers.map((row) => [
+      row.id,
+      developerAvatarPublicUrl(row.avatar_path),
+    ]),
+  );
   const loggedInDeveloperId = context.developer?.id ?? null;
   const loggedInDeveloperName = loggedInDeveloperId
     ? (developerNames[loggedInDeveloperId] ?? null)
@@ -93,6 +99,7 @@ export default async function StgSessionPage({ params }: PageProps) {
         detail={detail}
         team={team}
         developerNames={developerNames}
+        developerAvatarUrls={developerAvatarUrls}
         canEdit={canEditStg}
         canDelete={canDeleteStg}
         loggedInDeveloperId={loggedInDeveloperId}

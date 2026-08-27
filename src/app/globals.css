@@ -265,17 +265,60 @@ body {
   }
 }
 
+@keyframes stg-float-a {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.6deg);
+  }
+}
+
+@keyframes stg-float-b {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-0.5deg);
+  }
+}
+
+@keyframes stg-float-c {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(0.4deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-closing-attention,
   .ui-closing-attention-btn,
   .ui-btn-save-pending,
   .ui-stg-finding-pending,
-  .ui-stg-traffic-active-dot {
+  .ui-stg-traffic-active-dot,
+  .ui-stg-floating-avatar {
     animation: none !important;
   }
 }
 
 @layer components {
+  .ui-stg-floating-avatar {
+    will-change: transform;
+  }
+  .ui-stg-floating-avatar-a {
+    animation: stg-float-a 4.2s ease-in-out infinite;
+  }
+  .ui-stg-floating-avatar-b {
+    animation: stg-float-b 3.6s ease-in-out infinite;
+  }
+  .ui-stg-floating-avatar-c {
+    animation: stg-float-c 4.8s ease-in-out infinite;
+  }
   .ui-stg-traffic-active-dot {
     animation: stg-traffic-glow 1.8s ease-in-out infinite;
   }

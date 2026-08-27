@@ -28,6 +28,7 @@ import {
 } from "@/app/app/stg/actions";
 import { StgResultBanner } from "@/components/stg/stg-result-banner";
 import { DataTable } from "@/components/surface";
+import { PersonAvatar } from "@/components/person-avatar";
 import { DestructiveAction } from "@/components/ui/destructive-action";
 import {
   FormActions,
@@ -40,11 +41,55 @@ import type { StgSessionDetail } from "@/services/stg";
 import type {
   StgFinding,
   StgFindingImpact,
+  StgParticipation,
   StgScenarioRun,
   StgSessionScenario,
 } from "@/types/stg";
 import type { StgFindingJiraDetail } from "@/services/stg";
 import type { Team } from "@/types/team";
+
+const PARTICIPATION_CONFIG: Record<
+  StgParticipation,
+  { label: string; chipClass: string }
+> = {
+  required: {
+    label: "Obrigatório",
+    chipClass:
+      "border-brand/40 bg-brand/10 text-brand dark:text-cyan-300 font-semibold",
+  },
+  optional: {
+    label: "Opcional",
+    chipClass:
+      "border-border/70 bg-card/80 text-muted-foreground font-medium",
+  },
+  excluded: {
+    label: "Dispensado",
+    chipClass:
+      "border-border/40 bg-muted/40 text-muted-foreground/60 line-through font-normal",
+  },
+};
+
+const FLOAT_CLASSES = [
+  "ui-stg-floating-avatar-a",
+  "ui-stg-floating-avatar-b",
+  "ui-stg-floating-avatar-c",
+] as const;
+
+const FLOAT_DELAYS = [
+  "0s",
+  "-1.4s",
+  "-2.8s",
+  "-0.7s",
+  "-2.1s",
+  "-3.5s",
+  "-1.0s",
+  "-2.5s",
+] as const;
+
+function getFirstName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return parts[0] ?? fullName;
+}
 
 const initial: StgActionState = { error: null, success: null };
 
@@ -52,6 +97,7 @@ type SessionHubProps = {
   detail: StgSessionDetail;
   team: Team | null;
   developerNames: Record<string, string>;
+  developerAvatarUrls?: Record<string, string | null>;
   canEdit: boolean;
   canDelete: boolean;
   loggedInDeveloperId: string | null;
@@ -62,6 +108,7 @@ export function StgSessionHub({
   detail,
   team,
   developerNames,
+  developerAvatarUrls = {},
   canEdit,
   canDelete,
   loggedInDeveloperId,
@@ -406,27 +453,103 @@ export function StgSessionHub({
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Participantes</h2>
-        <DataTable minWidthClassName="min-w-[420px]">
-          <thead>
-            <tr>
-              <th>Pessoa</th>
-              <th>Participação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {participants.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  {developerNames[row.developer_id] ??
-                    row.developer_id.slice(0, 8)}
-                </td>
-                <td>{row.participation}</td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
+      <section className="ui-dashboard-panel relative overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold">Participantes</h2>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+                {participants.length}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Equipe escalada para a homologação desta versão.
+            </p>
+          </div>
+        </div>
+
+        {participants.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum participante configurado nesta sessão.
+          </p>
+        ) : (
+          <div className="relative mt-2 flex flex-wrap items-start justify-center gap-6 px-2 py-4 sm:gap-8 sm:py-6">
+            {participants.map((row, index) => {
+              const fullName =
+                developerNames[row.developer_id] ?? row.developer_id.slice(0, 8);
+              const firstName = getFirstName(fullName);
+              const avatarUrl = developerAvatarUrls[row.developer_id] ?? null;
+              const isYou =
+                loggedInDeveloperId !== null &&
+                row.developer_id === loggedInDeveloperId;
+              const config =
+                PARTICIPATION_CONFIG[row.participation] ??
+                PARTICIPATION_CONFIG.optional;
+
+              const floatClass = FLOAT_CLASSES[index % FLOAT_CLASSES.length];
+              const floatDelay = FLOAT_DELAYS[index % FLOAT_DELAYS.length];
+
+              const participantRuns = runs.filter(
+                (r) => r.developer_id === row.developer_id,
+              );
+              const doneCount = participantRuns.filter(
+                (r) => r.status === "done",
+              ).length;
+              const totalCount = participantRuns.length;
+              const progressText =
+                totalCount > 0 ? ` · ${doneCount}/${totalCount} concluídos` : "";
+
+              return (
+                <div
+                  key={row.id}
+                  style={{ animationDelay: floatDelay }}
+                  className={cn(
+                    "ui-stg-floating-avatar group flex flex-col items-center gap-2 transition-transform duration-300 hover:scale-105 hover:z-20",
+                    floatClass,
+                  )}
+                  title={`${fullName} (${config.label})${progressText}`}
+                >
+                  <div className="relative">
+                    <div
+                      className={cn(
+                        "rounded-full p-1 transition-all duration-300",
+                        isYou
+                          ? "ring-2 ring-brand shadow-[0_0_14px_rgba(56,189,248,0.45)]"
+                          : "ring-1 ring-border/80 group-hover:ring-brand/50 group-hover:shadow-[0_0_12px_rgba(56,189,248,0.25)]",
+                      )}
+                    >
+                      <PersonAvatar
+                        name={fullName}
+                        src={avatarUrl}
+                        size="xl"
+                        className="size-14 border-0 shadow-inner sm:size-16"
+                      />
+                    </div>
+                    {isYou ? (
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full border border-brand/50 bg-brand px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-brand-foreground shadow-sm">
+                        Você
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1 text-center">
+                    <p className="max-w-[100px] truncate text-xs font-semibold text-foreground tracking-tight sm:max-w-[115px]">
+                      {firstName}
+                    </p>
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px]",
+                        config.chipClass,
+                      )}
+                    >
+                      {config.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">
