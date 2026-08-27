@@ -115,6 +115,22 @@ export async function upsertStgFinding(
   return mapStgFinding(data as Record<string, unknown>);
 }
 
+export async function getStgFindingById(
+  findingId: string,
+): Promise<StgFinding | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stg_findings")
+    .select("*")
+    .eq("id", findingId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+  return mapStgFinding(data as Record<string, unknown>);
+}
+
 export async function deleteStgFinding(findingId: string): Promise<void> {
   const supabase = await createClient();
   const { data, error } = await supabase

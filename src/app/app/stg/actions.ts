@@ -15,11 +15,13 @@ import type {
 } from "@/types/stg";
 import {
   deleteStgFinding,
+  getStgFindingById,
   deleteStgSession,
   openStgSession,
   removeStgDefaultParticipant,
   setStgDefaultParticipant,
   getStgScenarioRunById,
+  upsertStgScenarioRunStatus,
   updateStgScenarioRunStatus,
   updateStgSessionStatus,
   updateStgSessionMeta,
@@ -131,8 +133,9 @@ export async function updateStgRunAction(
 ): Promise<StgActionState> {
   const context = await getAppContext();
   await requirePermission("stg", "access");
-  const runId = String(formData.get("runId") ?? "");
-  const sessionId = String(formData.get("sessionId") ?? "");
+  const runId = String(formData.get("runId") ?? "").trim();
+  const scenarioId = String(formData.get("scenarioId") ?? "").trim();
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
   const status = String(formData.get("status") ?? "") as StgRunStatus;
   const actingDeveloperId = context.developer?.id;
 
@@ -145,18 +148,32 @@ export async function updateStgRunAction(
   }
 
   try {
-    const run = await getStgScenarioRunById(runId);
-    if (!run) {
-      return { error: "Execução não encontrada.", success: null };
-    }
-    if (run.developer_id !== actingDeveloperId) {
+    if (scenarioId && sessionId) {
+      await upsertStgScenarioRunStatus({
+        sessionId,
+        sessionScenarioId: scenarioId,
+        developerId: actingDeveloperId,
+        status,
+      });
+    } else if (runId) {
+      const run = await getStgScenarioRunById(runId);
+      if (!run) {
+        return { error: "Execução não encontrada.", success: null };
+      }
+      if (run.developer_id !== actingDeveloperId) {
+        return {
+          error: "Você só pode atualizar a execução da sua própria pessoa.",
+          success: null,
+        };
+      }
+      await updateStgScenarioRunStatus({ runId, status });
+    } else {
       return {
-        error: "Você só pode atualizar a execução da sua própria pessoa.",
+        error: "Parâmetros inválidos para atualizar execução.",
         success: null,
       };
     }
 
-    await updateStgScenarioRunStatus({ runId, status });
     revalidateStg(sessionId);
     return { error: null, success: "Execução atualizada." };
   } catch (error) {
@@ -260,21 +277,37 @@ export async function upsertStgFindingAction(
   await requirePermission("stg", "access");
 
   const sessionId = String(formData.get("sessionId") ?? "");
+  const findingId = String(formData.get("findingId") ?? "").trim() || undefined;
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const jiraKey = String(formData.get("jiraKey") ?? "").trim();
-  const foundBy =
-    String(formData.get("foundByDeveloperId") ?? "").trim() ||
-    context.developer?.id ||
-    "";
+  const actingDeveloperId = context.developer?.id;
 
-  if (!foundBy) {
+  if (!actingDeveloperId) {
     return {
       error:
         "Seu login não está vinculado a um cadastro de pessoa. Peça para vincular o profile antes de registrar apontamentos.",
       success: null,
     };
   }
+
+  // Se for edição de apontamento existente, somente quem registrou pode alterar
+  if (findingId) {
+    const existing = await getStgFindingById(findingId);
+    if (!existing) {
+      return { error: "Apontamento não encontrado.", success: null };
+    }
+    if (existing.found_by_developer_id !== actingDeveloperId) {
+      return {
+        error: "Você só pode editar apontamentos registrados por você.",
+        success: null,
+      };
+    }
+  }
+
+  const foundBy =
+    String(formData.get("foundByDeveloperId") ?? "").trim() ||
+    actingDeveloperId;
 
   if (!title) {
     return { error: "Informe o título do apontamento.", success: null };
@@ -285,6 +318,7 @@ export async function upsertStgFindingAction(
 
   try {
     await upsertStgFinding({
+      id: findingId,
       sessionId,
       title,
       description,
@@ -296,7 +330,10 @@ export async function upsertStgFindingAction(
       notes: String(formData.get("notes") ?? "") || null,
     });
     revalidateStg(sessionId);
-    return { error: null, success: "Apontamento salvo." };
+    return {
+      error: null,
+      success: findingId ? "Apontamento atualizado." : "Apontamento salvo.",
+    };
   } catch (error) {
     return fail(error, "Não foi possível salvar o apontamento.");
   }

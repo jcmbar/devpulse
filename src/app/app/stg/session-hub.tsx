@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  Check,
+  CheckCircle2,
   ChevronDown,
+  CircleDot,
   ClipboardList,
+  Minus,
   NotebookPen,
   RotateCcw,
   X,
@@ -72,6 +76,12 @@ const PARTICIPATION_CONFIG: Record<
       "border-border/40 bg-muted/40 text-muted-foreground/60 line-through font-normal",
   },
 };
+
+const MICRO_FLOAT_CLASSES = [
+  "ui-stg-micro-avatar-a",
+  "ui-stg-micro-avatar-b",
+  "ui-stg-micro-avatar-c",
+] as const;
 
 const FLOAT_CLASSES = [
   "ui-stg-floating-avatar-a",
@@ -228,6 +238,7 @@ export function StgSessionHub({
 
   const [findingScenario, setFindingScenario] =
     useState<StgSessionScenario | null>(null);
+  const [editingFinding, setEditingFinding] = useState<StgFinding | null>(null);
   const [findingLinkError, setFindingLinkError] = useState<string | null>(null);
 
   const [findingFilters, setFindingFilters] = useState({
@@ -267,6 +278,94 @@ export function StgSessionHub({
       `${row.module_name} · ${row.scenario_name}`,
     ]),
   );
+
+  // Agrupamento por módulo para a matriz de participação
+  const moduleMatrixData = useMemo(() => {
+    const activeParticipants = participants.filter(
+      (p) => p.participation !== "excluded",
+    );
+
+    const modulesMap = new Map<
+      string,
+      {
+        moduleName: string;
+        scenarioIds: string[];
+      }
+    >();
+
+    includedScenarios.forEach((sc) => {
+      const existing = modulesMap.get(sc.module_name);
+      if (existing) {
+        existing.scenarioIds.push(sc.id);
+      } else {
+        modulesMap.set(sc.module_name, {
+          moduleName: sc.module_name,
+          scenarioIds: [sc.id],
+        });
+      }
+    });
+
+    const modules = Array.from(modulesMap.values());
+
+    // Para cada módulo e participante, calcula se participou (tem pelo menos um run = 'done' ou apontamento no módulo)
+    const rows = modules.map((mod) => {
+      const scenarioIdSet = new Set(mod.scenarioIds);
+
+      const participantStatus: Record<
+        string,
+        {
+          doneRuns: number;
+          doneFullRuns: number;
+          donePartialRuns: number;
+          totalRuns: number;
+          findingsCount: number;
+          participated: boolean;
+        }
+      > = {};
+
+      activeParticipants.forEach((p) => {
+        const pRuns = runs.filter(
+          (r) =>
+            r.developer_id === p.developer_id &&
+            scenarioIdSet.has(r.session_scenario_id),
+        );
+        const pFindings = findings.filter(
+          (f) =>
+            f.found_by_developer_id === p.developer_id &&
+            f.session_scenario_id &&
+            scenarioIdSet.has(f.session_scenario_id),
+        );
+
+        const doneFullRuns = pRuns.filter((r) => r.status === "done").length;
+        const donePartialRuns = pRuns.filter((r) => r.status === "partial").length;
+        const doneRuns = doneFullRuns + donePartialRuns;
+        const totalRuns = pRuns.length;
+        const findingsCount = pFindings.length;
+        // Participou se marcou pelo menos 1 cenário como done/partial ou registrou algum apontamento no módulo
+        const participated = doneRuns > 0 || findingsCount > 0;
+
+        participantStatus[p.developer_id] = {
+          doneRuns,
+          doneFullRuns,
+          donePartialRuns,
+          totalRuns,
+          findingsCount,
+          participated,
+        };
+      });
+
+      return {
+        moduleName: mod.moduleName,
+        totalScenarios: mod.scenarioIds.length,
+        participantStatus,
+      };
+    });
+
+    return {
+      activeParticipants,
+      rows,
+    };
+  }, [includedScenarios, participants, runs, findings]);
 
   const uniqueScenarioIds = useMemo(() => {
     const ids = new Set<string>();
@@ -388,6 +487,7 @@ export function StgSessionHub({
   useEffect(() => {
     if (findingState.success) {
       setFindingScenario(null);
+      setEditingFinding(null);
     }
   }, [findingState.success]);
 
@@ -399,6 +499,35 @@ export function StgSessionHub({
       return;
     }
     setFindingLinkError(null);
+    setEditingFinding(null);
+    setFindingScenario(scenario);
+  }
+
+  function openEditFindingModal(finding: StgFinding) {
+    if (!loggedInDeveloperId) {
+      setFindingLinkError(
+        "Seu login não está vinculado a um cadastro de pessoa. Peça para vincular o profile antes de editar apontamentos.",
+      );
+      return;
+    }
+    if (finding.found_by_developer_id !== loggedInDeveloperId) {
+      return;
+    }
+    setFindingLinkError(null);
+    const scenario =
+      scenarios.find((s) => s.id === finding.session_scenario_id) ??
+      ({
+        id: finding.session_scenario_id ?? "",
+        module_name: "Geral",
+        scenario_name: "Sessão STG",
+        summary: null,
+        is_included: true,
+        sort_order: 0,
+        session_id: session.id,
+        source_scenario_id: null,
+      } as StgSessionScenario);
+
+    setEditingFinding(finding);
     setFindingScenario(scenario);
   }
 
@@ -471,8 +600,7 @@ export function StgSessionHub({
           <div>
             <h2 className="text-base font-semibold">Cenários e execução</h2>
             <p className="text-sm text-muted-foreground">
-              Expanda um cenário para marcar execuções. Use o ícone de
-              apontamento no cabeçalho.
+              Acompanhe os cenários, marque suas execuções e crie apontamentos.
             </p>
           </div>
           <p className="text-xs tabular-nums text-muted-foreground">
@@ -503,7 +631,7 @@ export function StgSessionHub({
               const myScenarioFindings = loggedInDeveloperId
                 ? scenarioFindings.filter(
                     (row) =>
-                      row.found_by_developer_id === loggedInDeveloperId,
+                    row.found_by_developer_id === loggedInDeveloperId,
                   )
                 : [];
               return (
@@ -520,6 +648,7 @@ export function StgSessionHub({
                   closed={closed}
                   sessionId={session.id}
                   developerNames={developerNames}
+                  developerAvatarUrls={developerAvatarUrls}
                   runAction={runAction}
                   runPending={runPending}
                   onAddFinding={() => openFindingModal(scenario)}
@@ -570,7 +699,7 @@ export function StgSessionHub({
                 (r) => r.developer_id === row.developer_id,
               );
               const doneCount = participantRuns.filter(
-                (r) => r.status === "done",
+                (r) => r.status === "done" || r.status === "partial",
               ).length;
               const totalCount = participantRuns.length;
               const progressText =
@@ -870,6 +999,9 @@ export function StgSessionHub({
                   const identifierName =
                     developerNames[finding.found_by_developer_id] ??
                     finding.found_by_developer_id.slice(0, 8);
+                  const isMyFinding =
+                    loggedInDeveloperId !== null &&
+                    finding.found_by_developer_id === loggedInDeveloperId;
 
                   return (
                     <tr key={finding.id}>
@@ -925,28 +1057,163 @@ export function StgSessionHub({
                         </span>
                       </td>
                       <td className="text-right">
-                        {!closed && canDelete ? (
-                          <form action={deleteFindingAction}>
-                            <input
-                              type="hidden"
-                              name="findingId"
-                              value={finding.id}
-                            />
-                            <input
-                              type="hidden"
-                              name="sessionId"
-                              value={session.id}
-                            />
-                            <button type="submit" className="ui-btn-ghost">
-                              Remover
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          {!closed && isMyFinding ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditFindingModal(finding)}
+                              className="ui-btn-ghost text-xs text-foreground hover:text-brand"
+                              title="Editar este apontamento"
+                            >
+                              Editar
                             </button>
-                          </form>
-                        ) : null}
+                          ) : null}
+                          {!closed && canDelete ? (
+                            <form action={deleteFindingAction}>
+                              <input
+                                type="hidden"
+                                name="findingId"
+                                value={finding.id}
+                              />
+                              <input
+                                type="hidden"
+                                name="sessionId"
+                                value={session.id}
+                              />
+                              <button
+                                type="submit"
+                                className="ui-btn-ghost text-xs text-muted-foreground hover:text-danger"
+                              >
+                                Remover
+                              </button>
+                            </form>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   );
                 })
               )}
+            </tbody>
+          </DataTable>
+        )}
+      </section>
+
+      {/* Matriz de Participação por Módulo */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold">Participação por Módulo</h2>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+                {moduleMatrixData.rows.length} módulos
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Acompanhamento de quais participantes já atuaram em cada módulo homologado.
+            </p>
+          </div>
+        </div>
+
+        {moduleMatrixData.rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum módulo incluído nesta sessão.
+          </p>
+        ) : (
+          <DataTable minWidthClassName="min-w-[640px]">
+            <thead>
+              <tr>
+                <th className="min-w-[180px]">Módulo</th>
+                <th className="w-24 text-center">Cenários</th>
+                {moduleMatrixData.activeParticipants.map((p) => {
+                  const fullName =
+                    developerNames[p.developer_id] ?? p.developer_id.slice(0, 8);
+                  const firstName = getFirstName(fullName);
+                  const avatarUrl = developerAvatarUrls[p.developer_id] ?? null;
+                  const isYou =
+                    loggedInDeveloperId !== null &&
+                    p.developer_id === loggedInDeveloperId;
+
+                  return (
+                    <th
+                      key={p.id}
+                      className={cn(
+                        "text-center min-w-[90px] p-2",
+                        isYou && "bg-brand/5",
+                      )}
+                      title={`${fullName} (${p.participation})`}
+                    >
+                      <div className="flex flex-col items-center gap-1">
+                        <PersonAvatar
+                          name={fullName}
+                          src={avatarUrl}
+                          size="sm"
+                          className={cn(
+                            isYou && "ring-1.5 ring-brand",
+                          )}
+                        />
+                        <span className="max-w-[80px] truncate text-[11px] font-semibold text-foreground">
+                          {firstName}
+                          {isYou ? (
+                            <span className="text-brand font-normal"> (você)</span>
+                          ) : null}
+                        </span>
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {moduleMatrixData.rows.map((row) => (
+                <tr key={row.moduleName}>
+                  <td className="font-semibold text-foreground">
+                    {row.moduleName}
+                  </td>
+                  <td className="text-center text-xs tabular-nums text-muted-foreground">
+                    {row.totalScenarios}
+                  </td>
+                  {moduleMatrixData.activeParticipants.map((p) => {
+                    const status = row.participantStatus[p.developer_id];
+                    const isYou =
+                      loggedInDeveloperId !== null &&
+                      p.developer_id === loggedInDeveloperId;
+
+                    return (
+                      <td
+                        key={p.id}
+                        className={cn(
+                          "text-center p-2",
+                          isYou && "bg-brand/5",
+                        )}
+                      >
+                        {status?.participated ? (
+                          <div className="inline-flex flex-col items-center justify-center gap-0.5">
+                            <span
+                              className="inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500 ring-1 ring-emerald-500/30"
+                              title={`${developerNames[p.developer_id] ?? p.developer_id}: ${status.doneRuns} cenários concluídos (${status.doneFullRuns} total, ${status.donePartialRuns} parcial), ${status.findingsCount} apontamentos`}
+                            >
+                              <CheckCircle2 className="size-4" strokeWidth={2.4} />
+                            </span>
+                            <span className="text-[10px] tabular-nums font-medium text-emerald-600 dark:text-emerald-400">
+                              {status.doneRuns}/{row.totalScenarios}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex flex-col items-center justify-center">
+                            <span
+                              className="inline-flex size-6 items-center justify-center rounded-full bg-muted/40 text-muted-foreground/50"
+                              title="Nenhuma participação registrada neste módulo"
+                            >
+                              <Minus className="size-3.5" strokeWidth={2} />
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
             </tbody>
           </DataTable>
         )}
@@ -1019,16 +1286,28 @@ export function StgSessionHub({
 
       {findingScenario && loggedInDeveloperId ? (
         <FindingModal
+          key={editingFinding?.id ?? "new-finding"}
           sessionId={session.id}
           scenario={findingScenario}
-          foundByDeveloperId={loggedInDeveloperId}
+          finding={editingFinding}
+          foundByDeveloperId={
+            editingFinding
+              ? editingFinding.found_by_developer_id
+              : loggedInDeveloperId
+          }
           foundByLabel={
-            loggedInDeveloperName ?? loggedInDeveloperId.slice(0, 8)
+            editingFinding
+              ? (developerNames[editingFinding.found_by_developer_id] ??
+                editingFinding.found_by_developer_id.slice(0, 8))
+              : (loggedInDeveloperName ?? loggedInDeveloperId.slice(0, 8))
           }
           formAction={findingAction}
           pending={findingPending}
           error={findingState.error}
-          onClose={() => setFindingScenario(null)}
+          onClose={() => {
+            setFindingScenario(null);
+            setEditingFinding(null);
+          }}
         />
       ) : null}
     </div>
@@ -1318,6 +1597,7 @@ function ScenarioCard({
   closed,
   sessionId,
   developerNames,
+  developerAvatarUrls = {},
   runAction,
   runPending,
   onAddFinding,
@@ -1333,179 +1613,258 @@ function ScenarioCard({
   closed: boolean;
   sessionId: string;
   developerNames: Record<string, string>;
+  developerAvatarUrls?: Record<string, string | null>;
   runAction: (payload: FormData) => void;
   runPending: boolean;
   onAddFinding: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
   const accent = scenarioAccent(accentIndex);
-  const done = runs.filter((run) => run.status === "done").length;
+  const doneCount = runs.filter((run) => run.status === "done").length;
+  const partialCount = runs.filter((run) => run.status === "partial").length;
   const total = runs.length;
-  const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+  const completedRunsCount = doneCount + partialCount;
+  const progress = total > 0 ? Math.round((completedRunsCount / total) * 100) : 0;
+
+  const myRun = loggedInDeveloperId
+    ? (runs.find((r) => r.developer_id === loggedInDeveloperId) ?? null)
+    : null;
+
+  // Participantes que já concluíram o cenário (done = total, partial = parcial)
+  const completedRuns = useMemo(
+    () => runs.filter((r) => r.status === "done" || r.status === "partial"),
+    [runs],
+  );
 
   return (
-    <div className="ui-dashboard-panel relative space-y-2 overflow-hidden">
+    <div className="ui-dashboard-panel relative overflow-hidden p-3 sm:p-3.5">
       <span
         className={cn("absolute inset-y-0 left-0 w-1.5", accent.bar)}
         aria-hidden
       />
-      <div className="flex flex-wrap items-start gap-2 pl-2">
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-start gap-2 rounded-[var(--radius-sm)] px-1 py-0.5 text-left transition-colors hover:bg-background/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <ChevronDown
-            className={cn(
-              "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
-              open ? "rotate-0" : "-rotate-90",
-            )}
-            strokeWidth={2}
-            aria-hidden
-          />
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div className="min-w-0">
-                <p
-                  className={cn(
-                    "inline-flex rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
-                    accent.chip,
-                  )}
-                >
-                  {scenario.module_name}
-                </p>
-                <p className="mt-1 font-medium text-foreground">
-                  {scenario.scenario_name}
-                </p>
-              </div>
-              <p className="text-xs tabular-nums text-muted-foreground">
-                {done}/{total} · {progress}%
-                {findingCount > 0 ? ` · ${findingCount} apont.` : ""}
-              </p>
-            </div>
-            {scenario.summary ? (
-              <p className="text-sm text-muted-foreground">{scenario.summary}</p>
-            ) : null}
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-muted"
-              aria-hidden
+      <div className="flex flex-col gap-3 pl-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* Left: Module, Scenario Name, Summary & Completed Participants micro-avatars */}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span
+              className={cn(
+                "inline-flex rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                accent.chip,
+              )}
             >
-              <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-200",
-                  progress === 100 ? "bg-success" : accent.progress,
-                )}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+              {scenario.module_name}
+            </span>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {completedRunsCount}/{total} ({progress}%)
+              {findingCount > 0 ? ` · ${findingCount} apont.` : ""}
+            </span>
           </div>
-        </button>
-        <MyFindingsBadge
-          findings={myFindings}
-          showPendingHint={showPendingHint}
-        />
-        {!closed ? (
-          <button
-            type="button"
-            className="ui-btn-ghost shrink-0"
-            onClick={onAddFinding}
-            title="Novo apontamento neste cenário"
-            aria-label={`Novo apontamento em ${scenario.scenario_name}`}
-          >
-            <NotebookPen className="size-4" strokeWidth={1.9} />
-            <span className="hidden sm:inline">Apontar</span>
-          </button>
-        ) : null}
-      </div>
 
-      <div
-        id={panelId}
-        hidden={!open}
-        className={cn(
-          "space-y-2 border-t border-border/50 pt-2 pl-1",
-          !open && "hidden",
-        )}
-      >
-        {runs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma execução materializada.
-          </p>
-        ) : (
-          <ul className="space-y-1.5">
-            {runs.map((run) => {
-              const isOwnRun =
-                loggedInDeveloperId !== null &&
-                run.developer_id === loggedInDeveloperId;
-              const participantFindings = scenarioFindings.filter(
-                (row) => row.found_by_developer_id === run.developer_id,
-              );
-              return (
-                <li
-                  key={run.id}
-                  className={cn(
-                    "flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm",
-                    isOwnRun && "bg-brand/5 ring-1 ring-brand/15",
-                  )}
-                >
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="font-medium">
-                      {developerNames[run.developer_id] ??
-                        run.developer_id.slice(0, 8)}
-                      {isOwnRun ? (
-                        <span className="ml-1.5 text-xs font-normal text-brand">
-                          (você)
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {run.status}
-                    </span>
-                    <ScenarioFindingsBadge
-                      findings={participantFindings}
-                      variant={isOwnRun ? "self-row" : "participant"}
-                    />
-                  </div>
-                  {!closed && isOwnRun ? (
-                    <form action={runAction} className="flex gap-1">
-                      <input type="hidden" name="runId" value={run.id} />
-                      <input type="hidden" name="sessionId" value={sessionId} />
-                      <button
-                        type="submit"
-                        name="status"
-                        value="done"
-                        className="ui-btn-ghost"
-                        disabled={runPending || run.status === "done"}
+          <h3 className="text-sm font-semibold text-foreground tracking-tight sm:text-base">
+            {scenario.scenario_name}
+          </h3>
+
+          {scenario.summary ? (
+            <p className="text-xs text-muted-foreground leading-relaxed sm:text-sm">
+              {scenario.summary}
+            </p>
+          ) : null}
+
+          {/* Micro-avatares flutuantes de quem concluiu (Total ou Parcial) */}
+          {completedRuns.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Concluído por:
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {completedRuns.map((run, idx) => {
+                  const devName =
+                    developerNames[run.developer_id] ??
+                    run.developer_id.slice(0, 8);
+                  const firstName = getFirstName(devName);
+                  const avatarUrl =
+                    developerAvatarUrls[run.developer_id] ?? null;
+                  const isDone = run.status === "done";
+                  const isYou =
+                    loggedInDeveloperId !== null &&
+                    run.developer_id === loggedInDeveloperId;
+
+                  const microFloatClass =
+                    MICRO_FLOAT_CLASSES[idx % MICRO_FLOAT_CLASSES.length];
+                  const microDelay = FLOAT_DELAYS[idx % FLOAT_DELAYS.length];
+
+                  return (
+                    <div
+                      key={run.id}
+                      style={{ animationDelay: microDelay }}
+                      className={cn(
+                        "ui-stg-micro-avatar inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-xs transition-transform duration-200 hover:scale-105 hover:z-10",
+                        microFloatClass,
+                        isDone
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200"
+                          : "border-cyan-500/40 bg-cyan-500/10 text-cyan-950 dark:text-cyan-200",
+                        isYou && "ring-1 ring-brand",
+                      )}
+                      title={`${devName}: Concluído ${isDone ? "Total" : "Parcial"}${isYou ? " (Você)" : ""}`}
+                    >
+                      <PersonAvatar
+                        name={devName}
+                        src={avatarUrl}
+                        size="sm"
+                        className="size-4 text-[9px]"
+                      />
+                      <span className="max-w-[70px] truncate font-semibold">
+                        {firstName}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider",
+                          isDone
+                            ? "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300"
+                            : "bg-cyan-500/25 text-cyan-800 dark:text-cyan-300",
+                        )}
                       >
-                        Feito
-                      </button>
-                      <button
-                        type="submit"
-                        name="status"
-                        value="pending"
-                        className="ui-btn-ghost"
-                        disabled={runPending || run.status === "pending"}
-                      >
-                        Pendente
-                      </button>
-                      <button
-                        type="submit"
-                        name="status"
-                        value="skipped"
-                        className="ui-btn-ghost"
-                        disabled={runPending || run.status === "skipped"}
-                      >
-                        Skip
-                      </button>
-                    </form>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                        {isDone ? "Total" : "Parcial"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className="h-1.5 max-w-md overflow-hidden rounded-full bg-muted"
+            aria-hidden
+          >
+            <div
+              className={cn(
+                "h-full rounded-full transition-[width] duration-200",
+                progress === 100 ? "bg-success" : accent.progress,
+              )}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Right: User's findings badge, Execution controls (Completo / Parcial / Pendente / Skip), & Add finding button */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40 sm:border-t-0 sm:pt-0 sm:self-center">
+          <MyFindingsBadge
+            findings={myFindings}
+            showPendingHint={showPendingHint}
+          />
+
+          {/* User's direct execution status control buttons */}
+          {!closed && loggedInDeveloperId ? (
+            <form
+              action={runAction}
+              className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-card/60 p-0.5"
+            >
+              <input type="hidden" name="scenarioId" value={scenario.id} />
+              <input type="hidden" name="sessionId" value={sessionId} />
+              {myRun?.id ? (
+                <input type="hidden" name="runId" value={myRun.id} />
+              ) : null}
+              <button
+                type="submit"
+                name="status"
+                value="done"
+                disabled={runPending || myRun?.status === "done"}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+                  myRun?.status === "done"
+                    ? "bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/40"
+                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                )}
+                title="Marcar como Concluído Completo"
+              >
+                <Check className="size-3" strokeWidth={2.2} />
+                <span>Completo</span>
+              </button>
+              <button
+                type="submit"
+                name="status"
+                value="partial"
+                disabled={runPending || myRun?.status === "partial"}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+                  myRun?.status === "partial"
+                    ? "bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/40"
+                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                )}
+                title="Marcar como Concluído Parcial"
+              >
+                <CircleDot className="size-3" strokeWidth={2.2} />
+                <span>Parcial</span>
+              </button>
+              <button
+                type="submit"
+                name="status"
+                value="pending"
+                disabled={
+                  runPending || (myRun?.status === "pending" || !myRun)
+                }
+                className={cn(
+                  "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+                  myRun?.status === "pending"
+                    ? "bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40"
+                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                )}
+                title="Marcar como Pendente"
+              >
+                <span>Pendente</span>
+              </button>
+              <button
+                type="submit"
+                name="status"
+                value="skipped"
+                disabled={runPending || myRun?.status === "skipped"}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+                  myRun?.status === "skipped"
+                    ? "bg-muted text-foreground font-semibold border border-border"
+                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                )}
+                title="Marcar como Ignorado (Skip)"
+              >
+                <span>Skip</span>
+              </button>
+            </form>
+          ) : myRun ? (
+            <span
+              className={cn(
+                "rounded px-2 py-0.5 text-xs font-medium",
+                myRun.status === "done"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : myRun.status === "partial"
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : myRun.status === "skipped"
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-amber-500/20 text-amber-400",
+              )}
+            >
+              {myRun.status === "done"
+                ? "Completo"
+                : myRun.status === "partial"
+                  ? "Parcial"
+                  : myRun.status === "skipped"
+                    ? "Skip"
+                    : "Pendente"}
+            </span>
+          ) : null}
+
+          {!closed ? (
+            <button
+              type="button"
+              className="ui-btn-ghost shrink-0"
+              onClick={onAddFinding}
+              title="Novo apontamento neste cenário"
+              aria-label={`Novo apontamento em ${scenario.scenario_name}`}
+            >
+              <NotebookPen className="size-4" strokeWidth={1.9} />
+              <span className="hidden sm:inline">Apontar</span>
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1514,6 +1873,7 @@ function ScenarioCard({
 function FindingModal({
   sessionId,
   scenario,
+  finding,
   foundByDeveloperId,
   foundByLabel,
   formAction,
@@ -1523,6 +1883,7 @@ function FindingModal({
 }: {
   sessionId: string;
   scenario: StgSessionScenario;
+  finding?: StgFinding | null;
   foundByDeveloperId: string;
   foundByLabel: string;
   formAction: (payload: FormData) => void;
@@ -1532,8 +1893,9 @@ function FindingModal({
 }) {
   const titleId = useId();
   const [mounted, setMounted] = useState(false);
-  const [selectedImpact, setSelectedImpact] =
-    useState<StgFindingImpact>("medium");
+  const [selectedImpact, setSelectedImpact] = useState<StgFindingImpact>(
+    finding?.impact ?? "medium",
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -1604,7 +1966,7 @@ function FindingModal({
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              Novo apontamento
+              {finding ? "Editar apontamento" : "Novo apontamento"}
             </p>
             <h2
               id={titleId}
@@ -1628,6 +1990,9 @@ function FindingModal({
 
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="sessionId" value={sessionId} />
+          {finding?.id ? (
+            <input type="hidden" name="findingId" value={finding.id} />
+          ) : null}
           <input
             type="hidden"
             name="sessionScenarioId"
@@ -1645,6 +2010,7 @@ function FindingModal({
               id={`${titleId}-title`}
               name="title"
               required
+              defaultValue={finding?.title ?? ""}
               className="ui-input"
               autoFocus
             />
@@ -1699,6 +2065,7 @@ function FindingModal({
               id={`${titleId}-jira`}
               name="jiraKey"
               required
+              defaultValue={finding?.jira_key ?? ""}
               className="ui-input"
               placeholder="AP-1234"
             />
@@ -1713,6 +2080,7 @@ function FindingModal({
               id={`${titleId}-description`}
               name="description"
               rows={3}
+              defaultValue={finding?.description ?? ""}
               className="ui-input"
               placeholder="Detalhes ou observações adicionais sobre o apontamento..."
             />
@@ -1734,7 +2102,11 @@ function FindingModal({
               className="ui-btn-primary w-full sm:w-auto"
               disabled={pending}
             >
-              {pending ? "Salvando..." : "Salvar apontamento"}
+              {pending
+                ? "Salvando..."
+                : finding
+                  ? "Salvar alterações"
+                  : "Salvar apontamento"}
             </button>
           </div>
         </form>

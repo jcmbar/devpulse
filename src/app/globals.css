@@ -265,6 +265,36 @@ body {
   }
 }
 
+@keyframes stg-micro-float-a {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes stg-micro-float-b {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+
+@keyframes stg-micro-float-c {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
 @keyframes stg-float-a {
   0%,
   100% {
@@ -301,12 +331,25 @@ body {
   .ui-btn-save-pending,
   .ui-stg-finding-pending,
   .ui-stg-traffic-active-dot,
-  .ui-stg-floating-avatar {
+  .ui-stg-floating-avatar,
+  .ui-stg-micro-avatar {
     animation: none !important;
   }
 }
 
 @layer components {
+  .ui-stg-micro-avatar {
+    will-change: transform;
+  }
+  .ui-stg-micro-avatar-a {
+    animation: stg-micro-float-a 3.6s ease-in-out infinite;
+  }
+  .ui-stg-micro-avatar-b {
+    animation: stg-micro-float-b 3s ease-in-out infinite;
+  }
+  .ui-stg-micro-avatar-c {
+    animation: stg-micro-float-c 4.2s ease-in-out infinite;
+  }
   .ui-stg-floating-avatar {
     will-change: transform;
   }

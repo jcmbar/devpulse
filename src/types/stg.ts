@@ -17,7 +17,7 @@ export type StgParticipation = "required" | "optional" | "excluded";
 
 export type StgDefaultParticipantRole = "required" | "optional";
 
-export type StgRunStatus = "pending" | "done" | "skipped";
+export type StgRunStatus = "pending" | "done" | "partial" | "skipped";
 
 export type StgFindingImpact = "low" | "medium" | "high";
 
@@ -145,6 +145,7 @@ export type StgFinding = {
 export type StgCoverageStats = {
   expected_runs: number;
   done_runs: number;
+  partial_runs: number;
   skipped_runs: number;
   pending_runs: number;
   /** 0–1; null when expected_runs = 0 */

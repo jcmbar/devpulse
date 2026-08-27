@@ -116,14 +116,16 @@ export function computeStgCoverage(
 ): StgCoverageStats {
   const expected_runs = runs.length;
   const done_runs = runs.filter((row) => row.status === "done").length;
+  const partial_runs = runs.filter((row) => row.status === "partial").length;
   const skipped_runs = runs.filter((row) => row.status === "skipped").length;
   const pending_runs = runs.filter((row) => row.status === "pending").length;
   return {
     expected_runs,
     done_runs,
+    partial_runs,
     skipped_runs,
     pending_runs,
-    ratio: expected_runs === 0 ? null : done_runs / expected_runs,
+    ratio: expected_runs === 0 ? null : (done_runs + partial_runs) / expected_runs,
   };
 }
 
@@ -427,6 +429,57 @@ export async function getStgScenarioRunById(
   return mapStgScenarioRun(data as Record<string, unknown>);
 }
 
+export async function upsertStgScenarioRunStatus(input: {
+  sessionId: string;
+  sessionScenarioId: string;
+  developerId: string;
+  status: StgRunStatus;
+  note?: string | null;
+}): Promise<StgScenarioRun> {
+  const supabase = await createClient();
+  const completedAt =
+    input.status === "done" ||
+    input.status === "partial" ||
+    input.status === "skipped"
+      ? new Date().toISOString()
+      : null;
+
+  // Garantir que o participante existe na sessão
+  await supabase
+    .from("stg_session_participants")
+    .upsert(
+      {
+        session_id: input.sessionId,
+        developer_id: input.developerId,
+        participation: "optional",
+      },
+      { onConflict: "session_id, developer_id", ignoreDuplicates: true },
+    );
+
+  const payload: Record<string, unknown> = {
+    session_scenario_id: input.sessionScenarioId,
+    developer_id: input.developerId,
+    status: input.status,
+    completed_at: completedAt,
+  };
+  if (input.note !== undefined) {
+    payload.note = input.note;
+  }
+
+  const { data, error } = await supabase
+    .from("stg_scenario_runs")
+    .upsert(payload, {
+      onConflict: "session_scenario_id, developer_id",
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao registrar execução STG: ${error.message}`);
+  }
+  return mapStgScenarioRun(data as Record<string, unknown>);
+}
+
 export async function updateStgScenarioRunStatus(input: {
   runId: string;
   status: StgRunStatus;
@@ -434,7 +487,9 @@ export async function updateStgScenarioRunStatus(input: {
 }): Promise<StgScenarioRun> {
   const supabase = await createClient();
   const completedAt =
-    input.status === "done" || input.status === "skipped"
+    input.status === "done" ||
+    input.status === "partial" ||
+    input.status === "skipped"
       ? new Date().toISOString()
       : null;
 

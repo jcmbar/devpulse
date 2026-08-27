@@ -39,6 +39,7 @@ export {
   getStgSessionDetail,
   openStgSession,
   getStgScenarioRunById,
+  upsertStgScenarioRunStatus,
   updateStgScenarioRunStatus,
   updateStgSessionStatus,
   updateStgSessionMeta,
@@ -53,6 +54,7 @@ export type {
 } from "@/services/stg/sessions";
 
 export {
+  getStgFindingById,
   upsertStgFinding,
   deleteStgFinding,
   refreshStgFindingJiraStatus,
