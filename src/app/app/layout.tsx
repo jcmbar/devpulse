@@ -1,6 +1,7 @@
 import { AppChrome } from "@/components/app-chrome";
 import { InspectionDeterrent } from "@/components/security/inspection-deterrent";
 import { getAppContext } from "@/lib/auth/app-context";
+import { getAppBuildInfo } from "@/lib/app-version";
 import { getSessionIdleMinutes } from "@/lib/auth/session-ttl";
 import { developerAvatarPublicUrl } from "@/services/developers";
 
@@ -15,6 +16,7 @@ export default async function AppLayout({
 }>) {
   const { profile, developer, grants } = await getAppContext();
   const avatarUrl = developerAvatarPublicUrl(developer?.avatar_path);
+  const build = getAppBuildInfo();
 
   return (
     <InspectionDeterrent>
@@ -23,6 +25,7 @@ export default async function AppLayout({
         grants={grants}
         avatarUrl={avatarUrl}
         idleMinutes={getSessionIdleMinutes()}
+        versionLabel={build.label}
       >
         {children}
       </AppChrome>

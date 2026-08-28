@@ -22,6 +22,7 @@ import {
   CalendarDays,
   ChevronDown,
   FolderKanban,
+  GitBranch,
   Home,
   LayoutDashboard,
   LogOut,
@@ -50,6 +51,7 @@ type AppChromeProps = {
   /** Public avatar URL of the linked developer, when available. */
   avatarUrl?: string | null;
   idleMinutes?: number | null;
+  versionLabel?: string;
   children: ReactNode;
 };
 
@@ -103,6 +105,10 @@ const MODULE_ICONS: Record<
   times: {
     icon: FolderKanban,
     iconClass: "text-emerald-600 dark:text-emerald-400",
+  },
+  versionamento: {
+    icon: GitBranch,
+    iconClass: "text-fuchsia-600 dark:text-fuchsia-400",
   },
 };
 
@@ -163,6 +169,7 @@ export function AppChrome({
   grants,
   avatarUrl = null,
   idleMinutes = null,
+  versionLabel = "v0.1.0",
   children,
 }: AppChromeProps) {
   const pathname = usePathname();
@@ -248,8 +255,13 @@ export function AppChrome({
             className="group flex min-w-0 shrink-0 items-center gap-2 rounded-[var(--radius-sm)] pr-1 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
             <BrandMark size={32} className="size-8" />
-            <span className="truncate text-sm font-semibold tracking-tight">
-              DevPulse
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-sm font-semibold tracking-tight">
+                DevPulse
+              </span>
+              <span className="truncate text-[10px] font-medium tracking-wide text-muted-foreground">
+                {versionLabel}
+              </span>
             </span>
           </Link>
 
@@ -407,6 +419,17 @@ export function AppChrome({
       </header>
 
       <div className="relative z-10 flex flex-1 flex-col">{children}</div>
+      <footer className="relative z-10 border-t border-border/50 bg-background/40">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-3 py-3 text-[11px] text-muted-foreground sm:px-6 lg:px-8">
+          <span>DevPulse · Ambiente de produção</span>
+          <Link
+            href="/app/versionamento"
+            className="font-medium transition-colors hover:text-foreground"
+          >
+            {versionLabel}
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

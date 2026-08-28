@@ -13,6 +13,7 @@ export const APP_MODULE_KEYS = [
   "feriados",
   "imports",
   "times",
+  "versionamento",
 ] as const;
 
 export type AppModuleKey = (typeof APP_MODULE_KEYS)[number];
@@ -108,6 +109,13 @@ export const APP_MODULES: AppModuleMeta[] = [
     href: "/app/teams",
     navGroup: "more",
     matchPath: (path) => path.startsWith("/app/teams"),
+  },
+  {
+    key: "versionamento",
+    label: "Versão",
+    href: "/app/versionamento",
+    navGroup: "more",
+    matchPath: (path) => path.startsWith("/app/versionamento"),
   },
 ];
 

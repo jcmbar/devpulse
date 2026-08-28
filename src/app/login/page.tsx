@@ -1,6 +1,7 @@
 import { BrandMark } from "@/components/brand-mark";
 import { LoginConversationGraph } from "@/components/login-conversation-graph";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getAppBuildInfo } from "@/lib/app-version";
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage({
@@ -9,6 +10,7 @@ export default async function LoginPage({
   searchParams: Promise<{ expired?: string; idle?: string }>;
 }) {
   const { expired, idle } = await searchParams;
+  const build = getAppBuildInfo();
 
   return (
     <main className="login-stage login-stage--hybrid">
@@ -49,9 +51,10 @@ export default async function LoginPage({
           />
         </div>
 
-        <p className="mt-8 max-w-sm text-center text-xs text-muted-foreground">
-          Ambiente seguro · use a conta corporativa provisionada pelo gestor.
-        </p>
+        <footer className="mt-8 flex flex-col items-center gap-1 text-center text-xs text-muted-foreground">
+          <p>Ambiente seguro · use a conta corporativa provisionada pelo gestor.</p>
+          <p className="font-medium">{build.label}</p>
+        </footer>
       </div>
     </main>
   );
