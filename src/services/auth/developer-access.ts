@@ -3,6 +3,8 @@ import "server-only";
 import type { User } from "@supabase/supabase-js";
 import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSessionIdleMinutes } from "@/lib/auth/session-ttl";
+import { listLatestAppSessionsByProfileId } from "@/services/auth/app-sessions";
 import {
   classifyAccessInviteState,
   type AccessInviteTarget,
@@ -34,6 +36,14 @@ export type DeveloperAccessInfo = {
   relevantAtLabel: string | null;
   inviteTarget: AccessInviteTarget | null;
   suggestedActions: DeveloperAccessAction[];
+};
+
+export type DeveloperSessionInfo = {
+  status: "online" | "offline";
+  startedAt: string | null;
+  lastSeenAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number | null;
 };
 
 function readPasswordSetAt(user: User): string | null {
@@ -330,6 +340,59 @@ export async function resolveDevelopersAccessInfoMap(
   }
 
   return map;
+}
+
+export async function resolveDevelopersSessionInfoMap(
+  developers: DeveloperListItem[],
+): Promise<Map<string, DeveloperSessionInfo>> {
+  const result = new Map<string, DeveloperSessionInfo>();
+  const profileIds = developers
+    .map((developer) => developer.profile_id)
+    .filter((profileId): profileId is string => Boolean(profileId));
+  const sessions = await listLatestAppSessionsByProfileId(profileIds);
+  const now = Date.now();
+  const idleMinutes = getSessionIdleMinutes() ?? 30;
+  const onlineWindowMs = idleMinutes * 60_000;
+
+  for (const developer of developers) {
+    const session = developer.profile_id
+      ? sessions.get(developer.profile_id)
+      : undefined;
+    if (!session) {
+      result.set(developer.id, {
+        status: "offline",
+        startedAt: null,
+        lastSeenAt: null,
+        endedAt: null,
+        durationSeconds: null,
+      });
+      continue;
+    }
+
+    const lastSeenMs = Date.parse(session.last_seen_at);
+    const isOnline =
+      session.ended_at == null &&
+      Number.isFinite(lastSeenMs) &&
+      now - lastSeenMs < onlineWindowMs;
+    const startedMs = Date.parse(session.started_at);
+    const endMs = isOnline
+      ? now
+      : Date.parse(session.ended_at ?? session.last_seen_at);
+    const durationSeconds =
+      Number.isFinite(startedMs) && Number.isFinite(endMs)
+        ? Math.max(0, Math.floor((endMs - startedMs) / 1000))
+        : null;
+
+    result.set(developer.id, {
+      status: isOnline ? "online" : "offline",
+      startedAt: session.started_at,
+      lastSeenAt: session.last_seen_at,
+      endedAt: session.ended_at,
+      durationSeconds,
+    });
+  }
+
+  return result;
 }
 
 export function formatAccessDate(value: string | null): string | null {

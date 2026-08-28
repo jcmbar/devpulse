@@ -1,5 +1,6 @@
 export const SESSION_STARTED_COOKIE = "dp_session_started_at";
 export const SESSION_ACTIVE_COOKIE = "dp_session_last_active";
+export const SESSION_ID_COOKIE = "dp_app_session_id";
 
 const SESSION_COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 30;
 
@@ -53,6 +54,14 @@ export function clearSessionTrackingCookieOptions() {
   return {
     ...cookieBase(),
     maxAge: 0,
+  };
+}
+
+export function appSessionCookieOptions() {
+  return {
+    ...cookieBase(),
+    httpOnly: true,
+    maxAge: SESSION_COOKIE_MAX_AGE_SEC,
   };
 }
 

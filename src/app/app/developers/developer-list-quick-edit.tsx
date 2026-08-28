@@ -106,12 +106,14 @@ type DeveloperTeamInlineProps = {
   developerId: string;
   teamId: string | null;
   teams: Team[];
+  compact?: boolean;
 };
 
 export function DeveloperTeamInline({
   developerId,
   teamId,
   teams,
+  compact = false,
 }: DeveloperTeamInlineProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -151,7 +153,11 @@ export function DeveloperTeamInline({
             router.refresh();
           });
         }}
-        className="ui-select min-w-[10rem] max-w-[16rem] py-1 text-sm"
+        className={
+          compact
+            ? "ui-select w-[9rem] max-w-[10rem] truncate py-1 text-xs"
+            : "ui-select min-w-[10rem] max-w-[16rem] py-1 text-sm"
+        }
       >
         <option value="">Sem time</option>
         {teamOptions.map((team) => (

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   SESSION_ACTIVE_COOKIE,
+  SESSION_ID_COOKIE,
   SESSION_STARTED_COOKIE,
   clearSessionTrackingCookieOptions,
   getSessionIdleMs,
@@ -19,6 +20,7 @@ function copyCookies(from: NextResponse, to: NextResponse) {
 
 function clearTrackingCookies(response: NextResponse) {
   const clear = clearSessionTrackingCookieOptions();
+  response.cookies.set(SESSION_ID_COOKIE, "", clear);
   response.cookies.set(SESSION_STARTED_COOKIE, "", clear);
   response.cookies.set(SESSION_ACTIVE_COOKIE, "", clear);
   return response;

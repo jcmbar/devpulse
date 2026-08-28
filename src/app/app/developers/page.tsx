@@ -20,12 +20,14 @@ import {
 } from "@/lib/admin-list-query";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
-  formatAccessDate,
   resolveDevelopersAccessInfoMap,
+  resolveDevelopersSessionInfoMap,
   type DeveloperAccessInfo,
+  type DeveloperSessionInfo,
 } from "@/services/auth/developer-access";
 import {
   developerAvatarPublicUrl,
+  listDevelopersAdmin,
   listDevelopersAdminPaged,
 } from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
@@ -35,6 +37,7 @@ import {
   type DeveloperJobTitle,
 } from "@/types/developer-compensation";
 import { Plus, Users } from "lucide-react";
+import { formatDateTimeShortBrazil } from "@/lib/datetime/format-brazil";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -113,6 +116,89 @@ function filterSummaryLabel(input: {
   return parts.join(" · ");
 }
 
+function formatSessionDuration(seconds: number | null): string {
+  if (seconds == null) {
+    return "—";
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) {
+    return "< 1 min";
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) {
+    return `${minutes} min`;
+  }
+  return remainingMinutes > 0
+    ? `${hours}h ${remainingMinutes}min`
+    : `${hours}h`;
+}
+
+function PresenceBadge({ session }: { session: DeveloperSessionInfo }) {
+  return (
+    <span
+      className={
+        session.status === "online"
+          ? "inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-900 dark:text-emerald-200"
+          : "inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/60 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground"
+      }
+      title={
+        session.status === "online"
+          ? "Atividade registrada recentemente"
+          : session.lastSeenAt
+            ? `Última atividade em ${formatDateTimeShortBrazil(session.lastSeenAt)}`
+            : "Nenhuma sessão registrada"
+      }
+    >
+      <span
+        aria-hidden
+        className={`size-1.5 rounded-full ${
+          session.status === "online" ? "bg-emerald-500" : "bg-slate-400"
+        }`}
+      />
+      {session.status === "online" ? "Online" : "Offline"}
+    </span>
+  );
+}
+
+function PeopleMetric({
+  label,
+  value,
+  detail,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  detail?: string;
+  tone?: "default" | "success" | "warning";
+}) {
+  return (
+    <div className="ui-dashboard-panel min-w-0 px-3 py-2.5">
+      <p className="truncate text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <p
+          className={
+            tone === "success"
+              ? "text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300"
+              : tone === "warning"
+                ? "text-xl font-semibold tabular-nums text-amber-700 dark:text-amber-300"
+                : "text-xl font-semibold tabular-nums text-foreground"
+          }
+        >
+          {value}
+        </p>
+        {detail ? (
+          <span className="truncate text-[11px] text-muted-foreground">
+            {detail}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default async function DevelopersAdminPage({
   searchParams,
 }: DevelopersAdminPageProps) {
@@ -142,17 +228,22 @@ export default async function DevelopersAdminPage({
     );
   }
 
-  const [teams, paged] = await Promise.all([
+  const listInput = {
+    ...query.teamScope,
+    q: query.q || null,
+    isActive: toIsActiveFilter(query.activeFilter),
+    hasJiraAccountId: toHasJiraAccountFilter(query.jiraAccountFilter),
+    jobTitle: toJobTitleFilter(query.jobTitleFilter),
+  };
+
+  const [teams, paged, allDevelopers] = await Promise.all([
     listTeamsAdmin({ includeInactive: true }),
     listDevelopersAdminPaged({
-      ...query.teamScope,
-      q: query.q || null,
-      isActive: toIsActiveFilter(query.activeFilter),
-      hasJiraAccountId: toHasJiraAccountFilter(query.jiraAccountFilter),
-      jobTitle: toJobTitleFilter(query.jobTitleFilter),
+      ...listInput,
       page: query.page,
       pageSize: query.pageSize,
     }),
+    listDevelopersAdmin(listInput),
   ]);
 
   if (query.page !== paged.page) {
@@ -175,14 +266,26 @@ export default async function DevelopersAdminPage({
 
   let accessByDeveloperId = new Map<string, DeveloperAccessInfo>();
   let accessLookupError: string | null = null;
+  let sessionByDeveloperId = new Map<string, DeveloperSessionInfo>();
+  let sessionLookupError: string | null = null;
 
   try {
-    accessByDeveloperId = await resolveDevelopersAccessInfoMap(developers);
+    accessByDeveloperId = await resolveDevelopersAccessInfoMap(allDevelopers);
   } catch (error) {
     accessLookupError =
       error instanceof Error
         ? error.message
         : "Não foi possível carregar o status de acesso.";
+  }
+
+  try {
+    sessionByDeveloperId =
+      await resolveDevelopersSessionInfoMap(allDevelopers);
+  } catch (error) {
+    sessionLookupError =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível carregar as sessões.";
   }
 
   const selectedTeamId =
@@ -201,6 +304,45 @@ export default async function DevelopersAdminPage({
     jobTitleFilter: query.jobTitleFilter,
     q: query.q,
   });
+  const peopleStats = allDevelopers.reduce(
+    (stats, developer) => {
+      const session = sessionByDeveloperId.get(developer.id);
+      const access = accessByDeveloperId.get(developer.id);
+      stats.total += 1;
+      if (developer.is_active) {
+        stats.active += 1;
+      } else {
+        stats.inactive += 1;
+      }
+      if (developer.team_id) {
+        stats.withTeam += 1;
+      } else {
+        stats.withoutTeam += 1;
+      }
+      if (session?.status === "online") {
+        stats.online += 1;
+      } else {
+        stats.offline += 1;
+      }
+      if (access?.kind === "active") {
+        stats.permissionActive += 1;
+      } else {
+        stats.permissionPending += 1;
+      }
+      return stats;
+    },
+    {
+      total: 0,
+      online: 0,
+      offline: 0,
+      active: 0,
+      inactive: 0,
+      permissionActive: 0,
+      permissionPending: 0,
+      withTeam: 0,
+      withoutTeam: 0,
+    },
+  );
 
   return (
     <PageShell size="full">
@@ -221,7 +363,7 @@ export default async function DevelopersAdminPage({
       <PageHeader
         eyebrow="Cadastro"
         title="Pessoas"
-        description="Gerencie o cadastro do time: filtros à esquerda, edição rápida na lista e detalhes (dados, acesso e valores) em Editar."
+        description="Visão compacta do cadastro, acesso e presença da equipe. A edição completa continua disponível em Editar."
         actions={
           <Link href="/app/developers/new" className="ui-btn-primary">
             <Plus className="size-3.5" strokeWidth={2} />
@@ -229,6 +371,39 @@ export default async function DevelopersAdminPage({
           </Link>
         }
       />
+
+      <section
+        aria-label="Resumo de pessoas"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8"
+      >
+        <PeopleMetric label="Total" value={peopleStats.total} />
+        <PeopleMetric
+          label="Online"
+          value={peopleStats.online}
+          tone="success"
+        />
+        <PeopleMetric label="Offline" value={peopleStats.offline} />
+        <PeopleMetric
+          label="Ativos"
+          value={peopleStats.active}
+        />
+        <PeopleMetric
+          label="Inativos"
+          value={peopleStats.inactive}
+          tone="warning"
+        />
+        <PeopleMetric
+          label="Permissão ativa"
+          value={peopleStats.permissionActive}
+          detail={`${peopleStats.permissionPending} pendentes`}
+          tone="success"
+        />
+        <PeopleMetric
+          label="Sem organização"
+          value={peopleStats.withoutTeam}
+          detail={`${peopleStats.withTeam} com organização`}
+        />
+      </section>
 
       <FilterBar>
         <div className="space-y-3.5">
@@ -295,6 +470,12 @@ export default async function DevelopersAdminPage({
           Status de acesso indisponível: {accessLookupError}
         </div>
       ) : null}
+      {sessionLookupError ? (
+        <div className="rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100">
+          Sessões indisponíveis: {sessionLookupError}. Aplique a migration de
+          sessões para habilitar presença e duração.
+        </div>
+      ) : null}
 
       {developers.length === 0 ? (
         <EmptyState
@@ -328,25 +509,35 @@ export default async function DevelopersAdminPage({
           }
         >
           <div className="space-y-3">
-            <DataTable minWidthClassName="min-w-0 lg:min-w-[960px]" stickyFirstColumn>
+            <DataTable
+              minWidthClassName="min-w-[1180px] xl:min-w-[1320px]"
+              stickyFirstColumn
+            >
               <thead>
                 <tr>
                   <th>Pessoa</th>
+                  <th>Organização</th>
                   <th className="hidden sm:table-cell">Cargo</th>
-                  <th>Time</th>
-                  <th>Jira Account ID</th>
+                  <th className="hidden md:table-cell">Status</th>
+                  <th className="hidden md:table-cell">Permissão</th>
+                  <th className="hidden lg:table-cell">Sessão</th>
+                  <th className="hidden xl:table-cell">Último login</th>
+                  <th className="hidden lg:table-cell">Jira Account ID</th>
                   <th>Cadastro</th>
-                  <th className="hidden md:table-cell">Acesso</th>
-                  <th className="hidden lg:table-cell">Cards</th>
+                  <th className="hidden xl:table-cell">Cards</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {developers.map((developer) => {
                   const access = accessByDeveloperId.get(developer.id);
-                  const accessDate = formatAccessDate(
-                    access?.relevantAt ?? null,
-                  );
+                  const session = sessionByDeveloperId.get(developer.id) ?? {
+                    status: "offline",
+                    startedAt: null,
+                    lastSeenAt: null,
+                    endedAt: null,
+                    durationSeconds: null,
+                  };
 
                   return (
                     <tr key={developer.id}>
@@ -381,17 +572,48 @@ export default async function DevelopersAdminPage({
                           </div>
                         </div>
                       </td>
+                      <td className="max-w-[170px]">
+                        <DeveloperTeamInline
+                          developerId={developer.id}
+                          teamId={developer.team_id}
+                          teams={teams}
+                          compact
+                        />
+                      </td>
                       <td className="hidden sm:table-cell">
                         <span className="text-sm text-foreground">
                           {getJobTitleLabel(developer.job_title)}
                         </span>
                       </td>
-                      <td>
-                        <DeveloperTeamInline
-                          developerId={developer.id}
-                          teamId={developer.team_id}
-                          teams={teams}
-                        />
+                      <td className="hidden md:table-cell">
+                        <PresenceBadge session={session} />
+                      </td>
+                      <td className="hidden max-w-[150px] md:table-cell">
+                        {access ? (
+                          <AccessStatusBadge
+                            kind={access.kind}
+                            label={access.label}
+                            title={access.description}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td
+                        className="hidden whitespace-nowrap text-sm tabular-nums text-foreground lg:table-cell"
+                        title={
+                          session.startedAt
+                            ? `Início: ${formatDateTimeShortBrazil(session.startedAt)}`
+                            : "Nenhuma sessão registrada"
+                        }
+                      >
+                        {formatSessionDuration(session.durationSeconds)}
+                      </td>
+                      <td className="hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
+                        {formatDateTimeShortBrazil(
+                          access?.lastSignInAt ?? null,
+                          "Nunca",
+                        )}
                       </td>
                       <td>
                         <DeveloperJiraAccountInline
@@ -406,25 +628,7 @@ export default async function DevelopersAdminPage({
                           isActive={developer.is_active}
                         />
                       </td>
-                      <td className="hidden md:table-cell">
-                        {access ? (
-                          <div className="space-y-1">
-                            <AccessStatusBadge
-                              kind={access.kind}
-                              label={access.label}
-                              title={access.description}
-                            />
-                            {accessDate && access.relevantAtLabel ? (
-                              <p className="text-xs text-muted-foreground">
-                                {access.relevantAtLabel} {accessDate}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="hidden tabular-nums lg:table-cell">
+                      <td className="hidden tabular-nums xl:table-cell">
                         {developer.cards_count}
                       </td>
                       <td className="text-right">

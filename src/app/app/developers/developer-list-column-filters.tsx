@@ -134,7 +134,7 @@ export function DeveloperListColumnFilters({
         onChange={(jobTitle) => navigate({ jobTitle })}
       />
       <FilterChipGroup
-        label="Cadastro"
+        label="Status"
         value={activeFilter}
         options={ACTIVE_OPTIONS}
         disabled={pending}
