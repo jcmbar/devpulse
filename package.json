@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run record:release",
+    "record:release": "node scripts/record-app-release.mjs",
     "start": "next start",
     "lint": "eslint",
     "test:jira-jql": "node --experimental-strip-types --test src/services/integrations/jira/sync/build-jql.test.ts",

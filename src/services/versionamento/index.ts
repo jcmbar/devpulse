@@ -10,6 +10,8 @@ export type AppRelease = {
   version: string;
   released_at: string;
   release_type: ReleaseType;
+  commit_sha: string | null;
+  source: string;
   description: string;
   commit_descriptions: string;
   created_by: string | null;
@@ -25,6 +27,8 @@ const RELEASE_SELECT = `
   version,
   released_at,
   release_type,
+  commit_sha,
+  source,
   description,
   commit_descriptions,
   created_by,
@@ -51,6 +55,8 @@ function mapRelease(row: Record<string, unknown>): AppRelease {
     release_type: isReleaseType(row.release_type)
       ? row.release_type
       : "patch",
+    commit_sha: row.commit_sha ? String(row.commit_sha) : null,
+    source: String(row.source ?? "manual"),
     description: String(row.description),
     commit_descriptions: String(row.commit_descriptions),
     created_by: row.created_by ? String(row.created_by) : null,
@@ -80,42 +86,4 @@ export async function listAppReleases(): Promise<AppRelease[]> {
   }
 
   return (data ?? []).map((row) => mapRelease(row as Record<string, unknown>));
-}
-
-export async function createAppRelease(input: {
-  version: string;
-  releasedAt: string;
-  releaseType: ReleaseType;
-  description: string;
-  commitDescriptions: string;
-  createdBy: string;
-}): Promise<void> {
-  const admin = createAdminClient();
-  const { error } = await admin.from("app_releases").insert({
-    version: input.version,
-    released_at: input.releasedAt,
-    release_type: input.releaseType,
-    description: input.description,
-    commit_descriptions: input.commitDescriptions,
-    created_by: input.createdBy,
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      throw new Error("Esta versão já está cadastrada.");
-    }
-    throw new Error(`Falha ao cadastrar versão: ${error.message}`);
-  }
-}
-
-export async function deleteAppRelease(releaseId: string): Promise<void> {
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("app_releases")
-    .delete()
-    .eq("id", releaseId);
-
-  if (error) {
-    throw new Error(`Falha ao excluir versão: ${error.message}`);
-  }
 }
