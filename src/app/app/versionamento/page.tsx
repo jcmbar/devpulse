@@ -1,15 +1,26 @@
 import { EmptyState, DataTable } from "@/components/surface";
+import { ListPagination } from "@/components/list-pagination";
+import { ListSearchForm } from "@/components/list-search-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
-import { SectionShell } from "@/components/ui/section-shell";
+import { FilterBar, SectionShell } from "@/components/ui/section-shell";
+import {
+  adminListHref,
+  parsePageParam,
+  parseSearchQuery,
+} from "@/lib/admin-list-query";
 import { getAppBuildInfo } from "@/lib/app-version";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   formatDateBrazil,
   formatTimeBrazil,
 } from "@/lib/datetime/format-brazil";
-import { listAppReleases, type AppRelease } from "@/services/versionamento";
+import {
+  listAppReleasesPaged,
+  type AppRelease,
+} from "@/services/versionamento";
 import { GitBranch } from "lucide-react";
+import { redirect } from "next/navigation";
 
 function ReleaseRow({
   release,
@@ -49,19 +60,46 @@ function ReleaseRow({
   );
 }
 
-export default async function VersionamentoPage() {
+export default async function VersionamentoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
   await requirePermission("versionamento", "access");
   const build = getAppBuildInfo();
+  const params = await searchParams;
+  const q = parseSearchQuery(params.q);
+  const requestedPage = parsePageParam(params.page);
 
   let releases: AppRelease[] = [];
+  let total = 0;
+  let page = requestedPage;
+  let totalPages = 1;
+  const pageSize = 20;
   let loadError: string | null = null;
   try {
-    releases = await listAppReleases();
+    const paged = await listAppReleasesPaged({
+      q,
+      page: requestedPage,
+      pageSize,
+    });
+    releases = paged.items;
+    total = paged.total;
+    page = paged.page;
+    totalPages = paged.totalPages;
   } catch (error) {
     loadError =
       error instanceof Error
         ? error.message
         : "Não foi possível carregar o histórico de versões.";
+  }
+  if (!loadError && requestedPage !== page) {
+    redirect(
+      adminListHref("/app/versionamento", {
+        q: q || null,
+        page,
+      }),
+    );
   }
 
   return (
@@ -94,6 +132,14 @@ export default async function VersionamentoPage() {
         </div>
       </SectionShell>
 
+      <FilterBar>
+        <ListSearchForm
+          defaultQuery={q}
+          placeholder="Versão, commit ou ajuste…"
+          className="flex flex-wrap items-end gap-3"
+        />
+      </FilterBar>
+
       {loadError ? (
         <div className="rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100">
           {loadError}. Aplique as migrations do módulo Versionamento para
@@ -102,13 +148,17 @@ export default async function VersionamentoPage() {
       ) : releases.length === 0 ? (
         <EmptyState
           icon={GitBranch}
-          title="Nenhuma versão cadastrada"
-          description="O histórico será preenchido automaticamente após o próximo deploy."
+          title="Nenhum deploy registrado"
+          description={
+            q
+              ? `Nenhum deploy encontrado para “${q}”.`
+              : "O histórico será preenchido automaticamente após o próximo deploy."
+          }
         />
       ) : (
         <SectionShell
           title="Log de deploys"
-          description={`${releases.length} deploy${releases.length === 1 ? "" : "s"} registrado${releases.length === 1 ? "" : "s"}, do mais recente para o mais antigo.`}
+          description={`${total} deploy${total === 1 ? "" : "s"} registrado${total === 1 ? "" : "s"}${q ? ` para “${q}”` : ""}, do mais recente para o mais antigo.`}
         >
           <DataTable minWidthClassName="min-w-[980px]">
             <thead>
@@ -125,6 +175,16 @@ export default async function VersionamentoPage() {
               ))}
             </tbody>
           </DataTable>
+          <div className="mt-3">
+            <ListPagination
+              pathname="/app/versionamento"
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              q={q || null}
+            />
+          </div>
         </SectionShell>
       )}
     </PageShell>

@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build && npm run record:release",
     "record:release": "node scripts/record-app-release.mjs",
+    "backfill:releases": "node scripts/backfill-app-releases.mjs",
     "start": "next start",
     "lint": "eslint",
     "test:jira-jql": "node --experimental-strip-types --test src/services/integrations/jira/sync/build-jql.test.ts",
