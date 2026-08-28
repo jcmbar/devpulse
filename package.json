@@ -2,6 +2,10 @@
   "name": "devpulse",
   "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jcmbar/devpulse.git"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build && npm run record:release",

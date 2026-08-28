@@ -14,6 +14,7 @@ export const APP_MODULE_KEYS = [
   "imports",
   "times",
   "versionamento",
+  "analistas",
 ] as const;
 
 export type AppModuleKey = (typeof APP_MODULE_KEYS)[number];
@@ -116,6 +117,13 @@ export const APP_MODULES: AppModuleMeta[] = [
     href: "/app/versionamento",
     navGroup: "more",
     matchPath: (path) => path.startsWith("/app/versionamento"),
+  },
+  {
+    key: "analistas",
+    label: "Analistas",
+    href: "/app/analistas",
+    navGroup: "primary",
+    matchPath: (path) => path.startsWith("/app/analistas"),
   },
 ];
 

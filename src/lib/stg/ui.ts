@@ -7,7 +7,7 @@ export function isStgSchemaMissingError(error: unknown): boolean {
       : typeof error === "string"
         ? error
         : "";
-  return /stg_|does not exist|Could not find the table|schema cache/i.test(
+  return /relation .* does not exist|table .* does not exist|column .* does not exist|Could not find the table|schema cache/i.test(
     message,
   );
 }

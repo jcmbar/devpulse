@@ -27,6 +27,7 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  ClipboardClock,
   Menu,
   Upload,
   UserRound,
@@ -109,6 +110,10 @@ const MODULE_ICONS: Record<
   versionamento: {
     icon: GitBranch,
     iconClass: "text-fuchsia-600 dark:text-fuchsia-400",
+  },
+  analistas: {
+    icon: ClipboardClock,
+    iconClass: "text-purple-600 dark:text-purple-400",
   },
 };
 
@@ -214,10 +219,6 @@ export function AppChrome({
   const moreActive = more.some((item) => isActive(pathname, item));
 
   useEffect(() => {
-    setMoreOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     if (!moreOpen) {
       return;
     }
@@ -267,7 +268,12 @@ export function AppChrome({
 
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-visible lg:flex">
             {primary.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} />
+              <NavLink
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onClick={() => setMoreOpen(false)}
+              />
             ))}
             {more.length > 0 ? (
               <div ref={moreRef} className="relative z-50 shrink-0">
