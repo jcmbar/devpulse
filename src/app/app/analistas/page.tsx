@@ -31,8 +31,8 @@ function isValidMonth(value: string | undefined): value is string {
   return true;
 }
 
-function monthOptions(selected: string): string[] {
-  const [year, month] = selected.split("-").map(Number);
+function monthOptions(): string[] {
+  const [year, month] = currentMonth().split("-").map(Number);
   const result: string[] = [];
   let cursor = new Date(Date.UTC(year, month - 1, 1));
   for (let index = 0; index < 18; index += 1) {
@@ -129,7 +129,7 @@ export default async function AnalystTasksPage({ searchParams }: PageProps) {
         selectedDeveloperName={selectedDeveloper.full_name}
         month={month}
         monthLabel={formatYearMonthLabel(month)}
-        monthOptions={monthOptions(month)}
+        monthOptions={monthOptions()}
         defaultStartedAt={renderedAt}
         initialNow={renderedAt}
         tasks={tasks}
