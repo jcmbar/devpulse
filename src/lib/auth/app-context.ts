@@ -1,7 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
 import {
   emptyModuleGrants,
-  hasAnyTeamModuleAccess,
   presetGrantsForRole,
   type ModuleGrantsMap,
 } from "@/lib/auth/capabilities";
@@ -34,8 +33,9 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
   ]);
 
   let grants = grantsLoaded ?? emptyModuleGrants();
-  // Until migration/backfill exists, fall back to legacy role presets.
-  if (!hasAnyTeamModuleAccess(grants) && canManageTeam(profile.role)) {
+  // Fall back only when the grants table cannot be loaded. An empty matrix is
+  // a valid, intentional state and must not silently restore every module.
+  if (grantsLoaded == null && canManageTeam(profile.role)) {
     grants = presetGrantsForRole(profile.role);
   }
 

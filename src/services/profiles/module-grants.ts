@@ -64,24 +64,14 @@ export async function replaceModuleGrantsAdmin(input: {
     can_access: normalized[module].can_access,
     can_edit: normalized[module].can_edit,
     can_delete: normalized[module].can_delete,
-  })).filter((row) => row.can_access);
+  }));
 
-  const { error: deleteError } = await admin
+  const { error: grantsError } = await admin
     .from("profile_module_grants")
-    .delete()
-    .eq("profile_id", input.profileId);
+    .upsert(rows, { onConflict: "profile_id,module" });
 
-  if (deleteError) {
-    throw new Error(`Failed to clear module grants: ${deleteError.message}`);
-  }
-
-  if (rows.length > 0) {
-    const { error: insertError } = await admin
-      .from("profile_module_grants")
-      .insert(rows);
-    if (insertError) {
-      throw new Error(`Failed to save module grants: ${insertError.message}`);
-    }
+  if (grantsError) {
+    throw new Error(`Failed to save module grants: ${grantsError.message}`);
   }
 
   const { error: roleError } = await admin

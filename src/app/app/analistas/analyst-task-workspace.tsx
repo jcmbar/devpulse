@@ -74,12 +74,17 @@ const dayFormatter = new Intl.DateTimeFormat("pt-BR", {
 });
 
 function formatHours(value: number | null): string {
-  return value == null
-    ? "—"
-    : `${value.toLocaleString("pt-BR", {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      })} h`;
+  if (value == null || !Number.isFinite(value)) {
+    return "—";
+  }
+  const sign = value < 0 ? "-" : "";
+  const totalMinutes = Math.round(Math.abs(value) * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${sign}${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0",
+  )}`;
 }
 
 function formatDateTime(value: string): string {
