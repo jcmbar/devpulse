@@ -5,6 +5,7 @@ export type AnalystTask = {
   developer_id: string;
   developer_name: string | null;
   description: string;
+  details: string | null;
   started_at: string;
   ended_at: string | null;
   status: AnalystTaskStatus;

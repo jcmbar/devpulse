@@ -67,6 +67,7 @@ function mapTask(row: Record<string, unknown>): AnalystTask {
     developer_id: String(row.developer_id),
     developer_name: (row.developer_name as string | null) ?? null,
     description: String(row.description),
+    details: (row.details as string | null) ?? null,
     started_at: startedAt,
     ended_at: endedAt,
     status: String(row.status) as AnalystTaskStatus,

@@ -53,6 +53,14 @@ function readDescription(formData: FormData): string {
   return description;
 }
 
+function readDetails(formData: FormData): string | null {
+  const details = String(formData.get("details") ?? "").trim();
+  if (details.length > 2000) {
+    throw new Error("Os detalhes devem ter no máximo 2.000 caracteres.");
+  }
+  return details || null;
+}
+
 function isManager(role: string): boolean {
   return role === "admin" || role === "gestor";
 }
@@ -125,7 +133,11 @@ export async function createAnalystTaskAction(
     const developerId = String(formData.get("developerId") ?? "").trim();
     await resolveTargetDeveloper(context, developerId);
     const description = readDescription(formData);
-    const startedAt = parseDateTime(formData.get("startedAt"), "o início");
+    const details = readDetails(formData);
+    const startedAt =
+      formData.get("useCurrentStart") === "on"
+        ? new Date().toISOString()
+        : parseDateTime(formData.get("startedAt"), "o início");
     const endedAt = parseOptionalDateTime(formData.get("endedAt"), "o término");
     if (endedAt && new Date(endedAt) <= new Date(startedAt)) {
       throw new Error("O término deve ser posterior ao início.");
@@ -135,6 +147,7 @@ export async function createAnalystTaskAction(
     const { error } = await supabase.from("analyst_tasks").insert({
       developer_id: developerId,
       description,
+      details,
       started_at: startedAt,
       ended_at: endedAt,
       status: validateAnalystTaskStatus(endedAt ? "completed" : "running"),
@@ -168,6 +181,7 @@ export async function updateAnalystTaskAction(
     const taskId = String(formData.get("taskId") ?? "").trim();
     await canManageTask(context, taskId);
     const description = readDescription(formData);
+    const details = readDetails(formData);
     const startedAt = parseDateTime(formData.get("startedAt"), "o início");
     const endedAt = parseOptionalDateTime(formData.get("endedAt"), "o término");
     if (endedAt && new Date(endedAt) <= new Date(startedAt)) {
@@ -179,6 +193,7 @@ export async function updateAnalystTaskAction(
       .from("analyst_tasks")
       .update({
         description,
+        details,
         started_at: startedAt,
         ended_at: endedAt,
         status: validateAnalystTaskStatus(endedAt ? "completed" : "running"),

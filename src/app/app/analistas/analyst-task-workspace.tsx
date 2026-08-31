@@ -24,7 +24,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useActionState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -123,6 +123,10 @@ function localInputValue(value: string): string {
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
 }
 
+function nowInputValue(): string {
+  return localInputValue(new Date().toISOString());
+}
+
 function isoDateFromInstant(value: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Sao_Paulo",
@@ -187,34 +191,33 @@ function DayCell({
     <button
       type="button"
       onClick={onSelect}
-      className={`min-h-24 rounded-[var(--radius-sm)] border p-2 text-left transition ${
+      title={
+        day.task_count > 0
+          ? `${day.task_count} tarefa(s) registrada(s)`
+          : day.is_holiday
+            ? "Feriado sem tarefa registrada"
+            : "Nenhuma tarefa registrada"
+      }
+      className={`min-h-14 rounded-[var(--radius-sm)] border p-1.5 text-left transition ${
         selected
           ? "border-brand bg-brand-soft shadow-[var(--shadow-sm)]"
           : "border-border bg-card hover:border-brand/50 hover:bg-muted/30"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">{dayNumber}</span>
-        {day.is_holiday ? (
-          <span className="text-[10px] text-muted-foreground" title="Feriado">
-            F
-          </span>
-        ) : null}
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-xs font-semibold text-foreground">{dayNumber}</span>
       </div>
-      <p className="mt-4 text-xs tabular-nums text-muted-foreground">
-        {formatHours(day.hours)}
-      </p>
       {day.task_count > 0 ? (
-        <p className="text-[11px] text-brand-foreground">
-          {day.task_count} tarefa{day.task_count === 1 ? "" : "s"}
-        </p>
-      ) : null}
-      {day.urgent_hours > 0 ? (
-        <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-          <AlertTriangle className="size-3" />
-          urgente
+        <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
+          Registrado
         </span>
-      ) : null}
+      ) : (
+        <span className="mt-2 inline-flex animate-pulse items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+          <span className="size-1.5 rounded-full bg-amber-500" />
+          Ausente
+        </span>
+      )}
     </button>
   );
 }
@@ -248,6 +251,16 @@ function TaskRow({
           {task.ended_at ? formatTime(task.ended_at) : "em andamento"} ·{" "}
           {formatHours(task.duration_hours)}
         </p>
+        {task.details ? (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-medium text-brand-foreground">
+              Ver mais
+            </summary>
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+              {task.details}
+            </p>
+          </details>
+        ) : null}
       </div>
       <div className="flex shrink-0 gap-2">
         <button type="button" onClick={onEdit} className="ui-btn-secondary">
@@ -314,6 +327,18 @@ function EditTaskDialog({
               required
               maxLength={500}
               className="ui-input min-h-24 resize-y"
+            />
+          </FormField>
+          <FormField
+            label="Detalhes (opcional)"
+            htmlFor={`edit-details-${task.id}`}
+          >
+            <textarea
+              id={`edit-details-${task.id}`}
+              name="details"
+              defaultValue={task.details ?? ""}
+              maxLength={2000}
+              className="ui-input min-h-20 resize-y"
             />
           </FormField>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -385,8 +410,16 @@ export function AnalystTaskWorkspace({
       `${month}-01`,
   );
   const [editingTask, setEditingTask] = useState<AnalystTask | null>(null);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const startedAtEdited = useRef(false);
+  const descriptionRef = useRef<HTMLInputElement>(null);
+  const concludeRef = useRef<HTMLButtonElement>(null);
   const [createState, createAction, createPending] = useActionState(
     createAnalystTaskAction,
+    initialState,
+  );
+  const [completeState, completeAction, completePending] = useActionState(
+    completeAnalystTaskAction,
     initialState,
   );
   const classificationResult = classification(metrics);
@@ -403,12 +436,55 @@ export function AnalystTaskWorkspace({
     ...metrics.daily,
   ];
 
+  useEffect(() => {
+    if (!taskModalOpen) {
+      return;
+    }
+    const focusTarget = window.setTimeout(() => {
+      if (activeTask) {
+        concludeRef.current?.focus();
+      } else {
+        descriptionRef.current?.focus();
+      }
+    }, 0);
+    return () => window.clearTimeout(focusTarget);
+  }, [activeTask, taskModalOpen]);
+
+  useEffect(() => {
+    if (taskModalOpen) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Enter" || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(target.tagName))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      startedAtEdited.current = false;
+      setTaskModalOpen(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [taskModalOpen]);
+
   function navigate(nextMonth: string, nextDeveloperId = selectedDeveloperId) {
     const params = new URLSearchParams({
       month: nextMonth,
       developerId: nextDeveloperId,
     });
     startNavigation(() => router.push(`${pathname}?${params.toString()}`));
+  }
+
+  function openTaskModal() {
+    startedAtEdited.current = false;
+    setTaskModalOpen(true);
   }
 
   return (
@@ -509,55 +585,132 @@ export function AnalystTaskWorkspace({
           title={activeTask ? "Tarefa em andamento" : "Registrar tarefa"}
           description={
             activeTask
-              ? "O timer é atualizado enquanto a tarefa permanece aberta."
-              : "Inicie agora ou informe início e término para registrar uma tarefa retroativa."
+              ? "Abra o modal para acompanhar o cronômetro ou concluir a tarefa."
+              : "Clique no botão central para iniciar uma tarefa."
           }
         >
-          {activeTask ? (
-            <div className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-brand/30 bg-brand-soft p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-brand-foreground">
-                    {activeTask.description}
-                  </span>
-                  {activeTask.is_urgent ? (
-                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                      URGENTE
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Iniciada em {formatDateTime(activeTask.started_at)}
+          <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
+            <button type="button" onClick={openTaskModal} className="ui-btn-primary px-6 py-3">
+              <Play className="size-4" />
+              {activeTask ? "Abrir tarefa em andamento" : "Iniciar tarefa"}
+              <span className="rounded border border-current/30 px-1.5 py-0.5 text-xs opacity-80">
+                Enter
+              </span>
+            </button>
+            {activeTask ? (
+              <p className="text-xs text-muted-foreground">
+                Há uma tarefa ativa. O registro completo está no modal.
+              </p>
+            ) : null}
+          </div>
+        </SectionShell>
+      ) : null}
+
+      {taskModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="analyst-task-modal-title"
+            className="w-full max-w-xl rounded-[var(--radius-md)] border border-border bg-card p-5 shadow-[var(--shadow-lg)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold tracking-[0.16em] text-brand uppercase">
+                  Produtividade
                 </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <ActiveTimer
-                  startedAt={activeTask.started_at}
-                  initialNow={initialNow}
-                />
-                <form
-                  action={async (formData) => {
-                    await completeAnalystTaskAction(undefined, formData);
-                  }}
+                <h2
+                  id="analyst-task-modal-title"
+                  className="mt-1 text-lg font-semibold text-foreground"
                 >
+                  {activeTask ? "Tarefa em andamento" : "Iniciar tarefa"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTaskModalOpen(false)}
+                className="ui-btn-ghost px-2"
+                aria-label="Fechar modal"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {activeTask ? (
+              <div className="mt-5 space-y-5">
+                <div className="rounded-[var(--radius-sm)] border border-brand/30 bg-brand-soft p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-brand-foreground">
+                      {activeTask.description}
+                    </span>
+                    {activeTask.is_urgent ? (
+                      <span className="inline-flex animate-pulse items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                        <AlertTriangle className="size-3" />
+                        URGENTE
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Iniciada em {formatDateTime(activeTask.started_at)}
+                  </p>
+                  <div className="mt-4 text-center">
+                    <ActiveTimer
+                      startedAt={activeTask.started_at}
+                      initialNow={initialNow}
+                    />
+                  </div>
+                </div>
+                <form action={completeAction} className="flex justify-end">
                   <input type="hidden" name="taskId" value={activeTask.id} />
-                  <button type="submit" className="ui-btn-primary">
-                    <Check className="size-3.5" />
-                    Concluir
+                  <button
+                    ref={concludeRef}
+                    type="submit"
+                    disabled={completePending}
+                    className="ui-btn-primary px-6 py-3"
+                  >
+                    <Check className="size-4" />
+                    {completePending ? "Concluindo…" : "Concluir tarefa"}
+                    <span className="text-xs opacity-70">Enter</span>
                   </button>
                 </form>
+                <FormFeedback
+                  error={completeState.error}
+                  success={completeState.success}
+                />
               </div>
-            </div>
-          ) : (
-            <form action={createAction} className="space-y-4">
-              <input
-                type="hidden"
-                name="developerId"
-                value={selectedDeveloperId}
-              />
-              <div className="grid gap-4 lg:grid-cols-[1fr_13rem_13rem]">
-                <FormField label="O que você está fazendo?" htmlFor="task-description">
+            ) : (
+              <form
+                action={createAction}
+                className="mt-5 space-y-4"
+                onSubmit={(event) => {
+                  if (!startedAtEdited.current) {
+                    const startedAt = event.currentTarget.querySelector<
+                      HTMLInputElement
+                    >('input[name="startedAt"]');
+                    if (startedAt) {
+                      startedAt.value = nowInputValue();
+                    }
+                  }
+                const useCurrentStart = event.currentTarget.querySelector<
+                  HTMLInputElement
+                >('input[name="useCurrentStart"]');
+                if (useCurrentStart) {
+                  useCurrentStart.value = startedAtEdited.current ? "off" : "on";
+                }
+                }}
+              >
+                <input
+                  type="hidden"
+                  name="developerId"
+                  value={selectedDeveloperId}
+                />
+              <input type="hidden" name="useCurrentStart" value="off" />
+                <FormField
+                  label="O que você está fazendo?"
+                  htmlFor="task-description"
+                >
                   <input
+                    ref={descriptionRef}
                     id="task-description"
                     name="description"
                     required
@@ -566,30 +719,46 @@ export function AnalystTaskWorkspace({
                     className="ui-input"
                   />
                 </FormField>
-                <FormField label="Início" htmlFor="task-started-at">
-                  <input
-                    id="task-started-at"
-                    type="datetime-local"
-                    name="startedAt"
-                    defaultValue={localInputValue(defaultStartedAt)}
-                    required
-                    className="ui-input"
-                  />
-                </FormField>
                 <FormField
-                  label="Término (opcional)"
-                  htmlFor="task-ended-at"
-                  hint="Deixe vazio para iniciar o timer."
+                  label="Detalhes (opcional)"
+                  htmlFor="task-details"
+                  hint="Use este campo para contexto adicional da tarefa."
                 >
-                  <input
-                    id="task-ended-at"
-                    type="datetime-local"
-                    name="endedAt"
-                    className="ui-input"
+                  <textarea
+                    id="task-details"
+                    name="details"
+                    maxLength={2000}
+                    placeholder="Contexto, resultado ou observações adicionais"
+                    className="ui-input min-h-20 resize-y"
                   />
                 </FormField>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Início" htmlFor="task-started-at">
+                    <input
+                      id="task-started-at"
+                      type="datetime-local"
+                      name="startedAt"
+                      defaultValue={localInputValue(defaultStartedAt)}
+                      required
+                      onChange={() => {
+                        startedAtEdited.current = true;
+                      }}
+                      className="ui-input"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Término (opcional)"
+                    htmlFor="task-ended-at"
+                    hint="Preencha apenas para um lançamento retroativo."
+                  >
+                    <input
+                      id="task-ended-at"
+                      type="datetime-local"
+                      name="endedAt"
+                      className="ui-input"
+                    />
+                  </FormField>
+                </div>
                 <label className="ui-check">
                   <input
                     name="isUrgent"
@@ -598,20 +767,25 @@ export function AnalystTaskWorkspace({
                   />
                   <span>Atendimento urgente</span>
                 </label>
-                <button
-                  type="submit"
-                  disabled={createPending}
-                  className="ui-btn-primary"
-                >
-                  <Play className="size-3.5" />
-                  {createPending ? "Registrando…" : "Iniciar tarefa"}
-                  <span className="text-xs opacity-70">Enter</span>
-                </button>
-              </div>
-              <FormFeedback error={createState.error} success={createState.success} />
-            </form>
-          )}
-        </SectionShell>
+                <FormFeedback
+                  error={createState.error}
+                  success={createState.success}
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={createPending}
+                    className="ui-btn-primary px-6 py-3"
+                  >
+                    <Play className="size-4" />
+                    {createPending ? "Iniciando…" : "Iniciar tarefa"}
+                    <span className="text-xs opacity-70">Enter</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
@@ -643,7 +817,7 @@ export function AnalystTaskWorkspace({
                   onSelect={() => setSelectedDate(day.date)}
                 />
               ) : (
-                <div key={`empty-${index}`} className="min-h-24" />
+                <div key={`empty-${index}`} className="min-h-14" />
               ),
             )}
           </div>
@@ -657,7 +831,7 @@ export function AnalystTaskWorkspace({
               : undefined
           }
         >
-          <div className="space-y-2">
+          <div className="max-h-[30rem] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-[36rem]">
             {selectedTasks.length > 0 ? (
               selectedTasks.map((task) => (
                 <TaskRow
