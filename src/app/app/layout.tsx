@@ -26,6 +26,7 @@ export default async function AppLayout({
         profile={profile}
         grants={grants}
         homePath={homePath}
+        jobTitle={developer?.job_title ?? null}
         avatarUrl={avatarUrl}
         idleMinutes={getSessionIdleMinutes()}
         versionLabel={build.label}

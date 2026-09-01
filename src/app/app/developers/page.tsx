@@ -9,7 +9,7 @@ import { PersonAvatar } from "@/components/person-avatar";
 import { TeamFilterForm } from "@/components/team-filter";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import { requirePermission } from "@/lib/auth/permissions";
-import { getRoleLabel } from "@/lib/auth/role-labels";
+import { getProfileDisplayLabel } from "@/lib/auth/role-labels";
 import {
   adminListHref,
   listEmptyMessage,
@@ -562,7 +562,10 @@ export default async function DevelopersAdminPage({
                                 {developer.profile.full_name ??
                                   developer.profile.email}
                                 {" · "}
-                                {getRoleLabel(developer.profile.role)}
+                                {getProfileDisplayLabel({
+                                  role: developer.profile.role,
+                                  jobTitle: developer.job_title,
+                                })}
                               </p>
                             ) : (
                               <p className="mt-0.5 hidden text-[11px] text-muted-foreground lg:block">

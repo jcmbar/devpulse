@@ -13,8 +13,9 @@ import {
 } from "@/lib/auth/capabilities";
 import { type AppHomePath } from "@/lib/auth/home-path";
 import { APP_MODULES, type AppModuleKey } from "@/lib/auth/modules";
-import { getRoleLabel } from "@/lib/auth/role-labels";
+import { getProfileDisplayLabel } from "@/lib/auth/role-labels";
 import { cn } from "@/lib/utils";
+import type { DeveloperJobTitle } from "@/types/developer-compensation";
 import type { Profile } from "@/types/profile";
 import {
   Building2,
@@ -51,6 +52,7 @@ type AppChromeProps = {
   profile: Profile;
   grants: ModuleGrantsMap;
   homePath?: AppHomePath;
+  jobTitle?: DeveloperJobTitle | null;
   /** Public avatar URL of the linked developer, when available. */
   avatarUrl?: string | null;
   idleMinutes?: number | null;
@@ -175,6 +177,7 @@ export function AppChrome({
   profile,
   grants,
   homePath = "/app",
+  jobTitle = null,
   avatarUrl = null,
   idleMinutes = null,
   versionLabel = "v0.1.0",
@@ -187,6 +190,10 @@ export function AppChrome({
   const moreMenuId = useId();
   const hasTeamNav = hasAnyTeamModuleAccess(grants);
   const analystHome = homePath === "/app/analistas";
+  const profileLabel = getProfileDisplayLabel({
+    role: profile.role,
+    jobTitle,
+  });
 
   const contaItem: NavItem = {
     href: "/app/conta",
@@ -366,7 +373,7 @@ export function AppChrome({
               <span className="max-w-[160px] truncate text-xs font-medium text-foreground">
                 {profile.full_name ?? profile.email}
               </span>
-              <span className="ui-badge">{getRoleLabel(profile.role)}</span>
+              <span className="ui-badge">{profileLabel}</span>
             </Link>
             <ThemeToggle />
             <form action={signOut} className="hidden sm:block">
@@ -400,7 +407,7 @@ export function AppChrome({
                   {profile.full_name ?? profile.email}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {getRoleLabel(profile.role)}
+                  {profileLabel}
                 </p>
               </div>
             </div>

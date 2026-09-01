@@ -24,7 +24,7 @@ import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
 import { FilterBar, SectionShell } from "@/components/ui/section-shell";
 import { canManageImports } from "@/lib/auth/permissions";
-import { getRoleLabel } from "@/lib/auth/role-labels";
+import { getProfileDisplayLabel } from "@/lib/auth/role-labels";
 import {
   formatDateRangeLabel,
   type CompiladoDateRange,
@@ -186,7 +186,10 @@ export function AppHome({
           <>
             Seu Compilado ·{" "}
             <span className="font-medium text-foreground">
-              {getRoleLabel(profile.role)}
+              {getProfileDisplayLabel({
+                role: profile.role,
+                jobTitle: developer.job_title,
+              })}
             </span>
             {" · "}
             {developer.is_active ? "Ativo" : "Inativo"}

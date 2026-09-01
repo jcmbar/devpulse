@@ -2,11 +2,15 @@ import { ChangePasswordForm } from "@/app/app/conta/change-password-form";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
-import { getRoleLabel } from "@/lib/auth/role-labels";
+import { getProfileDisplayLabel } from "@/lib/auth/role-labels";
 import { getAppContext } from "@/lib/auth/app-context";
 
 export default async function ContaPage() {
-  const { profile } = await getAppContext();
+  const { profile, developer } = await getAppContext();
+  const profileLabel = getProfileDisplayLabel({
+    role: profile.role,
+    jobTitle: developer?.job_title ?? null,
+  });
 
   return (
     <PageShell size="md">
@@ -38,9 +42,7 @@ export default async function ContaPage() {
               <dt className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 Perfil de acesso
               </dt>
-              <dd className="mt-1 text-foreground">
-                {getRoleLabel(profile.role)}
-              </dd>
+              <dd className="mt-1 text-foreground">{profileLabel}</dd>
             </div>
           </dl>
         </Surface>
