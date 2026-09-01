@@ -11,6 +11,7 @@ import {
   hasPermission,
   type ModuleGrantsMap,
 } from "@/lib/auth/capabilities";
+import { type AppHomePath } from "@/lib/auth/home-path";
 import { APP_MODULES, type AppModuleKey } from "@/lib/auth/modules";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ import {
 type AppChromeProps = {
   profile: Profile;
   grants: ModuleGrantsMap;
+  homePath?: AppHomePath;
   /** Public avatar URL of the linked developer, when available. */
   avatarUrl?: string | null;
   idleMinutes?: number | null;
@@ -172,6 +174,7 @@ function navItemForModule(key: AppModuleKey): NavItem {
 export function AppChrome({
   profile,
   grants,
+  homePath = "/app",
   avatarUrl = null,
   idleMinutes = null,
   versionLabel = "v0.1.0",
@@ -183,6 +186,7 @@ export function AppChrome({
   const moreRef = useRef<HTMLDivElement>(null);
   const moreMenuId = useId();
   const hasTeamNav = hasAnyTeamModuleAccess(grants);
+  const analystHome = homePath === "/app/analistas";
 
   const contaItem: NavItem = {
     href: "/app/conta",
@@ -194,7 +198,9 @@ export function AppChrome({
 
   const primaryModules = APP_MODULES.filter(
     (row) =>
-      row.navGroup === "primary" && hasPermission(grants, row.key, "access"),
+      row.navGroup === "primary" &&
+      hasPermission(grants, row.key, "access") &&
+      !(analystHome && row.key === "analistas"),
   ).map((row) => navItemForModule(row.key));
 
   const moreModules = APP_MODULES.filter(
@@ -202,14 +208,24 @@ export function AppChrome({
       row.navGroup === "more" && hasPermission(grants, row.key, "access"),
   ).map((row) => navItemForModule(row.key));
 
+  const homeNavItem: NavItem = analystHome
+    ? {
+        href: homePath,
+        label: "Início",
+        icon: ClipboardClock,
+        iconClass: "text-purple-600 dark:text-purple-400",
+        match: (path) => path.startsWith("/app/analistas"),
+      }
+    : {
+        href: homePath,
+        label: "Início",
+        icon: Home,
+        iconClass: "text-sky-600 dark:text-sky-400",
+        match: (path) => path === "/app",
+      };
+
   const primary: NavItem[] = [
-    {
-      href: "/app",
-      label: "Início",
-      icon: Home,
-      iconClass: "text-sky-600 dark:text-sky-400",
-      match: (path) => path === "/app",
-    },
+    homeNavItem,
     ...(hasTeamNav ? primaryModules : [contaItem]),
   ];
 
@@ -252,7 +268,7 @@ export function AppChrome({
       <header className="sticky top-0 z-40 border-b border-border/60 bg-header shadow-[var(--shadow-sm)] backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-[1600px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3 lg:px-8">
           <Link
-            href="/app"
+            href={homePath}
             className="group flex min-w-0 shrink-0 items-center gap-2 rounded-[var(--radius-sm)] pr-1 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
             <BrandMark size={32} className="size-8" />

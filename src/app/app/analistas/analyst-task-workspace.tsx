@@ -9,7 +9,8 @@ import {
 } from "@/app/app/analistas/actions";
 import { FormFeedback, FormField } from "@/components/ui/form";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
-import { FilterBar, SectionShell } from "@/components/ui/section-shell";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
+import { SectionShell } from "@/components/ui/section-shell";
 import type {
   AnalystTask,
   AnalystTaskDay,
@@ -138,45 +139,6 @@ function isoDateFromInstant(value: string): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-function classification(metrics: AnalystTaskMetrics): {
-  label: string;
-  tone: "success" | "warning" | "neutral";
-} {
-  if (metrics.total_tasks === 0) {
-    return { label: "Sem registros", tone: "neutral" };
-  }
-  if (metrics.contracted_hours > 0) {
-    const ratio = metrics.total_hours / metrics.contracted_hours;
-    if (ratio >= 1) {
-      return { label: "Carga completa", tone: "success" };
-    }
-    if (ratio >= 0.75) {
-      return { label: "Bom ritmo", tone: "success" };
-    }
-  }
-  return { label: "Em andamento", tone: "warning" };
-}
-
-function ActiveTimer({
-  startedAt,
-  initialNow,
-}: {
-  startedAt: string;
-  initialNow: string;
-}) {
-  const [now, setNow] = useState(() => new Date(initialNow).getTime());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <span className="font-mono text-xl font-semibold tabular-nums text-brand-foreground">
-      {formatElapsed(startedAt, now)}
-    </span>
-  );
-}
-
 function DayCell({
   day,
   selected,
@@ -219,6 +181,44 @@ function DayCell({
         </span>
       )}
     </button>
+  );
+}
+function classification(metrics: AnalystTaskMetrics): {
+  label: string;
+  tone: "success" | "warning" | "neutral";
+} {
+  if (metrics.total_tasks === 0) {
+    return { label: "Sem registros", tone: "neutral" };
+  }
+  if (metrics.contracted_hours > 0) {
+    const ratio = metrics.total_hours / metrics.contracted_hours;
+    if (ratio >= 1) {
+      return { label: "Carga completa", tone: "success" };
+    }
+    if (ratio >= 0.75) {
+      return { label: "Bom ritmo", tone: "success" };
+    }
+  }
+  return { label: "Em andamento", tone: "warning" };
+}
+
+function ActiveTimer({
+  startedAt,
+  initialNow,
+}: {
+  startedAt: string;
+  initialNow: string;
+}) {
+  const [now, setNow] = useState(() => new Date(initialNow).getTime());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <span className="font-mono text-xl font-semibold tabular-nums text-brand-foreground">
+      {formatElapsed(startedAt, now)}
+    </span>
   );
 }
 
@@ -451,7 +451,7 @@ export function AnalystTaskWorkspace({
   }, [activeTask, taskModalOpen]);
 
   useEffect(() => {
-    if (taskModalOpen) {
+    if (!canEdit || taskModalOpen) {
       return;
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -472,7 +472,7 @@ export function AnalystTaskWorkspace({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [taskModalOpen]);
+  }, [canEdit, taskModalOpen]);
 
   function navigate(nextMonth: string, nextDeveloperId = selectedDeveloperId) {
     const params = new URLSearchParams({
@@ -489,122 +489,116 @@ export function AnalystTaskWorkspace({
 
   return (
     <>
-      <FilterBar className="items-end">
-        <div className="ui-field min-w-44">
-          <label htmlFor="analyst-month" className="ui-label">
-            Mês do log
-          </label>
-          <select
-            id="analyst-month"
-            value={month}
-            disabled={pendingNavigation}
-            onChange={(event) => navigate(event.target.value)}
-            className="ui-select"
-          >
-            {monthOptions.map((option) => (
-              <option key={option} value={option}>
-                {formatMonthOption(option)}
-              </option>
-            ))}
-          </select>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-stretch">
+        <div className="ui-kpi-grid--hero order-2 min-w-0 xl:order-1">
+          <KpiMetricCard
+            variant="hero"
+            label="Tarefas concluídas"
+            value={metrics.total_tasks}
+            hint="No mês selecionado"
+            tone="info"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Horas realizadas"
+            value={formatHours(metrics.total_hours)}
+            hint={`Contratado: ${formatHours(metrics.contracted_hours)}`}
+            tone="brand"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Média por tarefa"
+            value={formatHours(metrics.average_hours)}
+            hint="Duração média"
+            tone="success"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Horas urgentes"
+            value={formatHours(metrics.urgent_hours)}
+            hint="Atendimentos prioritários"
+            tone={metrics.urgent_hours > 0 ? "warning" : "neutral"}
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Diferença mensal"
+            value={`${metrics.delta_hours >= 0 ? "+" : ""}${formatHours(metrics.delta_hours)}`}
+            hint="Realizado − contratado"
+            tone={metrics.delta_hours >= 0 ? "success" : "danger"}
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Classificação"
+            value={classificationResult.label}
+            hint="Volume + carga realizada"
+            tone={classificationResult.tone}
+          />
         </div>
-        {canManageAll ? (
-          <div className="ui-field min-w-60">
-            <label htmlFor="analyst-developer" className="ui-label">
-              Analista
+
+        <aside className="order-1 flex w-full flex-col gap-2.5 rounded-[var(--radius)] border border-border bg-card p-3 shadow-[var(--shadow-sm)] sm:p-3.5 xl:order-2 xl:w-[17.5rem] xl:shrink-0 2xl:w-[19rem]">
+          <div className="ui-field min-w-0">
+            <label htmlFor="analyst-month" className="ui-label">
+              Mês do log
             </label>
             <select
-              id="analyst-developer"
-              value={selectedDeveloperId}
+              id="analyst-month"
+              value={month}
               disabled={pendingNavigation}
-              onChange={(event) => navigate(month, event.target.value)}
+              onChange={(event) => navigate(event.target.value)}
               className="ui-select"
             >
-              {analysts.map((analyst) => (
-                <option key={analyst.id} value={analyst.id}>
-                  {analyst.name}
+              {monthOptions.map((option) => (
+                <option key={option} value={option}>
+                  {formatMonthOption(option)}
                 </option>
               ))}
             </select>
           </div>
-        ) : null}
-        <div className="rounded-[var(--radius-sm)] border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{selectedDeveloperName}</span>
-          <span className="mx-1.5">·</span>
-          {monthLabel}
-        </div>
-      </FilterBar>
-
-      <div className="ui-kpi-grid--hero">
-        <KpiMetricCard
-          variant="hero"
-          label="Tarefas concluídas"
-          value={metrics.total_tasks}
-          hint="No mês selecionado"
-          tone="info"
-        />
-        <KpiMetricCard
-          variant="hero"
-          label="Horas realizadas"
-          value={formatHours(metrics.total_hours)}
-          hint={`Contratado: ${formatHours(metrics.contracted_hours)}`}
-          tone="brand"
-        />
-        <KpiMetricCard
-          variant="hero"
-          label="Média por tarefa"
-          value={formatHours(metrics.average_hours)}
-          hint="Duração média"
-          tone="success"
-        />
-        <KpiMetricCard
-          variant="hero"
-          label="Horas urgentes"
-          value={formatHours(metrics.urgent_hours)}
-          hint="Atendimentos prioritários"
-          tone={metrics.urgent_hours > 0 ? "warning" : "neutral"}
-        />
-        <KpiMetricCard
-          variant="hero"
-          label="Diferença mensal"
-          value={`${metrics.delta_hours >= 0 ? "+" : ""}${formatHours(metrics.delta_hours)}`}
-          hint="Realizado − contratado"
-          tone={metrics.delta_hours >= 0 ? "success" : "danger"}
-        />
-        <KpiMetricCard
-          variant="hero"
-          label="Classificação"
-          value={classificationResult.label}
-          hint="Volume + carga realizada"
-          tone={classificationResult.tone}
-        />
-      </div>
-
-      {canEdit ? (
-        <SectionShell
-          title={activeTask ? "Tarefa em andamento" : "Registrar tarefa"}
-          description={
-            activeTask
-              ? "Abra o modal para acompanhar o cronômetro ou concluir a tarefa."
-              : "Clique no botão central para iniciar uma tarefa."
-          }
-        >
-          <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
-            <button type="button" onClick={openTaskModal} className="ui-btn-primary px-6 py-3">
+          {canManageAll ? (
+            <div className="ui-field min-w-0">
+              <label htmlFor="analyst-developer" className="ui-label">
+                Analista
+              </label>
+              <select
+                id="analyst-developer"
+                value={selectedDeveloperId}
+                disabled={pendingNavigation}
+                onChange={(event) => navigate(month, event.target.value)}
+                className="ui-select"
+              >
+                {analysts.map((analyst) => (
+                  <option key={analyst.id} value={analyst.id}>
+                    {analyst.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <p className="rounded-[var(--radius-sm)] border border-border/70 bg-muted/20 px-2.5 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {selectedDeveloperName}
+              </span>
+              <span className="mx-1">·</span>
+              {monthLabel}
+            </p>
+          )}
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={openTaskModal}
+              className={`ui-btn-primary mt-auto w-full justify-center px-4 py-2.5 ${
+                activeTask ? "animate-pulse ring-2 ring-brand/40" : ""
+              }`}
+            >
               <Play className="size-4" />
-              {activeTask ? "Abrir tarefa em andamento" : "Iniciar tarefa"}
+              {activeTask ? "Tarefa em andamento" : "Iniciar tarefa"}
               <span className="rounded border border-current/30 px-1.5 py-0.5 text-xs opacity-80">
                 Enter
               </span>
             </button>
-            {activeTask ? (
-              <p className="text-xs text-muted-foreground">
-                Há uma tarefa ativa. O registro completo está no modal.
-              </p>
-            ) : null}
-          </div>
-        </SectionShell>
-      ) : null}
+          ) : null}
+        </aside>
+      </div>
 
       {taskModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
@@ -850,9 +844,10 @@ export function AnalystTaskWorkspace({
         </SectionShell>
       </div>
 
-      <SectionShell
+      <CollapsibleSection
         title="Resumo diário"
-        description="Diferença entre horas registradas e horas contratadas, respeitando fins de semana e feriados."
+        description="Horas registradas e diferença contra a carga contratada por dia útil."
+        defaultOpen={false}
       >
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {metrics.daily
@@ -862,7 +857,11 @@ export function AnalystTaskWorkspace({
                 type="button"
                 key={day.date}
                 onClick={() => setSelectedDate(day.date)}
-                className="rounded-[var(--radius-sm)] border border-border bg-card px-3 py-2 text-left hover:border-brand/50"
+                className={`rounded-[var(--radius-sm)] border bg-card px-3 py-2 text-left transition hover:border-brand/50 ${
+                  day.date === selectedDate
+                    ? "border-brand bg-brand-soft"
+                    : "border-border"
+                }`}
               >
                 <p className="text-xs text-muted-foreground">
                   {formatDayLabel(day.date)}
@@ -870,14 +869,20 @@ export function AnalystTaskWorkspace({
                 <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
                   {formatHours(day.hours)}
                 </p>
-                <p className="text-[11px] tabular-nums text-muted-foreground">
+                <p
+                  className={`text-[11px] tabular-nums ${
+                    day.delta_hours >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-700 dark:text-amber-300"
+                  }`}
+                >
                   {day.delta_hours >= 0 ? "+" : ""}
                   {formatHours(day.delta_hours)}
                 </p>
               </button>
             ))}
         </div>
-      </SectionShell>
+      </CollapsibleSection>
 
       {editingTask ? (
         <EditTaskDialog

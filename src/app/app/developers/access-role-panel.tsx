@@ -11,6 +11,7 @@ import {
 } from "@/app/app/developers/actions";
 import {
   normalizeGrantFlags,
+  presetGrantsForAnalyst,
   presetGrantsForRole,
   type ModuleGrantsMap,
 } from "@/lib/auth/capabilities";
@@ -25,8 +26,11 @@ const initialState: AccessPermissionsFormState = {
   success: null,
 };
 
-const PRESET_OPTIONS: Array<{ value: "" | UserRole; label: string }> = [
+type AccessPreset = "" | UserRole | "analyst";
+
+const PRESET_OPTIONS: Array<{ value: AccessPreset; label: string }> = [
   { value: "", label: "Manter matriz atual" },
+  { value: "analyst", label: "Aplicar: Analista" },
   { value: "dev", label: `Aplicar: ${getRoleLabel("dev")}` },
   { value: "gestor", label: `Aplicar: ${getRoleLabel("gestor")}` },
   { value: "admin", label: `Aplicar: ${getRoleLabel("admin")}` },
@@ -45,7 +49,7 @@ export function AccessPermissionsPanel({
 }: AccessPermissionsPanelProps) {
   const router = useRouter();
   const [grants, setGrants] = useState<ModuleGrantsMap>(initialGrants);
-  const [preset, setPreset] = useState<"" | UserRole>("");
+  const [preset, setPreset] = useState<AccessPreset>("");
 
   const [state, formAction, isPending] = useActionState(
     async (prev: AccessPermissionsFormState, formData: FormData) => {
@@ -60,12 +64,14 @@ export function AccessPermissionsPanel({
 
   const grantJson = useMemo(() => JSON.stringify(grants), [grants]);
 
-  function applyPreset(next: "" | UserRole) {
+  function applyPreset(next: AccessPreset) {
     setPreset(next);
     if (!next) {
       return;
     }
-    setGrants(presetGrantsForRole(next));
+    setGrants(
+      next === "analyst" ? presetGrantsForAnalyst() : presetGrantsForRole(next),
+    );
   }
 
   function toggle(
@@ -113,7 +119,7 @@ export function AccessPermissionsPanel({
           id="accessPreset"
           value={preset}
           onChange={(event) =>
-            applyPreset(event.target.value as "" | UserRole)
+            applyPreset(event.target.value as AccessPreset)
           }
           className="ui-select w-full"
         >

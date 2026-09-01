@@ -5,6 +5,7 @@ import {
   hasAnyTeamModuleAccess,
   hasPermission,
 } from "@/lib/auth/capabilities";
+import { resolveAppHomePath } from "@/lib/auth/home-path";
 import type { AppModuleKey, PermissionAction } from "@/lib/auth/modules";
 import {
   canManageImports,
@@ -17,13 +18,17 @@ export type AppContextWithGrants = AppContext & {
   grants: Awaited<ReturnType<typeof getAppContext>>["grants"];
 };
 
+function redirectToAppHome(context: AppContextWithGrants): never {
+  redirect(resolveAppHomePath(context.grants));
+}
+
 export async function requirePermission(
   module: AppModuleKey,
   action: PermissionAction = "access",
 ): Promise<AppContextWithGrants> {
   const context = await getAppContext();
   if (!hasPermission(context.grants, module, action)) {
-    redirect("/app");
+    redirectToAppHome(context);
   }
   return context;
 }
@@ -38,7 +43,7 @@ export async function requireTeamAccess(): Promise<AppContextWithGrants> {
     !hasAnyTeamModuleAccess(context.grants) &&
     !canManageTeam(context.profile.role)
   ) {
-    redirect("/app");
+    redirectToAppHome(context);
   }
   return context;
 }

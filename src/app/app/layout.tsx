@@ -2,6 +2,7 @@ import { AppChrome } from "@/components/app-chrome";
 import { InspectionDeterrent } from "@/components/security/inspection-deterrent";
 import { getAppContext } from "@/lib/auth/app-context";
 import { getAppBuildInfo } from "@/lib/app-version";
+import { resolveAppHomePath } from "@/lib/auth/home-path";
 import { getSessionIdleMinutes } from "@/lib/auth/session-ttl";
 import { developerAvatarPublicUrl } from "@/services/developers";
 
@@ -17,12 +18,14 @@ export default async function AppLayout({
   const { profile, developer, grants } = await getAppContext();
   const avatarUrl = developerAvatarPublicUrl(developer?.avatar_path);
   const build = getAppBuildInfo();
+  const homePath = resolveAppHomePath(grants);
 
   return (
     <InspectionDeterrent>
       <AppChrome
         profile={profile}
         grants={grants}
+        homePath={homePath}
         avatarUrl={avatarUrl}
         idleMinutes={getSessionIdleMinutes()}
         versionLabel={build.label}

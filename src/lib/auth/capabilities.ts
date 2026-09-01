@@ -45,9 +45,19 @@ export function presetGrantsForRole(role: UserRole): ModuleGrantsMap {
   return map;
 }
 
+export function presetGrantsForAnalyst(): ModuleGrantsMap {
+  const map = emptyModuleGrants();
+  map.analistas = {
+    can_access: true,
+    can_edit: true,
+    can_delete: false,
+  };
+  return map;
+}
+
 /**
  * Ceiling role for RLS:
- * - no module access → dev
+ * - only the analyst self-service module (or no module access) → dev
  * - delete on every module → admin
  * - otherwise keep admin if already admin, else gestor
  */
@@ -55,8 +65,13 @@ export function roleCeilingFromGrants(
   grants: ModuleGrantsMap,
   currentRole: UserRole,
 ): UserRole {
-  const anyAccess = APP_MODULE_KEYS.some((key) => grants[key]?.can_access);
-  if (!anyAccess) {
+  const hasElevatedModuleAccess = APP_MODULE_KEYS.some(
+    (key) => key !== "analistas" && grants[key]?.can_access,
+  );
+  if (!hasElevatedModuleAccess) {
+    if (currentRole === "admin") {
+      return "admin";
+    }
     return "dev";
   }
   const fullAdmin = APP_MODULE_KEYS.every((key) => grants[key]?.can_delete);
