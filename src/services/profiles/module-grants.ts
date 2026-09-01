@@ -1,9 +1,11 @@
 import "server-only";
 
 import {
+  grantsForAccessPreset,
   grantsFromRows,
   normalizeGrantFlags,
   roleCeilingFromGrants,
+  type AccessPreset,
   type ModuleGrantFlags,
   type ModuleGrantsMap,
 } from "@/lib/auth/capabilities";
@@ -27,6 +29,29 @@ export async function listModuleGrantsForProfile(
 
   if (error) {
     throw new Error(`Failed to load module grants: ${error.message}`);
+  }
+
+  return grantsFromRows(
+    (data ?? []).map((row) => ({
+      module: String(row.module),
+      can_access: Boolean(row.can_access),
+      can_edit: Boolean(row.can_edit),
+      can_delete: Boolean(row.can_delete),
+    })),
+  );
+}
+
+export async function listModuleGrantsForProfileAdmin(
+  profileId: string,
+): Promise<ModuleGrantsMap> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profile_module_grants")
+    .select("module, can_access, can_edit, can_delete")
+    .eq("profile_id", profileId);
+
+  if (error) {
+    throw new Error(`Failed to load module grants (admin): ${error.message}`);
   }
 
   return grantsFromRows(
@@ -66,9 +91,18 @@ export async function replaceModuleGrantsAdmin(input: {
     can_delete: normalized[module].can_delete,
   }));
 
+  const { error: deleteError } = await admin
+    .from("profile_module_grants")
+    .delete()
+    .eq("profile_id", input.profileId);
+
+  if (deleteError) {
+    throw new Error(`Failed to clear module grants: ${deleteError.message}`);
+  }
+
   const { error: grantsError } = await admin
     .from("profile_module_grants")
-    .upsert(rows, { onConflict: "profile_id,module" });
+    .insert(rows);
 
   if (grantsError) {
     throw new Error(`Failed to save module grants: ${grantsError.message}`);
@@ -131,6 +165,42 @@ export function isValidGrantsPayload(
     }
   }
   return true;
+}
+
+function isAccessPreset(value: string): value is AccessPreset {
+  return (
+    value === "" ||
+    value === "analyst" ||
+    value === "dev" ||
+    value === "gestor" ||
+    value === "admin"
+  );
+}
+
+export function resolveGrantsFromPermissionForm(input: {
+  presetApplied: string;
+  grantsJson: string;
+}): ModuleGrantsMap {
+  const preset = input.presetApplied.trim();
+  if (isAccessPreset(preset) && preset) {
+    const fromPreset = grantsForAccessPreset(preset);
+    if (fromPreset) {
+      return fromPreset;
+    }
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input.grantsJson);
+  } catch {
+    throw new Error("Matriz de privilégios inválida.");
+  }
+
+  if (!isValidGrantsPayload(parsed)) {
+    throw new Error("Matriz de privilégios incompleta.");
+  }
+
+  return parsed;
 }
 
 export type { AppModuleKey };

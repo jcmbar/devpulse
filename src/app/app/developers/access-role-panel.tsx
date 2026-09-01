@@ -10,23 +10,24 @@ import {
   type AccessPermissionsFormState,
 } from "@/app/app/developers/actions";
 import {
+  grantsMapsEqual,
+  inferAccessPreset,
   normalizeGrantFlags,
   presetGrantsForAnalyst,
   presetGrantsForRole,
+  type AccessPreset,
   type ModuleGrantsMap,
 } from "@/lib/auth/capabilities";
 import { APP_MODULES, type AppModuleKey } from "@/lib/auth/modules";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import type { UserRole } from "@/types/profile";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const initialState: AccessPermissionsFormState = {
   error: null,
   success: null,
 };
-
-type AccessPreset = "" | UserRole | "analyst";
 
 const PRESET_OPTIONS: Array<{ value: AccessPreset; label: string }> = [
   { value: "", label: "Manter matriz atual" },
@@ -40,16 +41,25 @@ type AccessPermissionsPanelProps = {
   developerId: string;
   profileId: string;
   initialGrants: ModuleGrantsMap;
+  profileRole: UserRole;
 };
 
 export function AccessPermissionsPanel({
   developerId,
   profileId,
   initialGrants,
+  profileRole,
 }: AccessPermissionsPanelProps) {
   const router = useRouter();
   const [grants, setGrants] = useState<ModuleGrantsMap>(initialGrants);
-  const [preset, setPreset] = useState<AccessPreset>("");
+  const [preset, setPreset] = useState<AccessPreset>(() =>
+    inferAccessPreset(initialGrants),
+  );
+
+  useEffect(() => {
+    setGrants(initialGrants);
+    setPreset(inferAccessPreset(initialGrants));
+  }, [initialGrants]);
 
   const [state, formAction, isPending] = useActionState(
     async (prev: AccessPermissionsFormState, formData: FormData) => {
@@ -63,6 +73,7 @@ export function AccessPermissionsPanel({
   );
 
   const grantJson = useMemo(() => JSON.stringify(grants), [grants]);
+  const inferredPreset = useMemo(() => inferAccessPreset(grants), [grants]);
 
   function applyPreset(next: AccessPreset) {
     setPreset(next);
@@ -104,11 +115,27 @@ export function AccessPermissionsPanel({
     setPreset("");
   }
 
+  const presetHint =
+    preset && !grantsMapsEqual(grants, initialGrants)
+      ? "O preset selecionado será aplicado ao salvar."
+      : inferredPreset
+        ? `Matriz atual corresponde ao preset ${PRESET_OPTIONS.find((option) => option.value === inferredPreset)?.label ?? inferredPreset}.`
+        : "Matriz personalizada. O papel (RLS) será recalculado ao salvar.";
+
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="developerId" value={developerId} />
       <input type="hidden" name="profileId" value={profileId} />
       <input type="hidden" name="grantsJson" value={grantJson} />
+      <input type="hidden" name="presetApplied" value={preset} />
+
+      <p className="text-xs text-muted-foreground">
+        Papel atual (RLS):{" "}
+        <span className="font-medium text-foreground">
+          {getRoleLabel(profileRole)}
+        </span>
+        . {presetHint}
+      </p>
 
       <FormField
         label="Preset"

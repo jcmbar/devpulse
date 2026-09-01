@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/permissions";
+import { getRoleLabel } from "@/lib/auth/role-labels";
 import {
   presetGrantsForRole,
   roleCeilingFromGrants,
+  type ModuleGrantsMap,
 } from "@/lib/auth/capabilities";
 import {
   normalizeJiraAccountId,
@@ -36,6 +38,7 @@ import {
 import {
   isValidGrantsPayload,
   replaceModuleGrantsAdmin,
+  resolveGrantsFromPermissionForm,
 } from "@/services/profiles/module-grants";
 import { recordSensitiveAccessAudit } from "@/services/security/sensitive-access-audit";
 import {
@@ -638,16 +641,26 @@ export async function updateDeveloperAccessPermissionsAction(
   const developerId = String(formData.get("developerId") ?? "").trim();
   const profileId = String(formData.get("profileId") ?? "").trim();
   const grantsRaw = String(formData.get("grantsJson") ?? "").trim();
+  const presetApplied = String(formData.get("presetApplied") ?? "").trim();
 
   if (!developerId || !profileId) {
     return { error: "Developer ou profile inválido.", success: null };
   }
 
-  let parsed: unknown;
+  let parsed: ModuleGrantsMap;
   try {
-    parsed = JSON.parse(grantsRaw);
-  } catch {
-    return { error: "Matriz de privilégios inválida.", success: null };
+    parsed = resolveGrantsFromPermissionForm({
+      presetApplied,
+      grantsJson: grantsRaw,
+    });
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Matriz de privilégios inválida.",
+      success: null,
+    };
   }
 
   if (!isValidGrantsPayload(parsed)) {
@@ -713,7 +726,7 @@ export async function updateDeveloperAccessPermissionsAction(
     revalidatePath(`/app/developers/${developerId}`);
     return {
       error: null,
-      success: "Privilégios de acesso atualizados.",
+      success: `Privilégios atualizados. Papel (RLS): ${getRoleLabel(role)}.`,
     };
   } catch (error) {
     const message =

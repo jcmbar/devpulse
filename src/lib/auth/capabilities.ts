@@ -127,3 +127,42 @@ export function grantsFromRows(
   }
   return map;
 }
+
+export function grantsMapsEqual(
+  left: ModuleGrantsMap,
+  right: ModuleGrantsMap,
+): boolean {
+  return APP_MODULE_KEYS.every((key) => {
+    const a = left[key];
+    const b = right[key];
+    return (
+      a.can_access === b.can_access &&
+      a.can_edit === b.can_edit &&
+      a.can_delete === b.can_delete
+    );
+  });
+}
+
+export type AccessPreset = "" | UserRole | "analyst";
+
+export function grantsForAccessPreset(preset: AccessPreset): ModuleGrantsMap | null {
+  if (!preset) {
+    return null;
+  }
+  if (preset === "analyst") {
+    return presetGrantsForAnalyst();
+  }
+  return presetGrantsForRole(preset);
+}
+
+export function inferAccessPreset(grants: ModuleGrantsMap): AccessPreset {
+  if (grantsMapsEqual(grants, presetGrantsForAnalyst())) {
+    return "analyst";
+  }
+  for (const role of ["dev", "gestor", "admin"] as const) {
+    if (grantsMapsEqual(grants, presetGrantsForRole(role))) {
+      return role;
+    }
+  }
+  return "";
+}

@@ -14,8 +14,8 @@ import { PersonAvatar } from "@/components/person-avatar";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { SectionShell } from "@/components/ui/section-shell";
 import { requirePermission } from "@/lib/auth/permissions";
-import { listModuleGrantsForProfile } from "@/services/profiles/module-grants";
 import { emptyModuleGrants } from "@/lib/auth/capabilities";
+import { listModuleGrantsForProfileAdmin } from "@/services/profiles/module-grants";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import { resolveDeveloperAccessInfo } from "@/services/auth/developer-access";
 import {
@@ -68,10 +68,14 @@ export default async function EditDeveloperPage({
   }
 
   const accessGrants = developer.profile
-    ? await listModuleGrantsForProfile(developer.profile.id).catch(() =>
-        emptyModuleGrants(),
+    ? await listModuleGrantsForProfileAdmin(developer.profile.id).catch(
+        () => emptyModuleGrants(),
       )
     : emptyModuleGrants();
+
+  const accessGrantsKey = developer.profile
+    ? `${developer.profile.id}:${developer.profile.role}:${JSON.stringify(accessGrants)}`
+    : "none";
 
   let timeBankBalance = 0;
   if (activeTab === "valores" && compensation?.time_bank_enabled) {
@@ -289,9 +293,11 @@ export default async function EditDeveloperPage({
               <div className="ui-dashboard-panel">
                 {developer.profile ? (
                   <AccessPermissionsPanel
+                    key={accessGrantsKey}
                     developerId={developer.id}
                     profileId={developer.profile.id}
                     initialGrants={accessGrants}
+                    profileRole={developer.profile.role}
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">
