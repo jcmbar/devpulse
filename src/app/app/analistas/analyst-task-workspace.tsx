@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalystDayTimeline } from "@/app/app/analistas/analyst-day-timeline";
 import {
   completeAnalystTaskAction,
   createAnalystTaskAction,
@@ -9,8 +10,12 @@ import {
 } from "@/app/app/analistas/actions";
 import { FormFeedback, FormField } from "@/components/ui/form";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
-import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { SectionShell } from "@/components/ui/section-shell";
+import {
+  isoDateFromInstant as timelineIsoDate,
+  taskHasActiveOverlap,
+  tasksOverlappingDay,
+} from "@/lib/analyst-tasks/timeline";
 import type {
   AnalystTask,
   AnalystTaskDay,
@@ -160,7 +165,7 @@ function DayCell({
             ? "Feriado sem tarefa registrada"
             : "Nenhuma tarefa registrada"
       }
-      className={`min-h-14 rounded-[var(--radius-sm)] border p-1.5 text-left transition ${
+      className={`min-h-[4.5rem] rounded-[var(--radius-sm)] border p-1.5 text-left transition ${
         selected
           ? "border-brand bg-brand-soft shadow-[var(--shadow-sm)]"
           : "border-border bg-card hover:border-brand/50 hover:bg-muted/30"
@@ -170,16 +175,35 @@ function DayCell({
         <span className="text-xs font-semibold text-foreground">{dayNumber}</span>
       </div>
       {day.task_count > 0 ? (
-        <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
           <span className="size-1.5 rounded-full bg-emerald-500" />
           Registrado
         </span>
       ) : (
-        <span className="mt-2 inline-flex animate-pulse items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+        <span className="mt-1.5 inline-flex animate-pulse items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
           <span className="size-1.5 rounded-full bg-amber-500" />
           Ausente
         </span>
       )}
+      {day.contracted_hours > 0 || day.hours > 0 ? (
+        <div className="mt-1 space-y-0.5">
+          <p className="text-[10px] font-semibold tabular-nums text-foreground">
+            {formatHours(day.hours)}
+          </p>
+          {day.contracted_hours > 0 ? (
+            <p
+              className={`text-[9px] tabular-nums ${
+                day.delta_hours >= 0
+                  ? "text-emerald-600/90 dark:text-emerald-400/90"
+                  : "text-amber-700/90 dark:text-amber-300/90"
+              }`}
+            >
+              {day.delta_hours >= 0 ? "+" : ""}
+              {formatHours(day.delta_hours)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -405,10 +429,15 @@ export function AnalystTaskWorkspace({
   const router = useRouter();
   const pathname = usePathname();
   const [pendingNavigation, startNavigation] = useTransition();
-  const [selectedDate, setSelectedDate] = useState(
-    metrics.daily.find((day) => day.hours > 0)?.date ??
-      `${month}-01`,
-  );
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const todayIso = timelineIsoDate(initialNow);
+    if (month === todayIso.slice(0, 7)) {
+      return todayIso;
+    }
+    return (
+      metrics.daily.find((day) => day.hours > 0)?.date ?? `${month}-01`
+    );
+  });
   const [editingTask, setEditingTask] = useState<AnalystTask | null>(null);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const startedAtEdited = useRef(false);
@@ -425,11 +454,18 @@ export function AnalystTaskWorkspace({
   const classificationResult = classification(metrics);
   const dailyByDate = new Map(metrics.daily.map((day) => [day.date, day]));
   const selectedDay = dailyByDate.get(selectedDate) ?? metrics.daily[0];
-  const selectedTasks = tasks.filter(
-    (task) =>
-      task.status === "completed" &&
-      isoDateFromInstant(task.started_at) === selectedDate,
+  const selectedTasks = tasksOverlappingDay(
+    tasks,
+    activeTask,
+    selectedDate,
+    initialNow,
+  ).sort(
+    (left, right) =>
+      new Date(left.started_at).getTime() - new Date(right.started_at).getTime(),
   );
+  const activeTaskHasOverlap =
+    activeTask != null &&
+    taskHasActiveOverlap(activeTask, tasks, activeTask, initialNow);
   const firstWeekday = new Date(`${month}-01T12:00:00Z`).getUTCDay();
   const calendarCells: Array<AnalystTaskDay | null> = [
     ...Array.from({ length: firstWeekday }, () => null),
@@ -643,7 +679,19 @@ export function AnalystTaskWorkspace({
                         URGENTE
                       </span>
                     ) : null}
+                    {activeTaskHasOverlap ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                        Conflito simultâneo
+                      </span>
+                    ) : null}
                   </div>
+                  {activeTaskHasOverlap ? (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      Esta tarefa coincide no horário com outra atividade do
+                      mesmo dia. O registro continua permitido; a marcação é
+                      apenas informativa.
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-xs text-muted-foreground">
                     Iniciada em {formatDateTime(activeTask.started_at)}
                   </p>
@@ -811,7 +859,7 @@ export function AnalystTaskWorkspace({
                   onSelect={() => setSelectedDate(day.date)}
                 />
               ) : (
-                <div key={`empty-${index}`} className="min-h-14" />
+                <div key={`empty-${index}`} className="min-h-[4.5rem]" />
               ),
             )}
           </div>
@@ -832,57 +880,30 @@ export function AnalystTaskWorkspace({
                   key={task.id}
                   task={task}
                   onEdit={() => setEditingTask(task)}
-                  canDelete={canDelete}
+                  canDelete={canDelete && task.status === "completed"}
                 />
               ))
             ) : (
               <div className="rounded-[var(--radius-sm)] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                Nenhuma tarefa concluída neste dia.
+                Nenhuma tarefa neste dia.
               </div>
             )}
           </div>
         </SectionShell>
       </div>
 
-      <CollapsibleSection
-        title="Resumo diário"
-        description="Horas registradas e diferença contra a carga contratada por dia útil."
-        defaultOpen={false}
+      <SectionShell
+        title="Linha do tempo"
+        description={`Atividades de ${formatDayLabel(selectedDate)} em formato de cronograma. Marcações pontilhadas indicam sobreposição simultânea.`}
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-          {metrics.daily
-            .filter((day) => day.hours > 0 || day.contracted_hours > 0)
-            .map((day) => (
-              <button
-                type="button"
-                key={day.date}
-                onClick={() => setSelectedDate(day.date)}
-                className={`rounded-[var(--radius-sm)] border bg-card px-3 py-2 text-left transition hover:border-brand/50 ${
-                  day.date === selectedDate
-                    ? "border-brand bg-brand-soft"
-                    : "border-border"
-                }`}
-              >
-                <p className="text-xs text-muted-foreground">
-                  {formatDayLabel(day.date)}
-                </p>
-                <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
-                  {formatHours(day.hours)}
-                </p>
-                <p
-                  className={`text-[11px] tabular-nums ${
-                    day.delta_hours >= 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-amber-700 dark:text-amber-300"
-                  }`}
-                >
-                  {day.delta_hours >= 0 ? "+" : ""}
-                  {formatHours(day.delta_hours)}
-                </p>
-              </button>
-            ))}
-        </div>
-      </CollapsibleSection>
+        <AnalystDayTimeline
+          dateIso={selectedDate}
+          dateLabel={formatDayLabel(selectedDate)}
+          tasks={tasks}
+          activeTask={activeTask}
+          initialNow={initialNow}
+        />
+      </SectionShell>
 
       {editingTask ? (
         <EditTaskDialog
