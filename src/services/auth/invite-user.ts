@@ -7,6 +7,7 @@ import {
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
+import { formatInviteAuthError } from "@/services/auth/format-auth-error";
 import { presetGrantsForRole } from "@/lib/auth/capabilities";
 import {
   isUserRole,
@@ -29,46 +30,6 @@ export type InviteAccessUserResult = {
   linked: boolean;
   message: string;
 };
-
-function mapInviteError(message: string): string {
-  const lower = message.toLowerCase();
-
-  if (
-    lower.includes("already been registered") ||
-    lower.includes("already registered") ||
-    lower.includes("user already exists") ||
-    lower.includes("email_exists")
-  ) {
-    return "Já existe um usuário com este e-mail. Use “Reenviar convite” ou vincule o profile existente.";
-  }
-
-  if (
-    lower.includes("invalid") &&
-    (lower.includes("email") || lower.includes("format"))
-  ) {
-    return "E-mail inválido.";
-  }
-
-  if (
-    lower.includes("not allowed") ||
-    lower.includes("forbidden") ||
-    lower.includes("permission")
-  ) {
-    return "Sem permissão para convidar usuários. Verifique a service role e o papel do operador.";
-  }
-
-  if (
-    lower.includes("service_role") ||
-    lower.includes("service role") ||
-    lower.includes("supabase_service_role_key") ||
-    lower.includes("placeholder") ||
-    lower.includes(".env.local")
-  ) {
-    return message;
-  }
-
-  return message;
-}
 
 /**
  * Invites a user via Supabase Auth Admin API (inviteUserByEmail).
@@ -105,7 +66,7 @@ export async function inviteAccessUser(
   });
 
   if (error) {
-    throw new Error(mapInviteError(error.message));
+    throw new Error(formatInviteAuthError(error));
   }
 
   const user = data.user;

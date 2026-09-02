@@ -68,18 +68,38 @@ type FormFeedbackProps = {
   success?: string | null;
 };
 
+function displayFeedbackMessage(
+  value: string | null | undefined,
+  fallback?: string,
+): string | null {
+  if (value == null) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed || trimmed === "{}") {
+    return fallback ?? null;
+  }
+  return trimmed;
+}
+
 export function FormFeedback({ error, success }: FormFeedbackProps) {
-  if (error) {
+  const errorMessage = displayFeedbackMessage(
+    error,
+    "Não foi possível concluir a operação. Tente novamente.",
+  );
+  const successMessage = displayFeedbackMessage(success);
+
+  if (errorMessage) {
     return (
       <p className="ui-alert-error" role="alert">
-        {error}
+        {errorMessage}
       </p>
     );
   }
-  if (success) {
+  if (successMessage) {
     return (
       <p className="ui-alert-success" role="status">
-        {success}
+        {successMessage}
       </p>
     );
   }

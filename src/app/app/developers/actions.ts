@@ -14,6 +14,7 @@ import {
   validateJiraAccountId,
 } from "@/lib/jira/account-id";
 import { inviteAccessUser } from "@/services/auth/invite-user";
+import { formatActionError } from "@/services/auth/format-auth-error";
 import { resendAccessInvite } from "@/services/auth/resend-invite";
 import {
   createDeveloperAdmin,
@@ -893,10 +894,10 @@ export async function inviteUserForDeveloperAction(
     return { error: null, success: result.message };
   } catch (error) {
     return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível convidar o usuário.",
+      error: formatActionError(
+        error,
+        "Não foi possível convidar o usuário.",
+      ),
       success: null,
     };
   }
