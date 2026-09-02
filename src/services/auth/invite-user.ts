@@ -7,7 +7,7 @@ import {
   isValidEmail,
   normalizeEmail,
 } from "@/services/auth/shared";
-import { formatInviteAuthError } from "@/services/auth/format-auth-error";
+import { formatInviteAuthError, logInviteAuthFailure } from "@/services/auth/format-auth-error";
 import { presetGrantsForRole } from "@/lib/auth/capabilities";
 import {
   isUserRole,
@@ -56,16 +56,19 @@ export async function inviteAccessUser(
 
   const admin = createAdminClient();
 
+  const redirectTo = getAuthConfirmRedirectTo();
+
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
     data: {
       full_name: fullName,
       role,
     },
     // Branded templates read this as {{ .RedirectTo }} and append token_hash.
-    redirectTo: getAuthConfirmRedirectTo(),
+    redirectTo,
   });
 
   if (error) {
+    logInviteAuthFailure({ email, redirectTo, error });
     throw new Error(formatInviteAuthError(error));
   }
 
