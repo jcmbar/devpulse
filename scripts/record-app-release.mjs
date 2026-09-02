@@ -3,10 +3,38 @@ import { readFile } from "node:fs/promises";
 
 function git(args) {
   try {
-    return execFileSync("git", args, { encoding: "utf8" }).trim();
+    return execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch {
     return "";
   }
+}
+
+function gitCommitExists(sha) {
+  if (!sha) {
+    return false;
+  }
+  try {
+    execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function gitLogDescriptions(previousSha, commitSha) {
+  const logArgs =
+    previousSha &&
+    previousSha !== commitSha &&
+    gitCommitExists(previousSha) &&
+    gitCommitExists(commitSha)
+      ? ["log", `${previousSha}..${commitSha}`, "--pretty=format:%h — %s%n%b"]
+      : ["log", "-20", "--pretty=format:%h — %s%n%b"];
+  return git(logArgs);
 }
 
 function env(name) {
@@ -171,13 +199,10 @@ async function main() {
     previousSha,
     commitSha,
   });
-  const logArgs = previousSha && previousSha !== commitSha
-    ? ["log", `${previousSha}..${commitSha}`, "--pretty=format:%h — %s%n%b"]
-    : ["log", "-20", "--pretty=format:%h — %s%n%b"];
   const commitDescriptions =
-    git(logArgs) ||
     comparedGithubDescriptions ||
     currentGithubDescriptions ||
+    gitLogDescriptions(previousSha, commitSha) ||
     `${commitSha.slice(0, 7)} — Deploy automático`;
   const firstCommitLine =
     commitDescriptions.split("\n").find((line) => line.trim()) ??
