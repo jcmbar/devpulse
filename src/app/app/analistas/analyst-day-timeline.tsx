@@ -13,7 +13,7 @@ type Props = {
   dateIso: string;
   dateLabel: string;
   tasks: AnalystTask[];
-  activeTask: AnalystTask | null;
+  activeTasks: AnalystTask[];
   initialNow: string;
 };
 
@@ -37,18 +37,18 @@ export function AnalystDayTimeline({
   dateIso,
   dateLabel,
   tasks,
-  activeTask,
+  activeTasks,
   initialNow,
 }: Props) {
   const timeline = useMemo(
     () =>
       buildDayTimeline({
         tasks,
-        activeTask,
+        activeTasks,
         dateIso,
         nowIso: initialNow,
       }),
-    [tasks, activeTask, dateIso, initialNow],
+    [tasks, activeTasks, dateIso, initialNow],
   );
 
   if (timeline.segments.length === 0) {

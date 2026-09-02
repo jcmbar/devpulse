@@ -155,9 +155,6 @@ export async function createAnalystTaskAction(
       source: "devpulse",
     });
     if (error) {
-      if (error.code === "23505") {
-        throw new Error("Este analista já possui uma tarefa em andamento.");
-      }
       throw new Error(`Não foi possível registrar a tarefa: ${error.message}`);
     }
 
@@ -202,9 +199,6 @@ export async function updateAnalystTaskAction(
       .eq("id", taskId)
       .is("deleted_at", null);
     if (error) {
-      if (error.code === "23505") {
-        throw new Error("Este analista já possui outra tarefa em andamento.");
-      }
       throw new Error(`Não foi possível atualizar a tarefa: ${error.message}`);
     }
 

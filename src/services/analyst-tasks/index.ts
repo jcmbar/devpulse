@@ -102,9 +102,9 @@ export async function listAnalystTasksForMonth(input: {
   return (data ?? []).map((row) => mapTask(row as Record<string, unknown>));
 }
 
-export async function getActiveAnalystTask(
+export async function listActiveAnalystTasks(
   developerId: string,
-): Promise<AnalystTask | null> {
+): Promise<AnalystTask[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("analyst_tasks")
@@ -112,13 +112,13 @@ export async function getActiveAnalystTask(
     .eq("developer_id", developerId)
     .eq("status", "running")
     .is("deleted_at", null)
-    .maybeSingle();
+    .order("started_at", { ascending: false });
 
   if (error) {
-    throw new Error(`Falha ao carregar tarefa ativa: ${error.message}`);
+    throw new Error(`Falha ao carregar tarefas ativas: ${error.message}`);
   }
 
-  return data ? mapTask(data as Record<string, unknown>) : null;
+  return (data ?? []).map((row) => mapTask(row as Record<string, unknown>));
 }
 
 export function computeAnalystTaskMetrics(input: {

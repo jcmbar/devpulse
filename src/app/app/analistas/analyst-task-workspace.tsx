@@ -32,7 +32,13 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useActionState } from "react";
+import { cn } from "@/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
+
+type TaskModalView =
+  | { kind: "closed" }
+  | { kind: "create" }
+  | { kind: "complete"; taskId: string };
 
 type AnalystOption = { id: string; name: string };
 
@@ -46,7 +52,7 @@ type Props = {
   defaultStartedAt: string;
   initialNow: string;
   tasks: AnalystTask[];
-  activeTask: AnalystTask | null;
+  activeTasks: AnalystTask[];
   metrics: AnalystTaskMetrics;
   canManageAll: boolean;
   canEdit: boolean;
@@ -229,34 +235,69 @@ function classification(metrics: AnalystTaskMetrics): {
 function ActiveTimer({
   startedAt,
   initialNow,
+  className,
 }: {
   startedAt: string;
   initialNow: string;
+  className?: string;
 }) {
-  const [now, setNow] = useState(() => new Date(initialNow).getTime());
+  const startedMs = new Date(startedAt).getTime();
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    const elapsedMs = Math.max(0, new Date(initialNow).getTime() - startedMs);
+    return Math.floor(elapsedMs / 1000);
+  });
+
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const elapsedMs = Math.max(0, new Date(initialNow).getTime() - startedMs);
+    const baseSeconds = Math.floor(elapsedMs / 1000);
+    const anchor = performance.now();
+
+    setElapsedSeconds(baseSeconds);
+
+    const tick = () => {
+      setElapsedSeconds(
+        baseSeconds + Math.floor((performance.now() - anchor) / 1000),
+      );
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [startedAt, initialNow, startedMs]);
 
   return (
-    <span className="font-mono text-xl font-semibold tabular-nums text-brand-foreground">
-      {formatElapsed(startedAt, now)}
+    <span
+      className={cn(
+        "font-mono font-semibold tabular-nums text-brand-foreground",
+        className ?? "text-xl",
+      )}
+    >
+      {formatElapsed(startedAt, startedMs + elapsedSeconds * 1000)}
     </span>
   );
 }
 
 function TaskRow({
   task,
+  initialNow,
   onEdit,
+  onContinue,
   canDelete,
 }: {
   task: AnalystTask;
+  initialNow: string;
   onEdit: () => void;
+  onContinue: () => void;
   canDelete: boolean;
 }) {
+  const isRunning = task.status === "running";
+
   return (
-    <div className="flex flex-col gap-3 rounded-[var(--radius-sm)] border border-border bg-card px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={`flex flex-col gap-3 rounded-[var(--radius-sm)] border bg-card px-3 py-3 sm:flex-row sm:items-start sm:justify-between ${
+        isRunning ? "border-brand/40 bg-brand-soft/20" : "border-border"
+      }`}
+    >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-foreground">{task.description}</span>
@@ -264,6 +305,11 @@ function TaskRow({
             <span className="inline-flex animate-pulse items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
               <AlertTriangle className="size-3" />
               URGENTE
+            </span>
+          ) : null}
+          {isRunning ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand-foreground">
+              Em andamento
             </span>
           ) : null}
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
@@ -286,12 +332,20 @@ function TaskRow({
           </details>
         ) : null}
       </div>
-      <div className="flex shrink-0 gap-2">
-        <button type="button" onClick={onEdit} className="ui-btn-secondary">
-          <Pencil className="size-3.5" />
-          Editar
-        </button>
-        {canDelete ? (
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <div className="flex gap-2">
+          {isRunning ? (
+            <button type="button" onClick={onContinue} className="ui-btn-secondary">
+              <Play className="size-3.5" />
+              Continuar
+            </button>
+          ) : (
+            <button type="button" onClick={onEdit} className="ui-btn-secondary">
+              <Pencil className="size-3.5" />
+              Editar
+            </button>
+          )}
+          {canDelete ? (
           <form
             action={async (formData) => {
               await deleteAnalystTaskAction(undefined, formData);
@@ -308,6 +362,14 @@ function TaskRow({
               Excluir
             </button>
           </form>
+        ) : null}
+        </div>
+        {isRunning ? (
+          <ActiveTimer
+            startedAt={task.started_at}
+            initialNow={initialNow}
+            className="text-base"
+          />
         ) : null}
       </div>
     </div>
@@ -420,7 +482,7 @@ export function AnalystTaskWorkspace({
   defaultStartedAt,
   initialNow,
   tasks,
-  activeTask,
+  activeTasks,
   metrics,
   canManageAll,
   canEdit,
@@ -439,10 +501,12 @@ export function AnalystTaskWorkspace({
     );
   });
   const [editingTask, setEditingTask] = useState<AnalystTask | null>(null);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [modalView, setModalView] = useState<TaskModalView>({ kind: "closed" });
   const startedAtEdited = useRef(false);
   const descriptionRef = useRef<HTMLInputElement>(null);
   const concludeRef = useRef<HTMLButtonElement>(null);
+  const handledCreateSuccess = useRef<string | null>(null);
+  const handledCompleteSuccess = useRef<string | null>(null);
   const [createState, createAction, createPending] = useActionState(
     createAnalystTaskAction,
     initialState,
@@ -451,21 +515,28 @@ export function AnalystTaskWorkspace({
     completeAnalystTaskAction,
     initialState,
   );
+  const runningTasks = activeTasks;
+  const runningCount = runningTasks.length;
+  const focusedRunningTask =
+    modalView.kind === "complete"
+      ? (runningTasks.find((task) => task.id === modalView.taskId) ?? null)
+      : null;
+  const taskModalOpen = modalView.kind !== "closed";
   const classificationResult = classification(metrics);
   const dailyByDate = new Map(metrics.daily.map((day) => [day.date, day]));
   const selectedDay = dailyByDate.get(selectedDate) ?? metrics.daily[0];
   const selectedTasks = tasksOverlappingDay(
     tasks,
-    activeTask,
+    activeTasks,
     selectedDate,
     initialNow,
   ).sort(
     (left, right) =>
       new Date(left.started_at).getTime() - new Date(right.started_at).getTime(),
   );
-  const activeTaskHasOverlap =
-    activeTask != null &&
-    taskHasActiveOverlap(activeTask, tasks, activeTask, initialNow);
+  const focusedTaskHasOverlap =
+    focusedRunningTask != null &&
+    taskHasActiveOverlap(focusedRunningTask, tasks, activeTasks, initialNow);
   const firstWeekday = new Date(`${month}-01T12:00:00Z`).getUTCDay();
   const calendarCells: Array<AnalystTaskDay | null> = [
     ...Array.from({ length: firstWeekday }, () => null),
@@ -477,14 +548,66 @@ export function AnalystTaskWorkspace({
       return;
     }
     const focusTarget = window.setTimeout(() => {
-      if (activeTask) {
+      if (modalView.kind === "complete") {
         concludeRef.current?.focus();
       } else {
         descriptionRef.current?.focus();
       }
     }, 0);
     return () => window.clearTimeout(focusTarget);
-  }, [activeTask, taskModalOpen]);
+  }, [modalView, taskModalOpen]);
+
+  useEffect(() => {
+    if (modalView.kind !== "complete") {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      setModalView({ kind: "closed" });
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [modalView.kind]);
+
+  useEffect(() => {
+    if (
+      !createState.success ||
+      handledCreateSuccess.current === createState.success
+    ) {
+      return;
+    }
+    handledCreateSuccess.current = createState.success;
+    if (createState.success === "Tarefa iniciada." && runningCount > 0) {
+      const latestTask = runningTasks.reduce((latest, task) =>
+        new Date(task.started_at).getTime() > new Date(latest.started_at).getTime()
+          ? task
+          : latest,
+      );
+      setModalView({ kind: "complete", taskId: latestTask.id });
+      return;
+    }
+    setModalView({ kind: "closed" });
+  }, [createState.success, runningCount, runningTasks]);
+
+  useEffect(() => {
+    if (
+      !completeState.success ||
+      handledCompleteSuccess.current === completeState.success
+    ) {
+      return;
+    }
+    handledCompleteSuccess.current = completeState.success;
+    setModalView({ kind: "closed" });
+  }, [completeState.success]);
+
+  useEffect(() => {
+    if (modalView.kind === "complete" && focusedRunningTask == null) {
+      setModalView({ kind: "closed" });
+    }
+  }, [focusedRunningTask, modalView.kind]);
 
   useEffect(() => {
     if (!canEdit || taskModalOpen) {
@@ -503,8 +626,7 @@ export function AnalystTaskWorkspace({
         return;
       }
       event.preventDefault();
-      startedAtEdited.current = false;
-      setTaskModalOpen(true);
+      openCreateModal();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -518,9 +640,17 @@ export function AnalystTaskWorkspace({
     startNavigation(() => router.push(`${pathname}?${params.toString()}`));
   }
 
-  function openTaskModal() {
+  function openCreateModal() {
     startedAtEdited.current = false;
-    setTaskModalOpen(true);
+    setModalView({ kind: "create" });
+  }
+
+  function openCompleteModal(taskId: string) {
+    setModalView({ kind: "complete", taskId });
+  }
+
+  function hideTaskModal() {
+    setModalView({ kind: "closed" });
   }
 
   return (
@@ -621,13 +751,18 @@ export function AnalystTaskWorkspace({
           {canEdit ? (
             <button
               type="button"
-              onClick={openTaskModal}
+              onClick={openCreateModal}
               className={`ui-btn-primary mt-auto w-full justify-center px-4 py-2.5 ${
-                activeTask ? "animate-pulse ring-2 ring-brand/40" : ""
+                runningCount > 0 ? "ring-2 ring-brand/40" : ""
               }`}
             >
               <Play className="size-4" />
-              {activeTask ? "Tarefa em andamento" : "Iniciar tarefa"}
+              Iniciar tarefa
+              {runningCount > 0 ? (
+                <span className="rounded-full bg-brand-foreground/15 px-2 py-0.5 text-[10px] font-semibold">
+                  {runningCount} em andamento
+                </span>
+              ) : null}
               <span className="rounded border border-current/30 px-1.5 py-0.5 text-xs opacity-80">
                 Enter
               </span>
@@ -653,12 +788,14 @@ export function AnalystTaskWorkspace({
                   id="analyst-task-modal-title"
                   className="mt-1 text-lg font-semibold text-foreground"
                 >
-                  {activeTask ? "Tarefa em andamento" : "Iniciar tarefa"}
+                  {modalView.kind === "complete"
+                    ? "Tarefa em andamento"
+                    : "Iniciar tarefa"}
                 </h2>
               </div>
               <button
                 type="button"
-                onClick={() => setTaskModalOpen(false)}
+                onClick={hideTaskModal}
                 className="ui-btn-ghost px-2"
                 aria-label="Fechar modal"
               >
@@ -666,26 +803,26 @@ export function AnalystTaskWorkspace({
               </button>
             </div>
 
-            {activeTask ? (
+            {modalView.kind === "complete" && focusedRunningTask ? (
               <div className="mt-5 space-y-5">
                 <div className="rounded-[var(--radius-sm)] border border-brand/30 bg-brand-soft p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-brand-foreground">
-                      {activeTask.description}
+                      {focusedRunningTask.description}
                     </span>
-                    {activeTask.is_urgent ? (
+                    {focusedRunningTask.is_urgent ? (
                       <span className="inline-flex animate-pulse items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
                         <AlertTriangle className="size-3" />
                         URGENTE
                       </span>
                     ) : null}
-                    {activeTaskHasOverlap ? (
+                    {focusedTaskHasOverlap ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
                         Conflito simultâneo
                       </span>
                     ) : null}
                   </div>
-                  {activeTaskHasOverlap ? (
+                  {focusedTaskHasOverlap ? (
                     <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
                       Esta tarefa coincide no horário com outra atividade do
                       mesmo dia. O registro continua permitido; a marcação é
@@ -693,17 +830,29 @@ export function AnalystTaskWorkspace({
                     </p>
                   ) : null}
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Iniciada em {formatDateTime(activeTask.started_at)}
+                    Iniciada em {formatDateTime(focusedRunningTask.started_at)}
                   </p>
                   <div className="mt-4 text-center">
                     <ActiveTimer
-                      startedAt={activeTask.started_at}
+                      startedAt={focusedRunningTask.started_at}
                       initialNow={initialNow}
                     />
                   </div>
                 </div>
-                <form action={completeAction} className="flex justify-end">
-                  <input type="hidden" name="taskId" value={activeTask.id} />
+                <form action={completeAction} className="flex justify-end gap-2">
+                  <input
+                    type="hidden"
+                    name="taskId"
+                    value={focusedRunningTask.id}
+                  />
+                  <button
+                    type="button"
+                    onClick={hideTaskModal}
+                    className="ui-btn-secondary px-5 py-3"
+                  >
+                    Ocultar
+                    <span className="text-xs opacity-70">ESC</span>
+                  </button>
                   <button
                     ref={concludeRef}
                     type="submit"
@@ -720,7 +869,7 @@ export function AnalystTaskWorkspace({
                   success={completeState.success}
                 />
               </div>
-            ) : (
+            ) : modalView.kind === "create" ? (
               <form
                 action={createAction}
                 className="mt-5 space-y-4"
@@ -825,7 +974,7 @@ export function AnalystTaskWorkspace({
                   </button>
                 </div>
               </form>
-            )}
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -879,7 +1028,9 @@ export function AnalystTaskWorkspace({
                 <TaskRow
                   key={task.id}
                   task={task}
+                  initialNow={initialNow}
                   onEdit={() => setEditingTask(task)}
+                  onContinue={() => openCompleteModal(task.id)}
                   canDelete={canDelete && task.status === "completed"}
                 />
               ))
@@ -900,7 +1051,7 @@ export function AnalystTaskWorkspace({
           dateIso={selectedDate}
           dateLabel={formatDayLabel(selectedDate)}
           tasks={tasks}
-          activeTask={activeTask}
+          activeTasks={activeTasks}
           initialNow={initialNow}
         />
       </SectionShell>

@@ -8,7 +8,7 @@ import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays
 import { getCurrentDeveloperCompensation, listDevelopersAdmin } from "@/services/developers";
 import {
   computeAnalystTaskMetrics,
-  getActiveAnalystTask,
+  listActiveAnalystTasks,
   listAnalystTasksForMonth,
 } from "@/services/analyst-tasks";
 import { ClipboardClock } from "lucide-react";
@@ -93,12 +93,12 @@ export default async function AnalystTasksPage({ searchParams }: PageProps) {
   }
 
   const compensation = await getCurrentDeveloperCompensation(selectedDeveloper.id);
-  const [tasks, activeTask, holidayData] = await Promise.all([
+  const [tasks, activeTasks, holidayData] = await Promise.all([
     listAnalystTasksForMonth({
       developerId: selectedDeveloper.id,
       yearMonth: month,
     }),
-    getActiveAnalystTask(selectedDeveloper.id),
+    listActiveAnalystTasks(selectedDeveloper.id),
     listApplicableHolidayDatesForDeveloperMonth({
       developerId: selectedDeveloper.id,
       yearMonth: month,
@@ -133,7 +133,7 @@ export default async function AnalystTasksPage({ searchParams }: PageProps) {
         defaultStartedAt={renderedAt}
         initialNow={renderedAt}
         tasks={tasks}
-        activeTask={activeTask}
+        activeTasks={activeTasks}
         metrics={metrics}
         canManageAll={managers}
         canEdit={canEdit}

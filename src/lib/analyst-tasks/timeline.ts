@@ -71,7 +71,7 @@ function clipSegmentToDay(input: {
 
 export function tasksOverlappingDay(
   tasks: AnalystTask[],
-  activeTask: AnalystTask | null,
+  activeTasks: AnalystTask[],
   dateIso: string,
   nowIso: string,
 ): AnalystTask[] {
@@ -79,8 +79,8 @@ export function tasksOverlappingDay(
   for (const task of tasks) {
     merged.set(task.id, task);
   }
-  if (activeTask) {
-    merged.set(activeTask.id, activeTask);
+  for (const task of activeTasks) {
+    merged.set(task.id, task);
   }
 
   const isToday = isoDateFromInstant(nowIso) === dateIso;
@@ -169,7 +169,7 @@ function buildHourLabels(startMinutes: number, endMinutes: number): string[] {
 
 export function buildDayTimeline(input: {
   tasks: AnalystTask[];
-  activeTask: AnalystTask | null;
+  activeTasks: AnalystTask[];
   dateIso: string;
   nowIso: string;
   defaultStartHour?: number;
@@ -177,7 +177,7 @@ export function buildDayTimeline(input: {
 }): DayTimeline {
   const dayTasks = tasksOverlappingDay(
     input.tasks,
-    input.activeTask,
+    input.activeTasks,
     input.dateIso,
     input.nowIso,
   );
@@ -249,13 +249,13 @@ export function buildDayTimeline(input: {
 export function taskHasActiveOverlap(
   task: AnalystTask,
   tasks: AnalystTask[],
-  activeTask: AnalystTask | null,
+  activeTasks: AnalystTask[],
   nowIso: string,
 ): boolean {
   const dateIso = isoDateFromInstant(task.started_at);
   const timeline = buildDayTimeline({
     tasks,
-    activeTask,
+    activeTasks,
     dateIso,
     nowIso,
   });
