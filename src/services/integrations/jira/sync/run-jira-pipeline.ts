@@ -1,14 +1,9 @@
 import "server-only";
 
-import { revalidatePath } from "next/cache";
-import {
-  recomputeJiraFlowDailyFacts,
-  recomputeJiraFlowMetrics,
-} from "@/services/analytics/jira";
-import { materializeJiraCompiladoSnapshot } from "@/services/compilado/materialize-jira-snapshot";
 import type { JiraSyncTriggerSource } from "@/services/integrations/jira/constants";
 import { getJiraIntegration } from "@/services/integrations/jira/repositories/integrations";
 import { updatePipelineLockStep } from "@/services/integrations/jira/sync/pipeline-lock";
+import { runJiraPipelinePostSyncSteps } from "@/services/integrations/jira/sync/run-jira-pipeline-post-sync";
 import { runJiraSync } from "@/services/integrations/jira/sync/run-jira-sync";
 
 export type RunJiraPipelineInput = {
@@ -26,13 +21,6 @@ export type RunJiraPipelineResult = {
   message: string;
   error?: string;
 };
-
-function revalidateJiraSurfaces() {
-  revalidatePath("/app/jira");
-  revalidatePath("/app/jira/analytics");
-  revalidatePath("/app/gestor");
-  revalidatePath("/app");
-}
 
 /**
  * Full Jira → analytics → Compilado pipeline for one integration.
@@ -86,53 +74,28 @@ export async function runJiraPipelineForIntegration(
       };
     }
 
-    await updatePipelineLockStep(integration.id, "flow");
-
-    const flowResult = await recomputeJiraFlowMetrics({
+    const postSync = await runJiraPipelinePostSyncSteps({
       integrationId: integration.id,
-    });
-    if (!flowResult.ok) {
-      return {
-        ok: false,
-        syncRunId,
-        step: "flow",
-        message: "Falha no recompute de fluxo.",
-        error: flowResult.error ?? "Falha ao recalcular métricas.",
-      };
-    }
-
-    await updatePipelineLockStep(integration.id, "daily");
-
-    const dailyResult = await recomputeJiraFlowDailyFacts({
-      integrationId: integration.id,
-      triggerSource: input.triggerSource,
       createdBy: input.createdBy,
+      syncRunId,
+      triggerSource: input.triggerSource,
     });
-    if (!dailyResult.ok) {
+
+    if (!postSync.ok) {
       return {
         ok: false,
         syncRunId,
-        step: "daily",
-        message: "Falha nos fatos diários.",
-        error: dailyResult.error ?? "Falha ao recalcular fatos diários.",
+        step: postSync.step,
+        message: postSync.message,
+        error: postSync.error,
       };
     }
-
-    await updatePipelineLockStep(integration.id, "compilado");
-
-    const materialized = await materializeJiraCompiladoSnapshot({
-      integrationId: integration.id,
-      importedBy: input.createdBy,
-      syncRunId,
-    });
-
-    revalidateJiraSurfaces();
 
     return {
       ok: true,
       syncRunId,
       step: "compilado",
-      message: `Pipeline OK · sync ${syncResult.run.mode} · ${syncResult.run.issues_upserted} issues · Compilado ${materialized.cardsInserted} cards · ${materialized.justificationsCopied} justificativa(s) copiada(s)`,
+      message: `Pipeline OK · sync ${syncResult.run.mode} · ${syncResult.run.issues_upserted} issues · ${postSync.message}`,
     };
   } catch (error) {
     return {

@@ -224,6 +224,11 @@ export function GestorSyncControls({
             Última falha: {failed.error_message}
           </p>
         ) : null}
+        {primary?.pipelineLastError && !isRunning ? (
+          <p className="max-w-xs text-danger" title={primary.pipelineLastError}>
+            Pipeline: {primary.pipelineLastError}
+          </p>
+        ) : null}
         {summaries.length > 1 && isRunning ? (
           <p className="text-muted-foreground">
             {summaries.filter((s) => s.activeRun || s.pipelineLocked).length}/

@@ -13,4 +13,5 @@ export type JiraSyncStatusSummary = {
   latestFailedRun: JiraSyncRun | null;
   pipelineLocked: boolean;
   pipelineStep: JiraPipelineStepId | null;
+  pipelineLastError: string | null;
 };

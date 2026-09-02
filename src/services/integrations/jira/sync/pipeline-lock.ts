@@ -2,6 +2,7 @@ import "server-only";
 
 import type { JiraPipelineStepId } from "@/app/app/jira/pipeline-shared";
 import {
+  JIRA_PIPELINE_LAST_ERROR_KEY,
   JIRA_PIPELINE_LOCK_SETTINGS_KEY,
   JIRA_SYNC_STALE_MINUTES,
   type JiraSyncTriggerSource,
@@ -163,6 +164,41 @@ export async function updatePipelineLockStep(
       ...integration.settings,
       [JIRA_PIPELINE_LOCK_SETTINGS_KEY]: { ...lock, step },
     },
+  });
+}
+
+export async function setPipelineLastError(
+  integrationId: string,
+  error: string,
+): Promise<void> {
+  const integration = await getJiraIntegration(integrationId);
+  if (!integration) {
+    return;
+  }
+  await updateJiraIntegrationSettings({
+    integrationId,
+    settings: {
+      ...integration.settings,
+      [JIRA_PIPELINE_LAST_ERROR_KEY]: error,
+    },
+  });
+}
+
+export async function clearPipelineLastError(
+  integrationId: string,
+): Promise<void> {
+  const integration = await getJiraIntegration(integrationId);
+  if (!integration) {
+    return;
+  }
+  if (!(JIRA_PIPELINE_LAST_ERROR_KEY in integration.settings)) {
+    return;
+  }
+  const nextSettings = { ...integration.settings };
+  delete nextSettings[JIRA_PIPELINE_LAST_ERROR_KEY];
+  await updateJiraIntegrationSettings({
+    integrationId,
+    settings: nextSettings,
   });
 }
 

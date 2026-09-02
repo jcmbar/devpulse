@@ -13,6 +13,8 @@ import {
   hasPipelineLock,
   recoverStaleSyncState,
   releasePipelineLock,
+  setPipelineLastError,
+  clearPipelineLastError,
   tryAcquirePipelineLock,
 } from "@/services/integrations/jira/sync/pipeline-lock";
 import { runJiraPipelineForIntegration } from "@/services/integrations/jira/sync/run-jira-pipeline";
@@ -147,6 +149,8 @@ export async function triggerJiraSync(
     };
   }
 
+  await clearPipelineLastError(input.integrationId);
+
   try {
     const result = await runJiraPipelineForIntegration({
       integrationId: input.integrationId,
@@ -157,6 +161,10 @@ export async function triggerJiraSync(
     });
 
     if (!result.ok) {
+      await setPipelineLastError(
+        input.integrationId,
+        result.error ?? result.message,
+      );
       return {
         ok: false,
         started: true,
@@ -165,6 +173,8 @@ export async function triggerJiraSync(
         error: result.error,
       };
     }
+
+    await clearPipelineLastError(input.integrationId);
 
     return {
       ok: true,
@@ -181,12 +191,15 @@ export async function triggerJiraSync(
         message: "Já existe uma sincronização em andamento.",
       };
     }
+    const message =
+      error instanceof Error ? error.message : "Erro inesperado.";
+    await setPipelineLastError(input.integrationId, message);
     return {
       ok: false,
       started: true,
       syncRunId: null,
       message: "Falha na pipeline.",
-      error: error instanceof Error ? error.message : "Erro inesperado.",
+      error: message,
     };
   } finally {
     await releasePipelineLock(input.integrationId);

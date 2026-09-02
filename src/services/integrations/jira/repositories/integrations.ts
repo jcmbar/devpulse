@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { asJiraFieldMappings } from "@/lib/jira/field-mappings";
 import {
   JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY,
+  JIRA_PIPELINE_LAST_ERROR_KEY,
   JIRA_SYNC_STALE_MINUTES,
   resolveJiraAutoSyncCooldownMinutes,
 } from "@/services/integrations/jira/constants";
@@ -522,6 +523,12 @@ export async function getJiraSyncStatusSummary(
     pipelineStep = activeRun ? "sync" : "flow";
   }
 
+  const lastErrorRaw = integration.settings[JIRA_PIPELINE_LAST_ERROR_KEY];
+  const pipelineLastError =
+    typeof lastErrorRaw === "string" && lastErrorRaw.trim().length > 0
+      ? lastErrorRaw
+      : null;
+
   return {
     integrationId: integration.id,
     teamId: integration.team_id,
@@ -533,6 +540,7 @@ export async function getJiraSyncStatusSummary(
     latestFailedRun,
     pipelineLocked,
     pipelineStep,
+    pipelineLastError,
   };
 }
 

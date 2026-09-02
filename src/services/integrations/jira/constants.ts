@@ -83,6 +83,9 @@ export const JIRA_SYNC_STALE_MINUTES = 45;
 /** Key inside jira_integrations.settings for full-pipeline lease. */
 export const JIRA_PIPELINE_LOCK_SETTINGS_KEY = "pipeline_lock";
 
+/** Last background pipeline failure (cleared on next manual start). */
+export const JIRA_PIPELINE_LAST_ERROR_KEY = "pipeline_last_error";
+
 /** Key inside jira_integrations.settings for auto-sync cooldown (minutes). */
 export const JIRA_AUTO_SYNC_COOLDOWN_SETTINGS_KEY =
   "auto_sync_cooldown_minutes";

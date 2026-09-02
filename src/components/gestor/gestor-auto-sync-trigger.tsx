@@ -3,6 +3,8 @@
 import { requestGestorAutoSyncAction } from "@/app/app/jira/pipeline-actions";
 import { useEffect, useRef } from "react";
 
+const GESTOR_AUTO_SYNC_DELAY_MS = 60_000;
+
 type GestorAutoSyncTriggerProps = {
   /** Filtered team id, or null for “all teams”. */
   teamId: string | null;
@@ -10,7 +12,7 @@ type GestorAutoSyncTriggerProps = {
 
 /**
  * One-shot mount trigger for gestor auto-sync.
- * Does not block RSC HTML; schedules work via server action + after().
+ * Waits before scheduling so manual "Rodar Sync Agora" is not racing the background pipeline.
  */
 export function GestorAutoSyncTrigger({ teamId }: GestorAutoSyncTriggerProps) {
   const fired = useRef(false);
@@ -20,9 +22,16 @@ export function GestorAutoSyncTrigger({ teamId }: GestorAutoSyncTriggerProps) {
       return;
     }
     fired.current = true;
-    void requestGestorAutoSyncAction({ teamId }).catch((error) => {
-      console.error("[GestorAutoSyncTrigger]", error);
-    });
+
+    const timer = window.setTimeout(() => {
+      void requestGestorAutoSyncAction({ teamId }).catch((error) => {
+        console.error("[GestorAutoSyncTrigger]", error);
+      });
+    }, GESTOR_AUTO_SYNC_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [teamId]);
 
   return null;

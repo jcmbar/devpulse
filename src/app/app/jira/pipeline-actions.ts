@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   recomputeJiraFlowDailyFacts,
@@ -17,7 +18,15 @@ import {
   findActiveJiraSyncRun,
   markActiveJiraSyncRunsFailed,
 } from "@/services/integrations/jira/repositories/integrations";
-import { recoverStaleSyncState } from "@/services/integrations/jira/sync/pipeline-lock";
+import {
+  clearPipelineLastError,
+  recoverStaleSyncState,
+  releasePipelineLock,
+  setPipelineLastError,
+  tryAcquirePipelineLock,
+  updatePipelineLockStep,
+} from "@/services/integrations/jira/sync/pipeline-lock";
+import { runJiraPipelinePostSyncSteps } from "@/services/integrations/jira/sync/run-jira-pipeline-post-sync";
 import type { JiraSyncStatusSummary } from "@/types/jira-sync-status";
 import { scheduleEligibleJiraAutoSyncs } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
 import type {
@@ -310,6 +319,100 @@ export async function requestGestorAutoSyncAction(input: {
     trigger: "auto_gestor_load",
     actorUserId: context.profile.id,
   });
+}
+
+export async function getJiraPipelineStatusAction(input: {
+  integrationId: string;
+}): Promise<JiraSyncStatusSummary | null> {
+  await requirePermission("jira", "edit");
+  return getJiraSyncStatusSummary(input.integrationId);
+}
+
+export type BeginManualJiraPipelineResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function beginManualJiraPipelineAction(input: {
+  integrationId: string;
+  teamId: string;
+}): Promise<BeginManualJiraPipelineResult> {
+  const context = await requirePermission("jira", "edit");
+  await requireIntegrationPair(input);
+
+  await recoverStaleSyncState(input.integrationId);
+  await clearPipelineLastError(input.integrationId);
+
+  const claimed = await tryAcquirePipelineLock({
+    integrationId: input.integrationId,
+    trigger: "manual",
+    actorUserId: context.profile.id,
+  });
+
+  if (!claimed.ok) {
+    return {
+      ok: false,
+      error:
+        claimed.reason === "not_found"
+          ? "Integração não encontrada."
+          : "Já existe uma sincronização em andamento.",
+    };
+  }
+
+  await updatePipelineLockStep(input.integrationId, "sync");
+  return { ok: true };
+}
+
+export async function abortManualJiraPipelineAction(input: {
+  integrationId: string;
+  teamId: string;
+}): Promise<void> {
+  await requirePermission("jira", "edit");
+  await requireIntegrationPair(input);
+  await releasePipelineLock(input.integrationId);
+}
+
+export async function scheduleJiraPipelinePostSyncAction(input: {
+  integrationId: string;
+  teamId: string;
+  syncRunId: string | null;
+}): Promise<{ ok: true }> {
+  const context = await requirePermission("jira", "edit");
+  await requireIntegrationPair(input);
+
+  const runPostSync = async () => {
+    try {
+      const result = await runJiraPipelinePostSyncSteps({
+        integrationId: input.integrationId,
+        createdBy: context.profile.id,
+        syncRunId: input.syncRunId,
+        triggerSource: "manual",
+      });
+      if (!result.ok) {
+        await setPipelineLastError(
+          input.integrationId,
+          result.error ?? result.message,
+        );
+      } else {
+        await clearPipelineLastError(input.integrationId);
+      }
+    } catch (error) {
+      await setPipelineLastError(
+        input.integrationId,
+        error instanceof Error ? error.message : "Erro inesperado na pipeline.",
+      );
+    } finally {
+      await releasePipelineLock(input.integrationId);
+    }
+  };
+
+  after(async () => {
+    await runPostSync();
+  });
+  void runPostSync().catch((error) => {
+    console.error("[scheduleJiraPipelinePostSyncAction] background task failed", error);
+  });
+
+  return { ok: true };
 }
 
 export async function getGestorSyncStatusAction(input: {
