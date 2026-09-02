@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isJiraPipelineStepId } from "@/app/app/jira/pipeline-shared";
 import { createClient } from "@/lib/supabase/server";
 import { asJiraFieldMappings } from "@/lib/jira/field-mappings";
 import {
@@ -496,18 +497,29 @@ export async function getJiraSyncStatusSummary(
 
   const lock = integration.settings.pipeline_lock;
   let pipelineLocked = false;
+  let pipelineStep: JiraSyncStatusSummary["pipelineStep"] = null;
   if (lock != null && typeof lock === "object" && !Array.isArray(lock)) {
+    const lockObj = lock as { locked_at?: unknown; step?: unknown };
     const lockedAt =
-      typeof (lock as { locked_at?: unknown }).locked_at === "string"
-        ? (lock as { locked_at: string }).locked_at
-        : null;
+      typeof lockObj.locked_at === "string" ? lockObj.locked_at : null;
     if (lockedAt) {
       const lockedMs = Date.parse(lockedAt);
       if (Number.isFinite(lockedMs)) {
         const ageMinutes = (Date.now() - lockedMs) / 60_000;
         pipelineLocked = ageMinutes < JIRA_SYNC_STALE_MINUTES;
+        if (
+          pipelineLocked &&
+          typeof lockObj.step === "string" &&
+          isJiraPipelineStepId(lockObj.step)
+        ) {
+          pipelineStep = lockObj.step;
+        }
       }
     }
+  }
+
+  if (pipelineLocked && !pipelineStep) {
+    pipelineStep = activeRun ? "sync" : "flow";
   }
 
   return {
@@ -520,6 +532,7 @@ export async function getJiraSyncStatusSummary(
     latestRun,
     latestFailedRun,
     pipelineLocked,
+    pipelineStep,
   };
 }
 

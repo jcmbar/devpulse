@@ -1,3 +1,4 @@
+import type { JiraPipelineStepId } from "@/app/app/jira/pipeline-shared";
 import type { JiraSyncRun } from "@/types/jira-integration";
 
 /** Serializable sync status for Gestor UI (auto-sync + manual). */
@@ -11,4 +12,5 @@ export type JiraSyncStatusSummary = {
   latestRun: JiraSyncRun | null;
   latestFailedRun: JiraSyncRun | null;
   pipelineLocked: boolean;
+  pipelineStep: JiraPipelineStepId | null;
 };

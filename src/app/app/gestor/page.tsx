@@ -10,9 +10,8 @@ import {
   GestorMetricAuditButton,
   type GestorAuditFilterContext,
 } from "@/components/gestor/metric-audit-button";
-import { RunSyncNowButton } from "@/components/gestor/run-sync-now-button";
+import { GestorSyncControls } from "@/components/gestor/gestor-sync-controls";
 import { GestorAutoSyncTrigger } from "@/components/gestor/gestor-auto-sync-trigger";
-import { GestorSyncStatus } from "@/components/gestor/gestor-sync-status";
 import { GestorSourceFilter } from "@/components/gestor-source-filter";
 import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { ImportBatchSelector } from "@/components/import-batch-selector";
@@ -314,17 +313,11 @@ export default async function GestorDashboardPage({
               Feriados
             </Link>
             {syncTarget ? (
-              <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:items-end">
-                {autoSyncIntegrationIds.length > 0 ? (
-                  <GestorSyncStatus
-                    integrationIds={autoSyncIntegrationIds}
-                  />
-                ) : null}
-                <RunSyncNowButton
-                  integrationId={syncTarget.id}
-                  teamId={syncTarget.team_id}
-                />
-              </div>
+              <GestorSyncControls
+                integrationIds={autoSyncIntegrationIds}
+                integrationId={syncTarget.id}
+                teamId={syncTarget.team_id}
+              />
             ) : (
               <Link href="/app/jira" className="ui-btn-primary">
                 Configurar Jira

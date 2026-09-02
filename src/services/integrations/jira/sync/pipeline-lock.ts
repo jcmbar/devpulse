@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { JiraPipelineStepId } from "@/app/app/jira/pipeline-shared";
 import {
   JIRA_PIPELINE_LOCK_SETTINGS_KEY,
   JIRA_SYNC_STALE_MINUTES,
@@ -17,6 +18,7 @@ export type PipelineLockPayload = {
   locked_at: string;
   trigger: JiraSyncTriggerSource | string;
   by: string | null;
+  step?: JiraPipelineStepId;
 };
 
 function readPipelineLock(
@@ -31,10 +33,20 @@ function readPipelineLock(
   if (!lockedAt) {
     return null;
   }
+  const stepRaw = obj.step;
+  const step =
+    stepRaw === "sync" ||
+    stepRaw === "flow" ||
+    stepRaw === "daily" ||
+    stepRaw === "compilado"
+      ? stepRaw
+      : undefined;
+
   return {
     locked_at: lockedAt,
     trigger: typeof obj.trigger === "string" ? obj.trigger : "unknown",
     by: typeof obj.by === "string" ? obj.by : null,
+    step,
   };
 }
 
@@ -131,6 +143,27 @@ export async function tryAcquirePipelineLock(input: {
   });
 
   return { ok: true, integration: updated };
+}
+
+export async function updatePipelineLockStep(
+  integrationId: string,
+  step: JiraPipelineStepId,
+): Promise<void> {
+  const integration = await getJiraIntegration(integrationId);
+  if (!integration) {
+    return;
+  }
+  const lock = readPipelineLock(integration.settings);
+  if (!lock) {
+    return;
+  }
+  await updateJiraIntegrationSettings({
+    integrationId,
+    settings: {
+      ...integration.settings,
+      [JIRA_PIPELINE_LOCK_SETTINGS_KEY]: { ...lock, step },
+    },
+  });
 }
 
 export async function releasePipelineLock(

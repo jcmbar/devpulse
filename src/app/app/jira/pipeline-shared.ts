@@ -7,6 +7,12 @@ export const JIRA_PIPELINE_STEPS = [
 
 export type JiraPipelineStepId = (typeof JIRA_PIPELINE_STEPS)[number];
 
+export function isJiraPipelineStepId(
+  value: string,
+): value is JiraPipelineStepId {
+  return (JIRA_PIPELINE_STEPS as readonly string[]).includes(value);
+}
+
 export type JiraPipelineStepResult = {
   ok: boolean;
   step: JiraPipelineStepId;

@@ -8,6 +8,7 @@ import {
 import { materializeJiraCompiladoSnapshot } from "@/services/compilado/materialize-jira-snapshot";
 import type { JiraSyncTriggerSource } from "@/services/integrations/jira/constants";
 import { getJiraIntegration } from "@/services/integrations/jira/repositories/integrations";
+import { updatePipelineLockStep } from "@/services/integrations/jira/sync/pipeline-lock";
 import { runJiraSync } from "@/services/integrations/jira/sync/run-jira-sync";
 
 export type RunJiraPipelineInput = {
@@ -64,6 +65,8 @@ export async function runJiraPipelineForIntegration(
   let syncRunId: string | null = null;
 
   try {
+    await updatePipelineLockStep(integration.id, "sync");
+
     const syncResult = await runJiraSync({
       integrationId: integration.id,
       createdBy: input.createdBy,
@@ -83,6 +86,8 @@ export async function runJiraPipelineForIntegration(
       };
     }
 
+    await updatePipelineLockStep(integration.id, "flow");
+
     const flowResult = await recomputeJiraFlowMetrics({
       integrationId: integration.id,
     });
@@ -95,6 +100,8 @@ export async function runJiraPipelineForIntegration(
         error: flowResult.error ?? "Falha ao recalcular métricas.",
       };
     }
+
+    await updatePipelineLockStep(integration.id, "daily");
 
     const dailyResult = await recomputeJiraFlowDailyFacts({
       integrationId: integration.id,
@@ -110,6 +117,8 @@ export async function runJiraPipelineForIntegration(
         error: dailyResult.error ?? "Falha ao recalcular fatos diários.",
       };
     }
+
+    await updatePipelineLockStep(integration.id, "compilado");
 
     const materialized = await materializeJiraCompiladoSnapshot({
       integrationId: integration.id,
