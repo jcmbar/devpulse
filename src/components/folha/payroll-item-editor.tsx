@@ -268,10 +268,10 @@ export function PayrollItemEditor({
                   inputMode="decimal"
                   defaultValue={moneyInputValue(item.differential_amount)}
                   disabled={inputsDisabled}
-                  className="ui-input text-sm"
+                  className="ui-input"
                 />
               ) : (
-                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                <p className="ui-input text-muted-foreground tabular-nums">
                   {MASKED_MONEY}
                 </p>
               )}
@@ -285,10 +285,10 @@ export function PayrollItemEditor({
                   inputMode="decimal"
                   defaultValue={moneyInputValue(item.discounts_amount)}
                   disabled={inputsDisabled}
-                  className="ui-input text-sm"
+                  className="ui-input"
                 />
               ) : (
-                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                <p className="ui-input text-muted-foreground tabular-nums">
                   {MASKED_MONEY}
                 </p>
               )}
@@ -314,10 +314,10 @@ export function PayrollItemEditor({
                   inputMode="decimal"
                   defaultValue={moneyInputValue(item.travel_amount)}
                   disabled={inputsDisabled}
-                  className="ui-input text-sm"
+                  className="ui-input"
                 />
               ) : (
-                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                <p className="ui-input text-muted-foreground tabular-nums">
                   {MASKED_MONEY}
                 </p>
               )}
@@ -343,10 +343,10 @@ export function PayrollItemEditor({
                   inputMode="decimal"
                   defaultValue={moneyInputValue(item.meal_amount)}
                   disabled={inputsDisabled}
-                  className="ui-input text-sm"
+                  className="ui-input"
                 />
               ) : (
-                <p className="ui-input text-sm text-muted-foreground tabular-nums">
+                <p className="ui-input text-muted-foreground tabular-nums">
                   {MASKED_MONEY}
                 </p>
               )}
@@ -357,7 +357,7 @@ export function PayrollItemEditor({
                 value={issuerId}
                 onChange={(event) => setIssuerId(event.target.value)}
                 disabled={inputsDisabled}
-                className="ui-select text-sm"
+                className="ui-select"
               >
                 <option value="">—</option>
                 {issuers.map((issuer) => (
@@ -368,7 +368,7 @@ export function PayrollItemEditor({
               </select>
             </label>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="ui-control-row">
             <p className="text-sm font-medium tabular-nums">
               NF:{" "}
               {moneyVisible
@@ -392,7 +392,7 @@ export function PayrollItemEditor({
               <>
                 <button
                   type="submit"
-                  className="ui-btn-secondary text-xs"
+                  className="ui-btn-secondary"
                   disabled={busy || !moneyVisible}
                   title={
                     moneyVisible
@@ -404,7 +404,7 @@ export function PayrollItemEditor({
                 </button>
                 <button
                   type="button"
-                  className="ui-btn-ghost text-xs"
+                  className="ui-btn-ghost"
                   disabled={busy}
                   title={
                     hasManualAutoField
@@ -422,7 +422,7 @@ export function PayrollItemEditor({
                 <button
                   type="button"
                   className={cn(
-                    "inline-flex items-center gap-1.5 text-xs font-medium",
+                    "inline-flex items-center gap-1.5",
                     item.is_reviewed ? "ui-btn-secondary" : "ui-btn-primary",
                   )}
                   disabled={busy}

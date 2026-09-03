@@ -366,20 +366,20 @@ body {
     animation: stg-traffic-glow 1.8s ease-in-out infinite;
   }
   .ui-btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+    @apply box-border inline-flex h-10 min-h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 text-sm font-medium leading-5 text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:h-9 sm:min-h-9;
   }
 
   .ui-btn-save-pending {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 py-2 text-sm font-medium text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+    @apply box-border inline-flex h-10 min-h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-accent px-3 text-sm font-medium leading-5 text-accent-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:h-9 sm:min-h-9;
     animation: catalog-save-pulse 1.6s ease-in-out infinite;
   }
 
   .ui-btn-secondary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-border/80 bg-card/90 px-3 py-2 text-sm font-medium text-foreground shadow-[var(--shadow-sm)] transition-[transform,background-color,border-color,box-shadow] duration-150 hover:border-border hover:bg-muted/80 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+    @apply box-border inline-flex h-10 min-h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-border/80 bg-card/90 px-3 text-sm font-medium leading-5 text-foreground shadow-[var(--shadow-sm)] transition-[transform,background-color,border-color,box-shadow] duration-150 hover:border-border hover:bg-muted/80 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:h-9 sm:min-h-9;
   }
 
   .ui-btn-ghost {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-2 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:py-1.5;
+    @apply box-border inline-flex h-10 min-h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-sm font-medium leading-5 text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted/80 hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:h-9 sm:min-h-9;
   }
 
   .ui-closing-attention {
@@ -399,24 +399,37 @@ body {
 
   /** Idle destructive trigger — muted until hover/focus (tables / inline). */
   .ui-btn-danger-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-danger/10 hover:text-danger focus-visible:bg-danger/10 focus-visible:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+    @apply box-border inline-flex h-10 min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 text-sm font-medium leading-5 text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-danger/10 hover:text-danger focus-visible:bg-danger/10 focus-visible:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:h-9 sm:min-h-9;
   }
 
   /** Confirmed destructive step — clear but compact. */
   .ui-btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-danger px-3.5 py-2 text-sm font-medium text-danger-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60;
+    @apply box-border inline-flex h-10 min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-danger px-3.5 text-sm font-medium leading-5 text-danger-foreground shadow-[var(--shadow-sm)] transition-[transform,box-shadow,opacity,background-color] duration-150 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:h-9 sm:min-h-9;
   }
 
   .ui-inline-actions {
     @apply flex flex-wrap items-center gap-1;
   }
 
+  .ui-control-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
   .ui-input {
-    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2.5 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50 sm:py-2;
+    @apply box-border h-10 min-h-10 w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 text-sm leading-5 outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 placeholder:text-muted-foreground/80 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50 sm:h-9 sm:min-h-9;
   }
 
   .ui-select {
-    @apply w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 py-2.5 text-sm outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50 sm:py-2;
+    @apply box-border h-10 min-h-10 w-full rounded-[var(--radius-sm)] border border-border/80 bg-card/95 px-3 text-sm leading-5 outline-none ring-ring transition-[box-shadow,border-color,background-color] duration-150 focus:border-brand/50 focus:bg-card focus:ring-2 focus:ring-brand/20 disabled:opacity-50 sm:h-9 sm:min-h-9;
+  }
+
+  p.ui-input {
+    @apply flex items-center;
+  }
+
+  /** Dense controls for tight grids (e.g. day cards). */
+  .ui-control-sm {
+    @apply h-8 min-h-8 px-2 text-xs leading-4;
   }
 
   .ui-card {
@@ -1087,7 +1100,7 @@ body {
   }
 
   .login-panel .ui-btn-primary {
-    @apply py-2.5 text-[15px] font-semibold tracking-[0.01em] sm:py-2.5;
+    @apply h-auto min-h-10 py-2.5 text-[15px] font-semibold tracking-[0.01em] sm:h-auto sm:min-h-10 sm:py-2.5;
     background: linear-gradient(
       165deg,
       color-mix(in oklab, var(--accent) 72%, var(--brand-lime)) 0%,

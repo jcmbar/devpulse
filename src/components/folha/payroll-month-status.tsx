@@ -20,13 +20,13 @@ export function PayrollMonthStatusControl({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="ui-control-row">
       <label className="text-sm text-muted-foreground" htmlFor="payroll-status">
         Status
       </label>
       <select
         id="payroll-status"
-        className="ui-select text-sm"
+        className="ui-select w-auto min-w-[10rem]"
         value={closing.status}
         disabled={pending}
         onChange={(event) => {

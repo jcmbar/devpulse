@@ -465,10 +465,10 @@ export function PayrollAttendancePanel({
       </div>
 
       <div className="space-y-3 rounded-[var(--radius-sm)] border border-border/80 bg-muted/20 p-3">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="ui-control-row">
           <button
             type="button"
-            className="ui-btn-secondary text-xs"
+            className="ui-btn-secondary"
             disabled={locked}
             onClick={() => runShortcut("fill_month_default")}
           >
@@ -476,7 +476,7 @@ export function PayrollAttendancePanel({
           </button>
           <button
             type="button"
-            className="ui-btn-secondary text-xs"
+            className="ui-btn-secondary"
             disabled={locked}
             onClick={() => runShortcut("workweek_home")}
           >
@@ -484,7 +484,7 @@ export function PayrollAttendancePanel({
           </button>
           <button
             type="button"
-            className="ui-btn-secondary text-xs"
+            className="ui-btn-secondary"
             disabled={locked}
             onClick={() => runShortcut("workweek_presencial")}
           >
@@ -492,7 +492,7 @@ export function PayrollAttendancePanel({
           </button>
           <button
             type="button"
-            className="ui-btn-secondary text-xs"
+            className="ui-btn-secondary"
             disabled={locked}
             onClick={() => runShortcut("zero_weekends")}
           >
@@ -510,7 +510,7 @@ export function PayrollAttendancePanel({
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Tipo</span>
               <select
-                className="ui-select text-xs"
+                className="ui-select"
                 value={batchKind}
                 disabled={locked}
                 onChange={(event) =>
@@ -528,7 +528,7 @@ export function PayrollAttendancePanel({
               <span className="text-muted-foreground">De</span>
               <input
                 type="date"
-                className="ui-input text-xs"
+                className="ui-input"
                 value={rangeStart}
                 disabled={locked}
                 min={bounds?.start}
@@ -540,7 +540,7 @@ export function PayrollAttendancePanel({
               <span className="text-muted-foreground">Até</span>
               <input
                 type="date"
-                className="ui-input text-xs"
+                className="ui-input"
                 value={rangeEnd}
                 disabled={locked}
                 min={bounds?.start}
@@ -551,7 +551,7 @@ export function PayrollAttendancePanel({
             <label className="space-y-1 text-xs">
               <span className="text-muted-foreground">Modo</span>
               <select
-                className="ui-select text-xs"
+                className="ui-select"
                 value={batchMode}
                 disabled={locked}
                 onChange={(event) =>
@@ -566,7 +566,7 @@ export function PayrollAttendancePanel({
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="ui-control-row">
             <span className="mr-1 text-xs text-muted-foreground">Dias</span>
             {WEEKDAY_OPTIONS.map((weekday) => {
               const active = batchWeekdays.includes(weekday.value);
@@ -576,7 +576,7 @@ export function PayrollAttendancePanel({
                   type="button"
                   disabled={locked}
                   className={cn(
-                    "rounded-[calc(var(--radius-sm)-2px)] border px-2 py-1 text-xs font-medium transition-colors",
+                    "inline-flex h-8 min-h-8 items-center rounded-[calc(var(--radius-sm)-2px)] border px-2 text-xs font-medium transition-colors",
                     active
                       ? "border-brand/40 bg-brand-soft text-brand-foreground"
                       : "border-border bg-card/50 text-muted-foreground hover:bg-muted/50",
@@ -589,7 +589,7 @@ export function PayrollAttendancePanel({
             })}
             <button
               type="button"
-              className="ui-btn-secondary ml-auto text-xs"
+              className="ui-btn-secondary ml-auto shrink-0"
               disabled={locked || batchWeekdays.length === 0}
               onClick={applyCustomBatch}
             >
@@ -655,7 +655,7 @@ export function PayrollAttendancePanel({
                 </p>
               ) : null}
               <select
-                className="ui-select text-xs"
+                className="ui-select ui-control-sm"
                 value={day.day_kind}
                 disabled={locked}
                 onChange={(event) => {
@@ -707,10 +707,10 @@ export function PayrollAttendancePanel({
               ? "Gravando na folha…"
               : `${dirtyCount} dia(s) com alteração ainda não salva.`}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="ui-control-row">
             <button
               type="button"
-              className="ui-btn-secondary text-sm"
+              className="ui-btn-secondary"
               disabled={saving || readOnly}
               onClick={discardDraft}
             >
@@ -718,7 +718,7 @@ export function PayrollAttendancePanel({
             </button>
             <button
               type="button"
-              className="ui-btn-primary text-sm"
+              className="ui-btn-primary"
               disabled={saving || readOnly || dirtyCount === 0}
               onClick={() => {
                 void saveDraft();

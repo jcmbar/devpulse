@@ -197,39 +197,45 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       />
 
       <FilterBar>
-        <div className="ui-filter-bar__fields md:grid-cols-3">
-          <div className="ui-filter-bar__field">
-            <p className="ui-filter-bar__label">Time</p>
-            <GestorTeamFilter
-              basePath="/app/gestor/folha"
-              teams={teams}
-              selectedTeamId={selectedTeamId}
-              preservedParams={{ month }}
-              persistScope="gestor-folha"
-              embedded
-            />
-          </div>
-          <div className="ui-filter-bar__field">
-            <p className="ui-filter-bar__label">Mês</p>
-            <form className="flex gap-2">
-              {teamParam ? (
-                <input type="hidden" name="teamId" value={teamParam} />
-              ) : null}
+        <div className="ui-filter-bar__row">
+          <div className="ui-filter-bar__fields min-w-0 flex-1 md:grid-cols-3">
+            <div className="ui-filter-bar__field">
+              <p className="ui-filter-bar__label">Time</p>
+              <GestorTeamFilter
+                basePath="/app/gestor/folha"
+                teams={teams}
+                selectedTeamId={selectedTeamId}
+                preservedParams={{ month }}
+                persistScope="gestor-folha"
+                embedded
+              />
+            </div>
+            <div className="ui-filter-bar__field">
+              <p className="ui-filter-bar__label">Mês</p>
               <input
+                form="folha-month-filter"
                 type="month"
                 name="month"
                 defaultValue={month}
                 className="ui-input"
               />
-              <button type="submit" className="ui-btn-secondary text-sm">
-                Aplicar
-              </button>
-            </form>
+            </div>
+            <div className="ui-filter-bar__field">
+              <p className="ui-filter-bar__label">Fechamento</p>
+              <PayrollMonthStatusControl closing={closing} />
+            </div>
           </div>
-          <div className="ui-filter-bar__field">
-            <p className="ui-filter-bar__label">Fechamento</p>
-            <PayrollMonthStatusControl closing={closing} />
-          </div>
+          <form
+            id="folha-month-filter"
+            className="flex shrink-0 justify-end sm:ml-auto"
+          >
+            {teamParam ? (
+              <input type="hidden" name="teamId" value={teamParam} />
+            ) : null}
+            <button type="submit" className="ui-btn-secondary shrink-0">
+              Aplicar
+            </button>
+          </form>
         </div>
       </FilterBar>
 
