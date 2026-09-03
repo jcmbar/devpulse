@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npm run record:release",
+    "build": "next build",
+    "build:with-release-record": "npm run build && npm run record:release",
     "record:release": "node scripts/record-app-release.mjs",
     "backfill:releases": "node scripts/backfill-app-releases.mjs",
     "start": "next start",

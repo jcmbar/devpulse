@@ -6,6 +6,10 @@ import {
 } from "@/app/app/monthly-closing-actions";
 import { InvoiceIssuerDetailsCard } from "@/components/monthly-closing/invoice-issuer-details-card";
 import { formatClosingMoney } from "@/lib/metrics/closing-submit-values";
+import {
+  formatHoursAsTimeBank,
+  formatTimeBankMinutes,
+} from "@/lib/metrics/time-bank";
 import { cn } from "@/lib/utils";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type {
@@ -13,6 +17,7 @@ import type {
   MonthlyClosingAttachment,
   MonthlyClosingAttachmentType,
 } from "@/types/monthly-closing";
+import type { TimeBankEntry } from "@/types/time-bank";
 import {
   closingOffersMealPixSlot,
   monthlyClosingAttachmentTypeLabel,
@@ -203,8 +208,12 @@ function AttachmentSlot({
 
 export function MonthlyClosingValuesSummary({
   closing,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
 }: {
   closing: MonthlyClosing;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
 }) {
   const hasValues =
     closing.compensation_base_amount != null ||
@@ -245,6 +254,29 @@ export function MonthlyClosingValuesSummary({
     },
   ];
 
+  if (closing.time_bank_enabled_snapshot) {
+    rows.splice(1, 0, {
+      label: "Saldo anterior banco",
+      value: formatTimeBankMinutes(timeBankBalanceBeforeClosingMinutes),
+    });
+    rows.splice(2, 0, {
+      label: "Impacto no banco",
+      value: recordedTimeBankEntry
+        ? formatTimeBankMinutes(
+            recordedTimeBankEntry.entry_type === "credit"
+              ? recordedTimeBankEntry.minutes_amount
+              : -recordedTimeBankEntry.minutes_amount,
+          )
+        : formatHoursAsTimeBank(closing.time_bank_hours_delta),
+    });
+    if (recordedTimeBankEntry) {
+      rows.splice(3, 0, {
+        label: "Saldo após lançamento",
+        value: formatTimeBankMinutes(recordedTimeBankEntry.balance_after_minutes),
+      });
+    }
+  }
+
   return (
     <div className="rounded-[var(--radius-sm)] border border-border bg-muted/20 px-3 py-3">
       <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -272,8 +304,22 @@ export function MonthlyClosingValuesSummary({
   );
 }
 
-function ClosingValuesSummary({ closing }: { closing: MonthlyClosing }) {
-  return <MonthlyClosingValuesSummary closing={closing} />;
+function ClosingValuesSummary({
+  closing,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
+}: {
+  closing: MonthlyClosing;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
+}) {
+  return (
+    <MonthlyClosingValuesSummary
+      closing={closing}
+      timeBankBalanceBeforeClosingMinutes={timeBankBalanceBeforeClosingMinutes}
+      recordedTimeBankEntry={recordedTimeBankEntry}
+    />
+  );
 }
 
 export function MonthlyClosingAttachmentsPanel({
@@ -281,12 +327,16 @@ export function MonthlyClosingAttachmentsPanel({
   attachments,
   invoiceIssuer = null,
   requireMealPixReceipt = false,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
 }: {
   closing: MonthlyClosing;
   attachments: MonthlyClosingAttachment[];
   invoiceIssuer?: InvoiceIssuer | null;
   /** Cadastro Valores: cobrar comprovante PIX após finalize. */
   requireMealPixReceipt?: boolean;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
 }) {
   if (closing.status !== "closed" && closing.status !== "finalized") {
     return null;
@@ -337,7 +387,11 @@ export function MonthlyClosingAttachmentsPanel({
           </p>
         </div>
       ) : null}
-      <ClosingValuesSummary closing={closing} />
+      <ClosingValuesSummary
+        closing={closing}
+        timeBankBalanceBeforeClosingMinutes={timeBankBalanceBeforeClosingMinutes}
+        recordedTimeBankEntry={recordedTimeBankEntry}
+      />
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <AttachmentSlot
           closing={closing}

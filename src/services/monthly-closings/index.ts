@@ -340,6 +340,7 @@ function mapClosing(row: Record<string, unknown>): MonthlyClosing {
     absence_amount:
       row.absence_amount == null ? null : Number(row.absence_amount),
     time_bank_posted_at: (row.time_bank_posted_at as string | null) ?? null,
+    time_bank_posting_sequence: Number(row.time_bank_posting_sequence ?? 0),
     developer_values_notes:
       (row.developer_values_notes as string | null) ?? null,
     values_submitted_at: (row.values_submitted_at as string | null) ?? null,
@@ -2119,64 +2120,12 @@ export async function finalizeMonthlyClosing(input: {
     );
   }
 
-  // Post time bank BEFORE status=finalized so we can stamp posted_at in the
-  // same row update (finalized trigger blocks later money/meta edits).
-  // Skip when snapshot is null (pre-feature closings) — never backfill.
-  let timeBankPostedAt: string | null = closing.time_bank_posted_at;
-  if (
-    closing.time_bank_enabled_snapshot === true &&
-    closing.time_bank_posted_at == null &&
-    closing.time_bank_hours_delta != null &&
-    closing.time_bank_hours_delta !== 0
-  ) {
-    const { postTimeBankEntryForClosing } = await import(
-      "@/services/time-bank"
-    );
-    await postTimeBankEntryForClosing({
-      developerId: closing.developer_id,
-      yearMonth: closing.year_month,
-      hoursDelta: closing.time_bank_hours_delta,
-      monthlyClosingId: closing.id,
-      actorUserId: input.actorUserId,
-    });
-    timeBankPostedAt = now;
-  }
-
-  const finalizePatch: Record<string, unknown> = {
-    status: "finalized",
-    finalized_at: now,
-    finalized_by_user_id: input.actorUserId,
-  };
-  if (timeBankPostedAt && closing.time_bank_posted_at == null) {
-    finalizePatch.time_bank_posted_at = timeBankPostedAt;
-  }
-
-  const { data, error } = await supabase
-    .from("monthly_closings")
-    .update(finalizePatch)
-    .eq("id", closing.id)
-    .eq("status", "closed")
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(`Falha ao finalizar fechamento: ${error.message}`);
-  }
-
-  const updated = mapClosing(data as Record<string, unknown>);
-  await appendEvent({
-    closingId: closing.id,
-    eventType: "finalized",
-    fromStatus: "closed",
-    toStatus: "finalized",
-    actorUserId: input.actorUserId,
-    payload: {
-      invoiceValidated: true,
-      boletoValidated: true,
-      timeBankPosted: Boolean(timeBankPostedAt && !closing.time_bank_posted_at),
-      timeBankHoursDelta: closing.time_bank_hours_delta,
-    },
-  });
+  const { finalizeMonthlyClosingWithTimeBankRpc } = await import(
+    "@/services/time-bank"
+  );
+  const updated = mapClosing(
+    await finalizeMonthlyClosingWithTimeBankRpc(closing.id),
+  );
 
   const { trySendColaboradorEmailOnFinalize } = await import(
     "@/services/operational-emails"
@@ -2229,8 +2178,28 @@ export async function revertMonthlyClosingStatus(input: {
   };
 
   if (fromStatus === "finalized") {
-    updatePayload.finalized_at = null;
-    updatePayload.finalized_by_user_id = null;
+    const { reopenMonthlyClosingWithTimeBankRpc } = await import(
+      "@/services/time-bank"
+    );
+    const updated = mapClosing(
+      await reopenMonthlyClosingWithTimeBankRpc(closing.id),
+    );
+
+    const { error: attachmentError } = await supabase
+      .from("monthly_closing_attachments")
+      .update({
+        is_valid: null,
+        validated_at: null,
+        validated_by_user_id: null,
+      })
+      .eq("monthly_closing_id", closing.id);
+    if (attachmentError) {
+      throw new Error(
+        `Fechamento reaberto, mas falhou ao limpar validação dos anexos: ${attachmentError.message}`,
+      );
+    }
+
+    return updated;
   }
 
   if (fromStatus === "closed") {
@@ -2266,22 +2235,6 @@ export async function revertMonthlyClosingStatus(input: {
 
   const updated = mapClosing(data as Record<string, unknown>);
 
-  if (fromStatus === "finalized" && toStatus === "closed") {
-    const { error: attachmentError } = await supabase
-      .from("monthly_closing_attachments")
-      .update({
-        is_valid: null,
-        validated_at: null,
-        validated_by_user_id: null,
-      })
-      .eq("monthly_closing_id", closing.id);
-    if (attachmentError) {
-      throw new Error(
-        `Fechamento reaberto, mas falhou ao limpar validação dos anexos: ${attachmentError.message}`,
-      );
-    }
-  }
-
   await appendEvent({
     closingId: closing.id,
     eventType: "status_reverted",
@@ -2289,8 +2242,9 @@ export async function revertMonthlyClosingStatus(input: {
     toStatus,
     actorUserId: input.actorUserId,
     payload: {
-      action:
-        fromStatus === "finalized" ? "reopen_finalized" : "step_back_status",
+      action: "step_back_status",
+      timeBankReversed: false,
+      timeBankPostingSequence: null,
     },
   });
 

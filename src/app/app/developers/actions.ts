@@ -5,6 +5,12 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getRoleLabel } from "@/lib/auth/role-labels";
 import {
+  normalizeTimeBankEntryDate,
+  normalizeTimeBankEntryType,
+  normalizeTimeBankYearMonth,
+  parseTimeBankInputToMinutes,
+} from "@/lib/metrics/time-bank";
+import {
   presetGrantsForRole,
   roleCeilingFromGrants,
   type ModuleGrantsMap,
@@ -32,6 +38,10 @@ import {
   lookupAndFillDeveloperJiraAccount,
   type JiraAccountLookupResult,
 } from "@/services/developers/jira-account-lookup";
+import {
+  createManualTimeBankAdjustment,
+  reverseTimeBankEntry,
+} from "@/services/time-bank";
 import {
   isUserRole,
   updateProfileRoleAdmin,
@@ -68,6 +78,12 @@ export type AccessRoleFormState = {
 };
 
 export type AccessPermissionsFormState = AccessRoleFormState;
+
+export type TimeBankMutationActionResult = {
+  ok: boolean;
+  error: string | null;
+  success: string | null;
+};
 
 function readOptionalString(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? "").trim();
@@ -940,6 +956,128 @@ export async function resendInviteForDeveloperAction(
         error instanceof Error
           ? error.message
           : "Não foi possível reenviar o convite.",
+      success: null,
+    };
+  }
+}
+
+export async function createTimeBankAdjustmentAction(input: {
+  developerId: string;
+  entryType: string;
+  hours: string;
+  entryDate: string;
+  yearMonth: string;
+  description: string;
+  internalNote?: string | null;
+}): Promise<TimeBankMutationActionResult> {
+  const context = await requirePermission("pessoas", "edit");
+
+  const developerId = input.developerId.trim();
+  if (!developerId) {
+    return { ok: false, error: "Cadastro inválido.", success: null };
+  }
+
+  const entryType = normalizeTimeBankEntryType(input.entryType);
+  if (!entryType) {
+    return { ok: false, error: "Tipo de lançamento inválido.", success: null };
+  }
+
+  const yearMonth = normalizeTimeBankYearMonth(input.yearMonth);
+  if (!yearMonth) {
+    return { ok: false, error: "Competência inválida.", success: null };
+  }
+
+  const entryDate = normalizeTimeBankEntryDate(input.entryDate);
+  if (!entryDate) {
+    return { ok: false, error: "Data do lançamento inválida.", success: null };
+  }
+
+  const parsed = parseTimeBankInputToMinutes(input.hours);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error, success: null };
+  }
+
+  const description = input.description.trim();
+  if (!description) {
+    return { ok: false, error: "Informe o motivo do ajuste.", success: null };
+  }
+
+  try {
+    await createManualTimeBankAdjustment({
+      developerId,
+      yearMonth,
+      entryDate,
+      entryType,
+      minutesAmount: parsed.minutes,
+      description,
+      actorUserId: context.profile.id,
+      metadata: input.internalNote?.trim()
+        ? {
+            internal_note: input.internalNote.trim(),
+          }
+        : {},
+    });
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${developerId}`);
+    revalidatePath("/app");
+    return {
+      ok: true,
+      error: null,
+      success: "Ajuste lançado no banco de horas.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível lançar o ajuste.",
+      success: null,
+    };
+  }
+}
+
+export async function reverseTimeBankEntryAction(input: {
+  developerId: string;
+  entryId: string;
+  description: string;
+}): Promise<TimeBankMutationActionResult> {
+  const context = await requirePermission("pessoas", "edit");
+
+  const developerId = input.developerId.trim();
+  const entryId = input.entryId.trim();
+  const description = input.description.trim();
+
+  if (!developerId || !entryId) {
+    return { ok: false, error: "Lançamento inválido.", success: null };
+  }
+  if (!description) {
+    return { ok: false, error: "Informe o motivo da reversão.", success: null };
+  }
+
+  try {
+    const reversed = await reverseTimeBankEntry({
+      entryId,
+      actorUserId: context.profile.id,
+      description,
+    });
+    revalidatePath("/app/developers");
+    revalidatePath(`/app/developers/${developerId}`);
+    revalidatePath("/app");
+    return {
+      ok: true,
+      error: null,
+      success: reversed
+        ? "Lançamento revertido com sucesso."
+        : "Este lançamento já estava revertido.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reverter o lançamento.",
       success: null,
     };
   }

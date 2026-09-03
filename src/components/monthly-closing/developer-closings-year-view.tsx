@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import {
   listDeveloperYearClosingsAction,
@@ -31,6 +32,7 @@ import type {
   MonthlyClosingPresenceDay,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
+import type { TimeBankEntry } from "@/types/time-bank";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -66,6 +68,8 @@ type DeveloperClosingsYearViewProps = {
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
   closingPresenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   mealPixBlockReason?: string | null;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
 };
 
 type DetailPanelProps = {
@@ -82,6 +86,8 @@ type DetailPanelProps = {
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
   closingPresenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   mealPixBlockReason?: string | null;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
   empty?: boolean;
   /** Compact header when rendered inside the desktop drawer. */
   embedded?: boolean;
@@ -218,6 +224,8 @@ function MonthDetailContent({
   closingHolidays = [],
   closingPresenceDays = [],
   mealPixBlockReason = null,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
   empty,
   embedded = false,
   loading = false,
@@ -286,6 +294,10 @@ function MonthDetailContent({
               holidays={closingHolidays}
               presenceDays={closingPresenceDays}
               mealPixBlockReason={mealPixBlockReason}
+              timeBankBalanceBeforeClosingMinutes={
+                timeBankBalanceBeforeClosingMinutes
+              }
+              recordedTimeBankEntry={recordedTimeBankEntry}
             />
           ) : (
             <>
@@ -302,10 +314,14 @@ function MonthDetailContent({
         </div>
       ) : (
         <>
-          {detailClosing &&
-          detailClosing.status !== "closed" &&
-          detailClosing.status !== "finalized" ? (
-            <MonthlyClosingValuesSummary closing={detailClosing} />
+          {detailClosing ? (
+            <MonthlyClosingValuesSummary
+              closing={detailClosing}
+              timeBankBalanceBeforeClosingMinutes={
+                timeBankBalanceBeforeClosingMinutes
+              }
+              recordedTimeBankEntry={recordedTimeBankEntry}
+            />
           ) : null}
 
           <MonthlyClosingAuditSection
@@ -321,6 +337,10 @@ function MonthDetailContent({
               requireMealPixReceipt={
                 developerCompensation?.require_meal_pix_receipt ?? false
               }
+              timeBankBalanceBeforeClosingMinutes={
+                timeBankBalanceBeforeClosingMinutes
+              }
+              recordedTimeBankEntry={recordedTimeBankEntry}
             />
           ) : null}
         </>
@@ -642,6 +662,8 @@ export function DeveloperClosingsYearView({
   closingHolidays = [],
   closingPresenceDays = [],
   mealPixBlockReason = null,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
   const [, startDetailTransition] = useTransition();
@@ -670,6 +692,11 @@ export function DeveloperClosingsYearView({
   const [clientCompensation, setClientCompensation] = useState(
     developerCompensation,
   );
+  const [clientTimeBankBalanceBefore, setClientTimeBankBalanceBefore] = useState(
+    timeBankBalanceBeforeClosingMinutes,
+  );
+  const [clientRecordedTimeBankEntry, setClientRecordedTimeBankEntry] =
+    useState<TimeBankEntry | null>(recordedTimeBankEntry);
   const [loadError, setLoadError] = useState<string | null>(null);
   /** Live closings by month — keeps grid badges/actions fresh without RSC remount. */
   const [closingOverrides, setClosingOverrides] = useState<
@@ -751,6 +778,8 @@ export function DeveloperClosingsYearView({
       setClientPresenceDays(closingPresenceDays);
       setClientMealPixBlock(mealPixBlockReason);
       setClientCompensation(developerCompensation);
+      setClientTimeBankBalanceBefore(timeBankBalanceBeforeClosingMinutes);
+      setClientRecordedTimeBankEntry(recordedTimeBankEntry);
       setLoadError(null);
     },
     [
@@ -764,6 +793,8 @@ export function DeveloperClosingsYearView({
       closingPresenceDays,
       mealPixBlockReason,
       developerCompensation,
+      timeBankBalanceBeforeClosingMinutes,
+      recordedTimeBankEntry,
     ],
   );
 
@@ -781,9 +812,11 @@ export function DeveloperClosingsYearView({
   }, [detailMonth]);
 
   const panelMonthRef = useRef(panelMonth);
-  panelMonthRef.current = panelMonth;
   const clientClosingRef = useRef(clientClosing);
-  clientClosingRef.current = clientClosing;
+  useEffect(() => {
+    panelMonthRef.current = panelMonth;
+    clientClosingRef.current = clientClosing;
+  }, [panelMonth, clientClosing]);
 
   // Keep year-grid statuses in sync with DB (gestor reject/approve) without page flash.
   useEffect(() => {
@@ -847,15 +880,7 @@ export function DeveloperClosingsYearView({
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => {
-    if (!panelMonth || panelMonth === loadedMonth) {
-      return;
-    }
-    fetchMonthDetail(panelMonth);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelMonth, loadedMonth]);
-
-  function fetchMonthDetail(yearMonth: string) {
+  const fetchMonthDetail = useCallback((yearMonth: string) => {
     setLoadError(null);
     startDetailTransition(async () => {
       const result = await loadDeveloperClosingMonthDetailAction({
@@ -880,11 +905,22 @@ export function DeveloperClosingsYearView({
       setClientPresenceDays(result.detail.presenceDays);
       setClientMealPixBlock(result.detail.mealPixBlockReason);
       setClientCompensation(result.detail.compensation);
+      setClientTimeBankBalanceBefore(
+        result.detail.timeBankBalanceBeforeClosingMinutes,
+      );
+      setClientRecordedTimeBankEntry(result.detail.recordedTimeBankEntry);
       if (result.detail.closing) {
         mergeClosingOverrides([result.detail.closing]);
       }
     });
-  }
+  }, [importId, mergeClosingOverrides]);
+
+  useEffect(() => {
+    if (!panelMonth || panelMonth === loadedMonth) {
+      return;
+    }
+    fetchMonthDetail(panelMonth);
+  }, [panelMonth, loadedMonth, fetchMonthDetail]);
 
   function openMonth(yearMonth: string) {
     // Reload detail without RSC remount (no router.refresh — avoids black flash).
@@ -921,6 +957,10 @@ export function DeveloperClosingsYearView({
     closingHolidays: detailSynced ? clientHolidays : [],
     closingPresenceDays: detailSynced ? clientPresenceDays : [],
     mealPixBlockReason: detailSynced ? clientMealPixBlock : null,
+    timeBankBalanceBeforeClosingMinutes: detailSynced
+      ? clientTimeBankBalanceBefore
+      : 0,
+    recordedTimeBankEntry: detailSynced ? clientRecordedTimeBankEntry : null,
   };
 
   const yearSelect = (

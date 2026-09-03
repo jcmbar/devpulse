@@ -75,6 +75,7 @@ export type MonthlyClosing = {
   absence_days_count: number | null;
   absence_amount: number | null;
   time_bank_posted_at: string | null;
+  time_bank_posting_sequence: number;
   developer_values_notes: string | null;
   values_submitted_at: string | null;
   jira_changed_after_finalized: boolean;

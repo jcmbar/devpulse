@@ -9,6 +9,7 @@ import { assertClosingValuesMatchFolha } from "@/services/closing-folha-compare"
 import { getInvoiceIssuer } from "@/services/invoice-issuers";
 import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import { recordSensitiveAccessAudit } from "@/services/security/sensitive-access-audit";
+import { getDeveloperTimeBankClosingContext } from "@/services/time-bank";
 import {
   approveMonthlyClosing,
   createMonthlyClosingAttachmentSignedUrl,
@@ -39,6 +40,7 @@ import type {
   MonthlyClosingCardAuditRow,
   MonthlyClosingPresenceDay,
 } from "@/types/monthly-closing";
+import type { TimeBankEntry } from "@/types/time-bank";
 
 export type MonthlyClosingActionResult =
   | { ok: true; closingId: string }
@@ -561,6 +563,8 @@ export type DeveloperClosingMonthDetailPayload = {
   mealPixBlockReason: string | null;
   compensation: DeveloperCompensation | null;
   presenceDays: MonthlyClosingPresenceDay[];
+  timeBankBalanceBeforeClosingMinutes: number;
+  recordedTimeBankEntry: TimeBankEntry | null;
 };
 
 export type LoadDeveloperClosingMonthDetailResult =
@@ -723,6 +727,22 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
           ? listMonthlyClosingPresenceDays(monthlyClosing.id)
           : Promise.resolve([] as MonthlyClosingPresenceDay[]),
       ]);
+    const timeBankContext =
+      compensation?.time_bank_enabled
+        ? await getDeveloperTimeBankClosingContext({
+            developerId: developer.id,
+            yearMonth,
+            monthlyClosingId: monthlyClosing?.id ?? null,
+            closingSequence:
+              monthlyClosing?.time_bank_posting_sequence != null &&
+              monthlyClosing.time_bank_posting_sequence > 0
+                ? monthlyClosing.time_bank_posting_sequence
+                : null,
+          })
+        : {
+            balanceBeforeClosingMinutes: 0,
+            recordedEntry: null,
+          };
 
     return {
       ok: true,
@@ -740,6 +760,9 @@ export async function loadDeveloperClosingMonthDetailAction(input: {
         mealPixBlockReason,
         compensation,
         presenceDays,
+        timeBankBalanceBeforeClosingMinutes:
+          timeBankContext.balanceBeforeClosingMinutes,
+        recordedTimeBankEntry: timeBankContext.recordedEntry,
       },
     };
   } catch (error) {

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import {
   saveMonthlyClosingDraftAction,
@@ -12,6 +13,7 @@ import {
 import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
+import { formatTimeBankMinutes } from "@/lib/metrics/time-bank";
 import { cn } from "@/lib/utils";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
@@ -21,6 +23,7 @@ import type {
   MonthlyClosingPresenceDay,
   MonthlyClosingStatus,
 } from "@/types/monthly-closing";
+import type { TimeBankEntry } from "@/types/time-bank";
 import { monthlyClosingStatusLabel } from "@/types/monthly-closing";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -140,6 +143,8 @@ type MonthlyClosingControlsProps = {
   presenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   /** Bloqueia iniciar/enviar até comprovante PIX aceito. */
   mealPixBlockReason?: string | null;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
 };
 
 export function MonthlyClosingControls({
@@ -154,6 +159,8 @@ export function MonthlyClosingControls({
   holidays = [],
   presenceDays = [],
   mealPixBlockReason = null,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
 }: MonthlyClosingControlsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -499,6 +506,10 @@ export function MonthlyClosingControls({
           initialValuesNotes={initialValuesNotes}
           canConfirm={canConfirmSubmit}
           confirmBlockedReason={confirmBlockedReason}
+          timeBankBalanceBeforeClosingMinutes={
+            timeBankBalanceBeforeClosingMinutes
+          }
+          recordedTimeBankEntry={recordedTimeBankEntry}
           requireResubmissionNotes={valuesModalMode === "resubmit"}
           resubmissionNotes={resubmissionNotes}
           onResubmissionNotesChange={setResubmissionNotes}
@@ -514,6 +525,15 @@ export function MonthlyClosingControls({
           }
         />
       ) : null}
+
+        {closing?.time_bank_enabled_snapshot ? (
+          <p className="max-w-[18rem] text-xs text-muted-foreground text-pretty sm:text-right">
+            Saldo anterior no banco:{" "}
+            <span className="font-medium tabular-nums text-foreground">
+              {formatTimeBankMinutes(timeBankBalanceBeforeClosingMinutes)}
+            </span>
+          </p>
+        ) : null}
     </div>
   );
 }

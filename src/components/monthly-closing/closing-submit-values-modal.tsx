@@ -1,14 +1,20 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import {
   computeClosingSubmitValues,
   formatClosingMoney,
 } from "@/lib/metrics/closing-submit-values";
+import {
+  formatHoursAsTimeBank,
+  formatTimeBankMinutes,
+} from "@/lib/metrics/time-bank";
 import { HOLIDAY_OVERLAY_CELL_CLASS } from "@/lib/metrics/holiday-overlay";
 import { listDaysInYearMonth } from "@/lib/metrics/payroll-calc";
 import { cn } from "@/lib/utils";
 import type { DeveloperCompensation } from "@/types/developer-compensation";
 import { COMPENSATION_BASE_TYPE_LABELS } from "@/types/developer-compensation";
+import type { TimeBankEntry } from "@/types/time-bank";
 import { Loader2, X } from "lucide-react";
 import {
   useEffect,
@@ -46,6 +52,8 @@ type ClosingSubmitValuesModalProps = {
   /** When false, Confirmar is disabled (e.g. pending justifications). */
   canConfirm?: boolean;
   confirmBlockedReason?: string | null;
+  timeBankBalanceBeforeClosingMinutes?: number;
+  recordedTimeBankEntry?: TimeBankEntry | null;
   /** When resubmitting after rejection. */
   requireResubmissionNotes?: boolean;
   resubmissionNotes?: string;
@@ -343,6 +351,8 @@ export function ClosingSubmitValuesModal({
   initialValuesNotes = null,
   canConfirm = true,
   confirmBlockedReason = null,
+  timeBankBalanceBeforeClosingMinutes = 0,
+  recordedTimeBankEntry = null,
   requireResubmissionNotes = false,
   resubmissionNotes = "",
   onResubmissionNotesChange,
@@ -437,6 +447,30 @@ export function ClosingSubmitValuesModal({
   );
 
   const isVariable = compensation.base_type === "variable";
+  const timeBankImpactLabel = compensation.time_bank_enabled
+    ? preview.timeBankHoursDelta === 0
+      ? "Sem variação"
+      : preview.timeBankHoursDelta > 0
+        ? `Crédito de ${formatHoursAsTimeBank(preview.timeBankHoursDelta)}`
+        : `Débito de ${formatHoursAsTimeBank(preview.timeBankHoursDelta)}`
+    : "Sem banco";
+  const timeBankImpactHint = compensation.time_bank_enabled
+    ? preview.timeBankHoursDelta === 0
+      ? "Horas apuradas equivalentes à jornada prevista."
+      : preview.timeBankHoursDelta > 0
+        ? "Horas apuradas acima da jornada prevista."
+        : "Horas apuradas abaixo da jornada prevista."
+    : "Banco de horas não habilitado neste cadastro.";
+  const timeBankSummaryLine = compensation.time_bank_enabled
+    ? `Horas apuradas: ${formatHoursAsTimeBank(workedHours, { signed: false })} • Horas previstas: ${formatHoursAsTimeBank(compensation.contracted_hours_per_month, { signed: false })} • Impacto no banco: ${formatHoursAsTimeBank(preview.timeBankHoursDelta)}`
+    : null;
+  const recordedImpact = recordedTimeBankEntry
+    ? formatTimeBankMinutes(
+        recordedTimeBankEntry.entry_type === "credit"
+          ? recordedTimeBankEntry.minutes_amount
+          : -recordedTimeBankEntry.minutes_amount,
+      )
+    : null;
 
   if (!open) {
     return null;
@@ -731,7 +765,43 @@ export function ClosingSubmitValuesModal({
                     {formatClosingMoney(preview.mealAmount)}
                   </p>
                 </div>
+
+                {compensation.time_bank_enabled ? (
+                  <>
+                    <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                        Saldo banco de horas
+                      </p>
+                      <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                        {formatTimeBankMinutes(timeBankBalanceBeforeClosingMinutes)}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                        Saldo acumulado antes deste fechamento.
+                      </p>
+                    </div>
+
+                    <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                        Resultado do período
+                      </p>
+                      <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                        {recordedImpact && !pending ? recordedImpact : timeBankImpactLabel}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                        {recordedImpact && !pending
+                          ? "Lançamento efetivamente registrado no banco de horas."
+                          : timeBankImpactHint}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
               </div>
+
+              {timeBankSummaryLine ? (
+                <p className="text-xs leading-snug text-muted-foreground text-pretty">
+                  {timeBankSummaryLine}
+                </p>
+              ) : null}
 
               <p className="text-xs leading-snug text-muted-foreground text-pretty">
                 {isVariable

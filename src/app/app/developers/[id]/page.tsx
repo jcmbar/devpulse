@@ -11,8 +11,10 @@ import { DeveloperAccessSummary } from "@/components/developer-access-summary";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { PersonAvatar } from "@/components/person-avatar";
+import { TimeBankLedgerPanel } from "@/components/time-bank/time-bank-ledger-panel";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { SectionShell } from "@/components/ui/section-shell";
+import { formatTimeBankMinutes } from "@/lib/metrics/time-bank";
 import { requirePermission } from "@/lib/auth/permissions";
 import { emptyModuleGrants } from "@/lib/auth/capabilities";
 import { listModuleGrantsForProfileAdmin } from "@/services/profiles/module-grants";
@@ -25,6 +27,7 @@ import {
 } from "@/services/developers";
 import { listTeamsAdmin } from "@/services/teams";
 import { getJobTitleLabel } from "@/types/developer-compensation";
+import type { TimeBankEntry, TimeBankSummary } from "@/types/time-bank";
 import { SyncDeveloperAvatarButton } from "@/app/app/developers/sync-developer-avatar-button";
 
 type EditDeveloperPageProps = {
@@ -32,10 +35,10 @@ type EditDeveloperPageProps = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-type EditTab = "dados" | "acesso" | "valores";
+type EditTab = "dados" | "acesso" | "valores" | "banco";
 
 function parseTab(value: string | undefined): EditTab {
-  if (value === "acesso" || value === "valores") {
+  if (value === "acesso" || value === "valores" || value === "banco") {
     return value;
   }
   return "dados";
@@ -77,12 +80,28 @@ export default async function EditDeveloperPage({
     ? `${developer.profile.id}:${developer.profile.role}:${JSON.stringify(accessGrants)}`
     : "none";
 
-  let timeBankBalance = 0;
-  if (activeTab === "valores" && compensation?.time_bank_enabled) {
-    const { getDeveloperTimeBankBalance } = await import(
-      "@/services/time-bank"
-    );
-    timeBankBalance = await getDeveloperTimeBankBalance(developer.id);
+  let timeBankSummary: TimeBankSummary = {
+    current_balance_minutes: 0,
+    credit_minutes: 0,
+    debit_minutes: 0,
+    latest_balance_minutes: 0,
+    latest_reference_period: null,
+    total_entries: 0,
+  };
+  let timeBankEntries: TimeBankEntry[] = [];
+  if (
+    compensation?.time_bank_enabled &&
+    (activeTab === "banco" || activeTab === "valores")
+  ) {
+    const { getDeveloperTimeBankLedger, getDeveloperTimeBankSummary } =
+      await import("@/services/time-bank");
+    if (activeTab === "banco") {
+      const ledger = await getDeveloperTimeBankLedger(developer.id);
+      timeBankSummary = ledger.summary;
+      timeBankEntries = ledger.entries;
+    } else {
+      timeBankSummary = await getDeveloperTimeBankSummary(developer.id);
+    }
   }
 
   let access: Awaited<ReturnType<typeof resolveDeveloperAccessInfo>> | null =
@@ -158,6 +177,15 @@ export default async function EditDeveloperPage({
             label: "Valores",
             active: activeTab === "valores",
           },
+          ...(compensation?.time_bank_enabled
+            ? [
+                {
+                  href: tabHref(developer.id, "banco"),
+                  label: "Banco de horas",
+                  active: activeTab === "banco",
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -320,11 +348,7 @@ export default async function EditDeveloperPage({
             <p className="mb-4 text-sm text-muted-foreground">
               Saldo do banco de horas:{" "}
               <span className="font-semibold tabular-nums text-foreground">
-                {timeBankBalance > 0 ? "+" : ""}
-                {timeBankBalance.toLocaleString("pt-BR", {
-                  maximumFractionDigits: 1,
-                })}{" "}
-                h
+                {formatTimeBankMinutes(timeBankSummary.current_balance_minutes)}
               </span>
               . Movimentos entram ao finalizar novos fechamentos.
             </p>
@@ -332,6 +356,22 @@ export default async function EditDeveloperPage({
           <DeveloperCompensationForm
             developerId={developer.id}
             compensation={compensation}
+          />
+        </SectionShell>
+      ) : null}
+
+      {activeTab === "banco" && compensation?.time_bank_enabled ? (
+        <SectionShell
+          title="Banco de horas"
+          description="Histórico auditável, saldo acumulado e ajustes manuais do colaborador."
+        >
+          <TimeBankLedgerPanel
+            developerId={developer.id}
+            developerName={developer.full_name}
+            summary={timeBankSummary}
+            entries={timeBankEntries}
+            canManage
+            helperText="O saldo é calculado pelo livro-razão. Fechamentos reabertos geram reversões; ajustes manuais não apagam histórico."
           />
         </SectionShell>
       ) : null}

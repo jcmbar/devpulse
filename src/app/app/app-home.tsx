@@ -19,6 +19,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
 import { DataTable } from "@/components/surface";
+import { TimeBankLedgerPanel } from "@/components/time-bank/time-bank-ledger-panel";
 import { AppViewTabs } from "@/components/ui/app-view-tabs";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { MetricCalcTooltip } from "@/components/ui/metric-calc-tooltip";
@@ -51,8 +52,9 @@ import type {
   MonthlyClosingPresenceDay,
 } from "@/types/monthly-closing";
 import type { Profile } from "@/types/profile";
+import type { TimeBankEntry, TimeBankSummary } from "@/types/time-bank";
 
-export type DeveloperHomeTab = "cards" | "fechamentos";
+export type DeveloperHomeTab = "cards" | "fechamentos" | "banco";
 
 type AppHomeProps = {
   profile: Profile;
@@ -69,6 +71,7 @@ type AppHomeProps = {
   activeTab: DeveloperHomeTab;
   cardsTabHref: string;
   fechamentosTabHref: string;
+  bancoTabHref: string;
   closingYears: number[];
   closingSelectedYear: number;
   closingYearRows: DeveloperClosingYearMonthRow[];
@@ -83,6 +86,10 @@ type AppHomeProps = {
   closingHolidays?: ReadonlyArray<{ date: string; name: string }>;
   closingPresenceDays?: ReadonlyArray<MonthlyClosingPresenceDay>;
   mealPixBlockReason?: string | null;
+  closingTimeBankBalanceBeforeMinutes: number;
+  closingRecordedTimeBankEntry: TimeBankEntry | null;
+  timeBankSummary: TimeBankSummary;
+  timeBankEntries: TimeBankEntry[];
 };
 
 function formatHours(value: number): string {
@@ -151,6 +158,7 @@ export function AppHome({
   activeTab,
   cardsTabHref,
   fechamentosTabHref,
+  bancoTabHref,
   closingYears,
   closingSelectedYear,
   closingYearRows,
@@ -165,6 +173,10 @@ export function AppHome({
   closingHolidays = [],
   closingPresenceDays = [],
   mealPixBlockReason = null,
+  closingTimeBankBalanceBeforeMinutes,
+  closingRecordedTimeBankEntry,
+  timeBankSummary,
+  timeBankEntries,
 }: AppHomeProps) {
   const displayName = profile.full_name ?? developer.full_name;
   const delayCounts = countJustificationStatuses(delayJustificationsByKey);
@@ -216,6 +228,15 @@ export function AppHome({
             label: "Fechamentos",
             active: activeTab === "fechamentos",
           },
+          ...(developerCompensation?.time_bank_enabled
+            ? [
+                {
+                  href: bancoTabHref,
+                  label: "Meu banco de horas",
+                  active: activeTab === "banco",
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -620,6 +641,21 @@ export function AppHome({
             ) : null}
           </SectionShell>
         </>
+      ) : activeTab === "banco" ? (
+        <SectionShell
+          title="Meu banco de horas"
+          description="Seu saldo é atualizado após cada fechamento mensal ou ajuste registrado pelo gestor."
+        >
+          <TimeBankLedgerPanel
+            developerId={developer.id}
+            developerName={displayName}
+            summary={timeBankSummary}
+            entries={timeBankEntries}
+            canManage={false}
+            selfView
+            helperText="Consulte aqui o saldo atual, os créditos, os débitos e o histórico do seu banco de horas."
+          />
+        </SectionShell>
       ) : (
         <DeveloperClosingsYearView
           years={closingYears}
@@ -638,6 +674,8 @@ export function AppHome({
           closingHolidays={closingHolidays}
           closingPresenceDays={closingPresenceDays}
           mealPixBlockReason={mealPixBlockReason}
+          timeBankBalanceBeforeClosingMinutes={closingTimeBankBalanceBeforeMinutes}
+          recordedTimeBankEntry={closingRecordedTimeBankEntry}
         />
       )}
     </PageShell>

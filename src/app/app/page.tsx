@@ -56,7 +56,10 @@ type AppPageProps = {
 };
 
 function parseTab(value: string | undefined): DeveloperHomeTab {
-  return value === "fechamentos" ? "fechamentos" : "cards";
+  if (value === "fechamentos" || value === "banco") {
+    return value;
+  }
+  return "cards";
 }
 
 function buildAppHref(input: {
@@ -323,6 +326,18 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   let closingBlockingCount = 0;
   let closingAttachments: MonthlyClosingAttachment[] = [];
   let closingPresenceDays: MonthlyClosingPresenceDay[] = [];
+  let closingTimeBankBalanceBeforeMinutes = 0;
+  let closingRecordedTimeBankEntry: import("@/types/time-bank").TimeBankEntry | null =
+    null;
+  let timeBankSummary: import("@/types/time-bank").TimeBankSummary = {
+    current_balance_minutes: 0,
+    credit_minutes: 0,
+    debit_minutes: 0,
+    latest_balance_minutes: 0,
+    latest_reference_period: null,
+    total_entries: 0,
+  };
+  let timeBankEntries: import("@/types/time-bank").TimeBankEntry[] = [];
 
   if (
     closingYearMonth != null &&
@@ -408,6 +423,31 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   const developerCompensation: DeveloperCompensation | null =
     await getCurrentDeveloperCompensation(developer.id);
 
+  if (activeTab === "banco" && developerCompensation?.time_bank_enabled) {
+    const { getDeveloperTimeBankLedger } = await import("@/services/time-bank");
+    const ledger = await getDeveloperTimeBankLedger(developer.id);
+    timeBankSummary = ledger.summary;
+    timeBankEntries = ledger.entries;
+  }
+
+  if (closingYearMonth != null && developerCompensation?.time_bank_enabled) {
+    const { getDeveloperTimeBankClosingContext } = await import(
+      "@/services/time-bank"
+    );
+    const context = await getDeveloperTimeBankClosingContext({
+      developerId: developer.id,
+      yearMonth: closingYearMonth,
+      monthlyClosingId: monthlyClosing?.id ?? null,
+      closingSequence:
+        monthlyClosing?.time_bank_posting_sequence != null &&
+        monthlyClosing.time_bank_posting_sequence > 0
+          ? monthlyClosing.time_bank_posting_sequence
+          : null,
+    });
+    closingTimeBankBalanceBeforeMinutes = context.balanceBeforeClosingMinutes;
+    closingRecordedTimeBankEntry = context.recordedEntry;
+  }
+
   const mealPixBlockReason =
     await getMealPixClosingBlockReason(developer.id);
 
@@ -441,6 +481,9 @@ export default async function AppPage({ searchParams }: AppPageProps) {
     importId: selectedImportId,
     closingYear: closingSelectedYear,
   });
+  const bancoTabHref = buildAppHref({
+    tab: "banco",
+  });
 
   return (
     <>
@@ -469,6 +512,7 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         activeTab={activeTab}
         cardsTabHref={cardsTabHref}
         fechamentosTabHref={fechamentosTabHref}
+        bancoTabHref={bancoTabHref}
         closingYears={closingYears}
         closingSelectedYear={closingSelectedYear}
         closingYearRows={closingYearRows}
@@ -483,6 +527,10 @@ export default async function AppPage({ searchParams }: AppPageProps) {
         closingHolidays={closingHolidayEntries}
         closingPresenceDays={closingPresenceDays}
         mealPixBlockReason={mealPixBlockReason}
+        closingTimeBankBalanceBeforeMinutes={closingTimeBankBalanceBeforeMinutes}
+        closingRecordedTimeBankEntry={closingRecordedTimeBankEntry}
+        timeBankSummary={timeBankSummary}
+        timeBankEntries={timeBankEntries}
       />
     </>
   );
