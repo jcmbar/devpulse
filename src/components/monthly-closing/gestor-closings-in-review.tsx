@@ -4,8 +4,10 @@ import { DataTable } from "@/components/surface";
 import { SectionShell } from "@/components/ui/section-shell";
 import { formatDateTimeBrazil } from "@/lib/datetime/format-brazil";
 import { formatYearMonthLabel } from "@/lib/metrics/date-range";
+import { cn } from "@/lib/utils";
+import type { ClosingFolhaListStatus } from "@/services/closing-folha-compare";
 import type { MonthlyClosing } from "@/types/monthly-closing";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 type ClosingReviewRow = MonthlyClosing & {
   developer_name: string;
@@ -13,12 +15,45 @@ type ClosingReviewRow = MonthlyClosing & {
   item_count: number;
 };
 
+function FolhaDivergenceBadge({
+  status,
+}: {
+  status: ClosingFolhaListStatus | undefined;
+}) {
+  if (status === "mismatch") {
+    return (
+      <span
+        className={cn(
+          "ui-badge inline-flex items-center gap-1 border-rose-500/50 bg-rose-500/15 text-rose-800 dark:text-rose-200",
+          "ui-closing-attention",
+        )}
+      >
+        <AlertTriangle className="size-3.5 shrink-0" strokeWidth={2} />
+        Existe divergência
+      </span>
+    );
+  }
+
+  if (status === "ok") {
+    return (
+      <span className="ui-badge inline-flex items-center gap-1 border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200">
+        <CheckCircle2 className="size-3.5 shrink-0" strokeWidth={2} />
+        Sem divergências
+      </span>
+    );
+  }
+
+  return <span className="text-xs text-muted-foreground">—</span>;
+}
+
 export function GestorClosingsInReviewSection({
   closings,
   driftClosings = [],
+  folhaStatuses = {},
 }: {
   closings: ClosingReviewRow[];
   driftClosings?: ClosingReviewRow[];
+  folhaStatuses?: Record<string, ClosingFolhaListStatus>;
 }) {
   return (
     <div className="space-y-4">
@@ -73,14 +108,14 @@ export function GestorClosingsInReviewSection({
 
       <SectionShell
         title="Fechamentos em andamento"
-        description="Em revisão (aprovar) ou fechados (validar anexos e finalizar)."
+        description="Em revisão (aprovar) ou fechados (validar anexos e finalizar). A coluna Divergência compara o envio do usuário com a Folha."
       >
         {closings.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nenhum fechamento em andamento no momento.
           </p>
         ) : (
-          <DataTable minWidthClassName="min-w-[720px]">
+          <DataTable minWidthClassName="min-w-[860px]">
             <thead>
               <tr>
                 <th>Developer</th>
@@ -88,6 +123,7 @@ export function GestorClosingsInReviewSection({
                 <th className="hidden sm:table-cell">Time</th>
                 <th>Cards</th>
                 <th>Status</th>
+                <th>Divergência</th>
                 <th className="hidden md:table-cell">Atualizado</th>
                 <th />
               </tr>
@@ -105,6 +141,9 @@ export function GestorClosingsInReviewSection({
                   <td>{row.item_count}</td>
                   <td>
                     <MonthlyClosingStatusBadge status={row.status} />
+                  </td>
+                  <td>
+                    <FolhaDivergenceBadge status={folhaStatuses[row.id]} />
                   </td>
                   <td className="hidden whitespace-nowrap text-muted-foreground md:table-cell">
                     {row.submitted_at

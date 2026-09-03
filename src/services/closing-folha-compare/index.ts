@@ -152,3 +152,44 @@ export async function assertClosingValuesMatchFolha(
     "Há divergências entre os valores do envio (usuário) e a Folha (gestor). Corrija antes de aprovar ou finalizar.",
   );
 }
+
+/** Compact Folha × envio status for the in-review queue. */
+export type ClosingFolhaListStatus = "ok" | "mismatch" | "n/a";
+
+export function toClosingFolhaListStatus(
+  compare: ClosingFolhaCompareResult,
+): ClosingFolhaListStatus {
+  if (!compare.hasClosingValues) {
+    return "n/a";
+  }
+  if (compare.blocksDecision || compare.hasMismatch) {
+    return "mismatch";
+  }
+  return "ok";
+}
+
+export async function loadClosingFolhaListStatuses(
+  closings: MonthlyClosing[],
+): Promise<Record<string, ClosingFolhaListStatus>> {
+  if (closings.length === 0) {
+    return {};
+  }
+
+  const results = await Promise.all(
+    closings.map(async (closing) => {
+      try {
+        const { compare } = await loadClosingFolhaCompare(closing);
+        return [closing.id, toClosingFolhaListStatus(compare)] as const;
+      } catch (error) {
+        console.error(
+          "[closing-folha-compare] list status failed:",
+          closing.id,
+          error,
+        );
+        return [closing.id, "n/a" as const] as const;
+      }
+    }),
+  );
+
+  return Object.fromEntries(results);
+}

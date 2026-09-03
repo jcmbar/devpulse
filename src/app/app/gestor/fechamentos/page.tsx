@@ -33,6 +33,7 @@ import {
 } from "@/services/operational-emails";
 import { listTeamsAdmin } from "@/services/teams";
 import { listPayrollReviewedDeveloperMonthsForYear } from "@/services/payroll";
+import { loadClosingFolhaListStatuses } from "@/services/closing-folha-compare";
 import type { EmailDispatchStatus } from "@/types/operational-email";
 
 type PageProps = {
@@ -129,6 +130,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       row.year_month.startsWith(yearPrefix) &&
       folhaReviewed.keys.has(`${row.developer_id}:${row.year_month}`),
   );
+  const folhaStatuses = await loadClosingFolhaListStatuses(filteredClosings);
 
   const developerIds = new Set(developers.map((row) => row.id));
   const extraDeveloperIds = [
@@ -326,6 +328,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
       <GestorClosingsInReviewSection
         closings={filteredClosings}
         driftClosings={filteredDrift}
+        folhaStatuses={folhaStatuses}
       />
     </PageShell>
   );
