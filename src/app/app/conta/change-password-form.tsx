@@ -1,5 +1,6 @@
 "use client";
 
+import { notifyPasswordChangedAction } from "@/app/app/notifications-actions";
 import { FormActions, FormFeedback, FormField } from "@/components/ui/form";
 import { createClient } from "@/lib/supabase/client";
 import { FormEvent, useState } from "react";
@@ -91,6 +92,12 @@ export function ChangePasswordForm({ email }: { email: string }) {
     if (updateError) {
       setError(mapAuthError(updateError.message));
       return;
+    }
+
+    try {
+      await notifyPasswordChangedAction();
+    } catch {
+      // best-effort: password already changed
     }
 
     form.reset();

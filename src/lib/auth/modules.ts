@@ -15,6 +15,7 @@ export const APP_MODULE_KEYS = [
   "times",
   "versionamento",
   "analistas",
+  "notificacoes",
 ] as const;
 
 export type AppModuleKey = (typeof APP_MODULE_KEYS)[number];
@@ -46,6 +47,7 @@ export const APP_MODULES: AppModuleMeta[] = [
       path.startsWith("/app/gestor") &&
       !path.startsWith("/app/gestor/config/emails") &&
       !path.startsWith("/app/gestor/folha/empresas") &&
+      !path.startsWith("/app/gestor/notificacoes") &&
       path !== "/app/gestor/config" &&
       !path.startsWith("/app/gestor/config?") &&
       path !== "/app/gestor/config/capacidade" &&
@@ -124,6 +126,13 @@ export const APP_MODULES: AppModuleMeta[] = [
     href: "/app/analistas",
     navGroup: "primary",
     matchPath: (path) => path.startsWith("/app/analistas"),
+  },
+  {
+    key: "notificacoes",
+    label: "Notificações",
+    href: "/app/gestor/notificacoes",
+    navGroup: "more",
+    matchPath: (path) => path.startsWith("/app/gestor/notificacoes"),
   },
 ];
 

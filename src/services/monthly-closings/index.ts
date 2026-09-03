@@ -1525,6 +1525,22 @@ export async function rejectMonthlyClosing(input: {
     payload: { noteLength: notes.length },
   });
 
+  try {
+    const { notifyClosingStatusChange } = await import(
+      "@/services/notifications/emitters"
+    );
+    await notifyClosingStatusChange({
+      developerId: updated.developer_id,
+      closingId: updated.id,
+      yearMonth: updated.year_month,
+      fromStatus: "in_review",
+      toStatus: "rejected",
+      actorUserId: input.actorUserId,
+    });
+  } catch (notifyError) {
+    console.error("[monthly-closings] notify reject failed:", notifyError);
+  }
+
   return updated;
 }
 
@@ -1791,6 +1807,21 @@ export async function approveMonthlyClosing(input: {
       actorUserId: input.actorUserId,
       payload: { noteLength: notes.length },
     });
+  }
+  try {
+    const { notifyClosingStatusChange } = await import(
+      "@/services/notifications/emitters"
+    );
+    await notifyClosingStatusChange({
+      developerId: updated.developer_id,
+      closingId: updated.id,
+      yearMonth: updated.year_month,
+      fromStatus: "in_review",
+      toStatus: "closed",
+      actorUserId: input.actorUserId,
+    });
+  } catch (notifyError) {
+    console.error("[monthly-closings] notify approve failed:", notifyError);
   }
 
   return updated;
@@ -2135,6 +2166,22 @@ export async function finalizeMonthlyClosing(input: {
     actorUserId: input.actorUserId,
   });
 
+  try {
+    const { notifyClosingStatusChange } = await import(
+      "@/services/notifications/emitters"
+    );
+    await notifyClosingStatusChange({
+      developerId: updated.developer_id,
+      closingId: updated.id,
+      yearMonth: updated.year_month,
+      fromStatus: "closed",
+      toStatus: "finalized",
+      actorUserId: input.actorUserId,
+    });
+  } catch (notifyError) {
+    console.error("[monthly-closings] notify finalize failed:", notifyError);
+  }
+
   return updated;
 }
 
@@ -2199,6 +2246,22 @@ export async function revertMonthlyClosingStatus(input: {
       );
     }
 
+    try {
+      const { notifyClosingStatusChange } = await import(
+        "@/services/notifications/emitters"
+      );
+      await notifyClosingStatusChange({
+        developerId: updated.developer_id,
+        closingId: updated.id,
+        yearMonth: updated.year_month,
+        fromStatus: "finalized",
+        toStatus: "closed",
+        actorUserId: input.actorUserId,
+      });
+    } catch (notifyError) {
+      console.error("[monthly-closings] notify reopen failed:", notifyError);
+    }
+
     return updated;
   }
 
@@ -2247,6 +2310,22 @@ export async function revertMonthlyClosingStatus(input: {
       timeBankPostingSequence: null,
     },
   });
+
+  try {
+    const { notifyClosingStatusChange } = await import(
+      "@/services/notifications/emitters"
+    );
+    await notifyClosingStatusChange({
+      developerId: updated.developer_id,
+      closingId: updated.id,
+      yearMonth: updated.year_month,
+      fromStatus,
+      toStatus,
+      actorUserId: input.actorUserId,
+    });
+  } catch (notifyError) {
+    console.error("[monthly-closings] notify status revert failed:", notifyError);
+  }
 
   return updated;
 }

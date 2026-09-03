@@ -385,6 +385,23 @@ export async function decideDelayJustification(
       mirrorError,
     );
   }
+  try {
+    const { notifyJustificationDecision } = await import(
+      "@/services/notifications/emitters"
+    );
+    await notifyJustificationDecision({
+      developerId: decided.developer_id,
+      jiraKey: decided.jira_key,
+      kind: decided.kind === "rework" ? "rework" : "delay",
+      decision: decided.status === "accepted" ? "accepted" : "rejected",
+      actorUserId: input.reviewerProfileId,
+    });
+  } catch (notifyError) {
+    console.error(
+      "[delay-justifications] falha ao notificar decisão",
+      notifyError,
+    );
+  }
   return decided;
 }
 

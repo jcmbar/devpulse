@@ -3,9 +3,12 @@
 import { AppShellMesh } from "@/components/app-shell-mesh";
 import { SessionActivityGuard } from "@/components/session-activity-guard";
 import { BrandMark } from "@/components/brand-mark";
+import { NotificationBell } from "@/components/notifications/notification-bell";
+import { UnreadNotificationsModal } from "@/components/notifications/unread-notifications-modal";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth/actions";
+import type { AppNotification } from "@/types/notification";
 import {
   hasAnyTeamModuleAccess,
   hasPermission,
@@ -29,6 +32,7 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  Bell,
   ClipboardClock,
   Menu,
   Upload,
@@ -57,6 +61,8 @@ type AppChromeProps = {
   avatarUrl?: string | null;
   idleMinutes?: number | null;
   versionLabel?: string;
+  unreadNotificationCount?: number;
+  recentNotifications?: AppNotification[];
   children: ReactNode;
 };
 
@@ -118,6 +124,10 @@ const MODULE_ICONS: Record<
   analistas: {
     icon: ClipboardClock,
     iconClass: "text-purple-600 dark:text-purple-400",
+  },
+  notificacoes: {
+    icon: Bell,
+    iconClass: "text-sky-600 dark:text-sky-400",
   },
 };
 
@@ -181,6 +191,8 @@ export function AppChrome({
   avatarUrl = null,
   idleMinutes = null,
   versionLabel = "v0.1.0",
+  unreadNotificationCount = 0,
+  recentNotifications = [],
   children,
 }: AppChromeProps) {
   const pathname = usePathname();
@@ -360,6 +372,10 @@ export function AppChrome({
           </nav>
 
           <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <NotificationBell
+              initialUnreadCount={unreadNotificationCount}
+              initialItems={recentNotifications}
+            />
             <Link
               href="/app/conta"
               className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-2.5 py-1.5 transition-colors hover:bg-muted/60 xl:flex"
@@ -448,6 +464,7 @@ export function AppChrome({
       </header>
 
       <div className="relative z-10 flex flex-1 flex-col">{children}</div>
+      <UnreadNotificationsModal unreadCount={unreadNotificationCount} />
       <footer className="relative z-10 border-t border-border/50 bg-background/40">
         <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-3 py-3 text-[11px] text-muted-foreground sm:px-6 lg:px-8">
           <span>DevPulse · Ambiente de produção</span>
