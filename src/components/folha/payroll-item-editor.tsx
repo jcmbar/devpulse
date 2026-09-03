@@ -37,7 +37,7 @@ function moneyInputValue(value: number): string {
 type PayrollItemEditorProps = {
   item: PayrollClosingItemWithIssuer;
   issuers: InvoiceIssuer[];
-  attendanceHref: string;
+  onOpenAttendance: () => void;
   jiraHours: number;
   contractedHoursDelta: number;
   readOnly?: boolean;
@@ -80,7 +80,7 @@ function RestoreCalculatedButton({
 export function PayrollItemEditor({
   item,
   issuers,
-  attendanceHref,
+  onOpenAttendance,
   jiraHours,
   contractedHoursDelta,
   readOnly = false,
@@ -199,12 +199,13 @@ export function PayrollItemEditor({
                 : " · R$ ••••/h"
               : null}
           </p>
-          <Link
-            href={attendanceHref}
-            className="text-xs font-medium text-brand underline-offset-4 hover:underline"
+          <button
+            type="button"
+            onClick={onOpenAttendance}
+            className="text-left text-xs font-medium text-brand underline-offset-4 hover:underline"
           >
             Presença ({item.presencial_days_count} dias)
-          </Link>
+          </button>
         </div>
       </td>
       <td className="align-top tabular-nums">

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PayrollAttendancePanel } from "@/components/folha/payroll-attendance-panel";
 import { PayrollMonthStatusControl } from "@/components/folha/payroll-month-status";
 import { PayrollSinteticoExportButton } from "@/components/folha/payroll-sintetico-export-button";
 import { PayrollSinteticoPanel } from "@/components/folha/payroll-sintetico-panel";
@@ -19,13 +18,8 @@ import {
   teamListFilterParam,
 } from "@/lib/teams/team-filter";
 import { listInvoiceIssuers } from "@/services/invoice-issuers";
-import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import { mapFinalizedMonthlyClosingIdsByDeveloper } from "@/services/monthly-closings";
-import {
-  ensurePayrollMonthWithItems,
-  getPayrollItem,
-  listAttendanceForItem,
-} from "@/services/payroll";
+import { ensurePayrollMonthWithItems } from "@/services/payroll";
 import { mapJiraDeliveryHoursByDeveloperForMonth } from "@/services/payroll/jira-hours";
 import { listDevelopersAdmin } from "@/services/developers/admin";
 import { developerAvatarPublicUrl } from "@/services/developers/avatar";
@@ -51,23 +45,6 @@ function parseYearMonth(value: string | undefined): string {
   return currentYearMonth();
 }
 
-function buildFolhaHref(input: {
-  teamId?: string;
-  month: string;
-  itemId?: string | null;
-}): string {
-  const params = new URLSearchParams();
-  if (input.teamId) {
-    params.set("teamId", input.teamId);
-  }
-  params.set("month", input.month);
-  if (input.itemId) {
-    params.set("itemId", input.itemId);
-  }
-  const query = params.toString();
-  return `/app/gestor/folha?${query}`;
-}
-
 export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const { profile } = await requirePermission("gestor", "access");
   const params = await searchParams;
@@ -82,6 +59,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
     teamFilter.kind === "team" ? teamFilter.teamId : null;
   const teamParam = teamListFilterParam(teamFilter) || undefined;
   const month = parseYearMonth(params.month);
+  const initialAttendanceItemId = params.itemId?.trim() || null;
 
   const [teams, issuers, payroll, finalizedByDeveloper, developers] =
     await Promise.all([
@@ -118,40 +96,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       ? (teams.find((team) => team.id === selectedTeamId)?.name ?? null)
       : null;
 
-  const selectedItemId = params.itemId?.trim() || null;
-  const selectedItem =
-    selectedItemId != null
-      ? (items.find((item) => item.id === selectedItemId) ??
-        (await getPayrollItem(selectedItemId)))
-      : null;
-  const attendanceDays =
-    selectedItem != null
-      ? await listAttendanceForItem(selectedItem.id)
-      : [];
-  const attendanceHolidays =
-    selectedItem != null
-      ? (
-          await listApplicableHolidayDatesForDeveloperMonth({
-            developerId: selectedItem.developer_id,
-            yearMonth: month,
-          })
-        ).byDate
-      : null;
-  const holidayEntries =
-    attendanceHolidays != null
-      ? [...attendanceHolidays.entries()].map(([date, name]) => ({
-          date,
-          name,
-        }))
-      : [];
-
   const readOnly = closing.status === "closed";
 
-  const sinteticoItems =
-    selectedItem != null
-      ? items.filter((item) => item.id === selectedItem.id)
-      : items;
-  const sinteticoTotals = sinteticoItems.reduce(
+  const sinteticoTotals = items.reduce(
     (acc, item) => {
       acc.base += item.base_amount;
       acc.differential += item.differential_amount;
@@ -176,7 +123,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       reviewed: 0,
     },
   );
-  const sinteticoFinalizedCount = sinteticoItems.filter((item) =>
+  const sinteticoFinalizedCount = items.filter((item) =>
     finalizedByDeveloper.has(item.developer_id),
   ).length;
 
@@ -286,36 +233,18 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         </div>
       </FilterBar>
 
-      {selectedItem ? (
-        <PayrollAttendancePanel
-          item={selectedItem}
-          days={attendanceDays}
-          holidays={holidayEntries}
-          closeHref={buildFolhaHref({ teamId: teamParam, month })}
-          readOnly={
-            readOnly || finalizedByDeveloper.has(selectedItem.developer_id)
-          }
-          finalizedClosingId={
-            finalizedByDeveloper.get(selectedItem.developer_id) ?? null
-          }
-          avatarUrl={
-            avatarUrlByDeveloper[selectedItem.developer_id] ?? null
-          }
-        />
-      ) : null}
-
       <PayrollSinteticoPanel
-        items={sinteticoItems}
+        items={items}
         issuers={issuers}
         readOnly={readOnly}
         totals={sinteticoTotals}
         finalizedCount={sinteticoFinalizedCount}
-        focusedDeveloperName={selectedItem?.developer_name ?? null}
         teamId={teamParam}
         month={month}
         jiraHoursByDeveloper={Object.fromEntries(jiraHoursByDeveloper)}
         finalizedByDeveloper={Object.fromEntries(finalizedByDeveloper)}
         avatarUrlByDeveloper={avatarUrlByDeveloper}
+        initialAttendanceItemId={initialAttendanceItemId}
       />
     </PageShell>
   );

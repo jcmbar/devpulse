@@ -1,5 +1,6 @@
 "use client";
 
+import { PayrollAttendanceModal } from "@/components/folha/payroll-attendance-modal";
 import { PayrollItemEditor } from "@/components/folha/payroll-item-editor";
 import { DataTable, EmptyState } from "@/components/surface";
 import { computeContractedHoursDelta } from "@/lib/metrics/payroll-calc";
@@ -7,7 +8,8 @@ import { cn } from "@/lib/utils";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type { PayrollClosingItemWithIssuer } from "@/types/payroll-closing";
 import { Eye, EyeOff } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 function formatMoney(value: number): string {
   return value.toLocaleString("pt-BR", {
@@ -65,28 +67,14 @@ type Props = {
   readOnly: boolean;
   totals: Totals;
   finalizedCount: number;
-  /** When set, panel is scoped to presence editing for this person. */
-  focusedDeveloperName?: string | null;
   teamId?: string;
   month: string;
   jiraHoursByDeveloper: Record<string, number>;
   finalizedByDeveloper: Record<string, string>;
   avatarUrlByDeveloper?: Record<string, string | null>;
+  /** Opens attendance modal on mount (deep-link from ?itemId=). */
+  initialAttendanceItemId?: string | null;
 };
-
-function buildAttendanceHref(input: {
-  teamId?: string;
-  month: string;
-  itemId: string;
-}): string {
-  const params = new URLSearchParams();
-  if (input.teamId) {
-    params.set("teamId", input.teamId);
-  }
-  params.set("month", input.month);
-  params.set("itemId", input.itemId);
-  return `/app/gestor/folha?${params.toString()}`;
-}
 
 export function PayrollSinteticoPanel({
   items,
@@ -94,15 +82,42 @@ export function PayrollSinteticoPanel({
   readOnly,
   totals,
   finalizedCount,
-  focusedDeveloperName = null,
-  teamId,
   month,
   jiraHoursByDeveloper,
   finalizedByDeveloper,
   avatarUrlByDeveloper = {},
+  initialAttendanceItemId = null,
 }: Props) {
+  const router = useRouter();
   const [revealAll, setRevealAll] = useState(false);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
+  const [attendanceItemId, setAttendanceItemId] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!initialAttendanceItemId) {
+      return;
+    }
+    if (items.some((item) => item.id === initialAttendanceItemId)) {
+      setAttendanceItemId(initialAttendanceItemId);
+    }
+  }, [initialAttendanceItemId, items]);
+
+  const closeAttendance = useCallback(() => {
+    setAttendanceItemId(null);
+    if (typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("itemId")) {
+      return;
+    }
+    url.searchParams.delete("itemId");
+    router.replace(`${url.pathname}?${url.searchParams.toString()}`, {
+      scroll: false,
+    });
+  }, [router]);
 
   const toggleAll = useCallback(() => {
     setRevealAll((current) => {
@@ -141,16 +156,17 @@ export function PayrollSinteticoPanel({
     [revealAll, revealedIds],
   );
 
+  const attendanceItem =
+    attendanceItemId != null
+      ? (items.find((item) => item.id === attendanceItemId) ?? null)
+      : null;
+
   return (
     <section className="ui-dashboard-panel space-y-3">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold">
-              {focusedDeveloperName
-                ? `Sintético · ${focusedDeveloperName}`
-                : "Sintético mensal"}
-            </h2>
+            <h2 className="text-base font-semibold">Sintético mensal</h2>
             <MoneyVisibilityButton
               visible={revealAll}
               onToggle={toggleAll}
@@ -162,29 +178,29 @@ export function PayrollSinteticoPanel({
             />
           </div>
           <p className="text-sm text-muted-foreground">
-            {focusedDeveloperName
-              ? "Linha financeira desta pessoa no mês. Ajuste a presença acima e confira os valores NF aqui."
-              : "Base + diferencial − descontos + deslocamento + refeição = valor NF. Total horas Jira = mesma fonte do Gestor (time spent dos cards com entrega no mês), agregando o lote Compilado de cada time quando o filtro é “todos”. Diferença contratada = horas Jira − horas/mês do cadastro (negativo = abaixo do mínimo; base para futuro banco de horas)."}
+            Base + diferencial − descontos + deslocamento + refeição = valor NF.
+            Total horas Jira = mesma fonte do Gestor (time spent dos cards com
+            entrega no mês), agregando o lote Compilado de cada time quando o
+            filtro é “todos”. Diferença contratada = horas Jira − horas/mês do
+            cadastro (negativo = abaixo do mínimo; base para futuro banco de
+            horas).
           </p>
           {finalizedCount > 0 ? (
             <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-              {focusedDeveloperName
-                ? "Fechamento mensal finalizado — edição bloqueada. Reabra o fechamento para alterar."
-                : `${finalizedCount} linha(s) com fechamento mensal finalizado — edição bloqueada. Reabra o fechamento para alterar.`}
+              {finalizedCount} linha(s) com fechamento mensal finalizado —
+              edição bloqueada. Reabra o fechamento para alterar.
             </p>
           ) : null}
           <p className="mt-1 text-xs text-muted-foreground">
-            Valores monetários ficam ocultos por padrão. Use o olho
-            {focusedDeveloperName ? "" : " geral ou o olho de cada pessoa"} para
-            exibir.
+            Valores monetários ficam ocultos por padrão. Use o olho geral ou o
+            olho de cada pessoa para exibir.
           </p>
         </div>
         <div className="space-y-1 text-right">
           <p className="text-sm font-medium tabular-nums">
-            {focusedDeveloperName ? "NF: " : "Total NF: "}
-            {revealAll ? formatMoney(totals.invoice) : "R$ ••••"}
+            Total NF: {revealAll ? formatMoney(totals.invoice) : "R$ ••••"}
           </p>
-          {!focusedDeveloperName && items.length > 0 ? (
+          {items.length > 0 ? (
             <p className="text-xs text-muted-foreground tabular-nums">
               Conferidos: {totals.reviewed}/{items.length}
             </p>
@@ -226,11 +242,7 @@ export function PayrollSinteticoPanel({
                     jiraHours,
                     contractedHoursPerMonth: item.contracted_hours_per_month,
                   })}
-                  attendanceHref={buildAttendanceHref({
-                    teamId,
-                    month,
-                    itemId: item.id,
-                  })}
+                  onOpenAttendance={() => setAttendanceItemId(item.id)}
                   moneyVisible={moneyVisible}
                   onToggleMoneyVisible={() => toggleRow(item.id)}
                   avatarUrl={avatarUrlByDeveloper[item.developer_id] ?? null}
@@ -238,41 +250,57 @@ export function PayrollSinteticoPanel({
               );
             })}
           </tbody>
-          {focusedDeveloperName ? null : (
-            <tfoot>
-              <tr>
-                <td className="font-medium">Totais</td>
-                <td className="tabular-nums font-medium">
-                  {revealAll ? formatMoney(totals.base) : "R$ ••••"}
-                </td>
-                <td className="tabular-nums font-medium">
-                  {totals.jiraHours.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  h
-                </td>
-                <td className="text-muted-foreground">—</td>
-                <td colSpan={5} className="text-sm text-muted-foreground">
-                  {revealAll ? (
-                    <>
-                      Dif. {formatMoney(totals.differential)} · Desc.{" "}
-                      {formatMoney(totals.discounts)} · Desl.{" "}
-                      {formatMoney(totals.travel)} · Ref.{" "}
-                      {formatMoney(totals.meal)} · NF{" "}
-                      <span className="font-medium text-foreground tabular-nums">
-                        {formatMoney(totals.invoice)}
-                      </span>
-                    </>
-                  ) : (
-                    <>Dif. · Desc. · Desl. · Ref. · NF R$ ••••</>
-                  )}
-                </td>
-              </tr>
-            </tfoot>
-          )}
+          <tfoot>
+            <tr>
+              <td className="font-medium">Totais</td>
+              <td className="tabular-nums font-medium">
+                {revealAll ? formatMoney(totals.base) : "R$ ••••"}
+              </td>
+              <td className="tabular-nums font-medium">
+                {totals.jiraHours.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                h
+              </td>
+              <td className="text-muted-foreground">—</td>
+              <td colSpan={5} className="text-sm text-muted-foreground">
+                {revealAll ? (
+                  <>
+                    Dif. {formatMoney(totals.differential)} · Desc.{" "}
+                    {formatMoney(totals.discounts)} · Desl.{" "}
+                    {formatMoney(totals.travel)} · Ref.{" "}
+                    {formatMoney(totals.meal)} · NF{" "}
+                    <span className="font-medium text-foreground tabular-nums">
+                      {formatMoney(totals.invoice)}
+                    </span>
+                  </>
+                ) : (
+                  <>Dif. · Desc. · Desl. · Ref. · NF R$ ••••</>
+                )}
+              </td>
+            </tr>
+          </tfoot>
         </DataTable>
       )}
+
+      {attendanceItem ? (
+        <PayrollAttendanceModal
+          item={attendanceItem}
+          yearMonth={month}
+          onClose={closeAttendance}
+          readOnly={
+            readOnly ||
+            Boolean(finalizedByDeveloper[attendanceItem.developer_id])
+          }
+          finalizedClosingId={
+            finalizedByDeveloper[attendanceItem.developer_id] ?? null
+          }
+          avatarUrl={
+            avatarUrlByDeveloper[attendanceItem.developer_id] ?? null
+          }
+        />
+      ) : null}
     </section>
   );
 }

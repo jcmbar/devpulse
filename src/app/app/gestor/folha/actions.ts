@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { upsertInvoiceIssuer } from "@/services/invoice-issuers";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import {
   batchUpsertPayrollAttendanceDays,
   assertPayrollItemEditable,
@@ -418,6 +419,46 @@ export async function listAttendanceAction(
   try {
     const days = await listAttendanceForItem(itemId);
     return { ok: true, days };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha ao carregar presença.",
+    };
+  }
+}
+
+export async function loadPayrollAttendanceCalendarAction(input: {
+  itemId: string;
+  developerId: string;
+  yearMonth: string;
+}): Promise<
+  | {
+      ok: true;
+      days: PayrollAttendanceDay[];
+      holidays: Array<{ date: string; name: string }>;
+    }
+  | { ok: false; error: string }
+> {
+  await requirePermission("gestor", "edit");
+  try {
+    const [days, holidayResult] = await Promise.all([
+      listAttendanceForItem(input.itemId),
+      listApplicableHolidayDatesForDeveloperMonth({
+        developerId: input.developerId,
+        yearMonth: input.yearMonth,
+      }),
+    ]);
+    return {
+      ok: true,
+      days,
+      holidays: [...holidayResult.byDate.entries()].map(([date, name]) => ({
+        date,
+        name,
+      })),
+    };
   } catch (error) {
     return {
       ok: false,
