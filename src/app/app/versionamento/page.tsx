@@ -16,11 +16,13 @@ import {
   formatTimeBrazil,
 } from "@/lib/datetime/format-brazil";
 import {
+  getAppReleaseByCommitSha,
   listAppReleasesPaged,
   type AppRelease,
 } from "@/services/versionamento";
 import { GitBranch } from "lucide-react";
 import { redirect } from "next/navigation";
+import { registerCurrentBuildReleaseAction } from "./actions";
 
 function ReleaseRow({
   release,
@@ -67,6 +69,9 @@ export default async function VersionamentoPage({
 }) {
   await requirePermission("versionamento", "access");
   const build = getAppBuildInfo();
+  const currentBuildRelease = build.commitSha
+    ? await getAppReleaseByCommitSha(build.commitSha)
+    : null;
   const params = await searchParams;
   const q = parseSearchQuery(params.q);
   const requestedPage = parsePageParam(params.page);
@@ -114,21 +119,50 @@ export default async function VersionamentoPage({
         title="Versão em execução"
         description="Identificador do build atualmente publicado neste ambiente."
       >
-        <div className="ui-dashboard-panel flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
-              {build.label}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              A versão é definida por APP_VERSION; o identificador do commit
-              confirma o deploy exato.
-            </p>
+        <div className="ui-dashboard-panel flex flex-col gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-2xl font-semibold tracking-tight text-foreground">
+                {build.label}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                A versão é definida por APP_VERSION; o identificador do commit
+                confirma o deploy exato.
+              </p>
+            </div>
+            {build.commitSha ? (
+              <code className="rounded-[var(--radius-sm)] border border-border/70 bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                {build.commitSha}
+              </code>
+            ) : null}
           </div>
-          {build.commitSha ? (
-            <code className="rounded-[var(--radius-sm)] border border-border/70 bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-              {build.commitSha}
-            </code>
-          ) : null}
+          {build.commitSha == null ? (
+            <div className="rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100">
+              Este ambiente não expôs o hash do commit publicado. Sem esse dado,
+              não é possível correlacionar o build atual com o histórico.
+            </div>
+          ) : currentBuildRelease ? (
+            <div className="rounded-[var(--radius-sm)] border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-900 dark:text-emerald-100">
+              Este build já está registrado no histórico como{" "}
+              <span className="font-semibold">{currentBuildRelease.version}</span>.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-[var(--radius-sm)] border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-900 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                O commit atual ainda não foi registrado em{" "}
+                <code className="rounded bg-background/60 px-1 py-0.5 text-xs">
+                  app_releases
+                </code>
+                . Use o botão abaixo para incluir este build no log de deploys
+                sem acoplar escrita ao processo de build.
+              </p>
+              <form action={registerCurrentBuildReleaseAction}>
+                <button type="submit" className="ui-btn-primary whitespace-nowrap">
+                  Registrar build atual
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </SectionShell>
 
