@@ -6,7 +6,6 @@ import { PageShell } from "@/components/page-shell";
 import { Surface } from "@/components/surface";
 import type { DeveloperClosingYearMonthRow } from "@/components/monthly-closing/developer-closings-year-view";
 import { getAppContext } from "@/lib/auth/app-context";
-import { usesAnalystHome } from "@/lib/auth/home-path";
 import { restorePersistedFiltersOrRedirect } from "@/lib/filters/persist-server";
 import {
   endOfMonth,
@@ -41,7 +40,6 @@ import type {
   MonthlyClosingCardAuditRow,
   MonthlyClosingPresenceDay,
 } from "@/types/monthly-closing";
-import { redirect } from "next/navigation";
 
 type AppPageProps = {
   searchParams: Promise<{
@@ -102,11 +100,7 @@ function buildAppHref(input: {
 }
 
 export default async function AppPage({ searchParams }: AppPageProps) {
-  const { profile, developer, grants } = await getAppContext();
-
-  if (usesAnalystHome(grants)) {
-    redirect("/app/analistas");
-  }
+  const { profile, developer } = await getAppContext();
 
   if (!developer) {
     const linkCandidate = await findUnlinkedDeveloperByEmail(profile.email);

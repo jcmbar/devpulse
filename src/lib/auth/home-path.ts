@@ -1,25 +1,13 @@
-import {
-  hasPermission,
-  type ModuleGrantsMap,
-} from "@/lib/auth/capabilities";
-import { APP_MODULE_KEYS } from "@/lib/auth/modules";
+import type { ModuleGrantsMap } from "@/lib/auth/capabilities";
 
 export type AppHomePath = "/app" | "/app/analistas";
 
 /**
- * Users with access only to the analyst module should land on /app/analistas
- * instead of the developer home (/app).
+ * The developer home remains the canonical entry point. The analyst workspace
+ * is an additional module and must not hide existing developer flows such as
+ * closures and self-service views.
  */
-export function usesAnalystHome(grants: ModuleGrantsMap): boolean {
-  if (!hasPermission(grants, "analistas", "access")) {
-    return false;
-  }
-
-  return !APP_MODULE_KEYS.some(
-    (key) => key !== "analistas" && hasPermission(grants, key, "access"),
-  );
-}
-
 export function resolveAppHomePath(grants: ModuleGrantsMap): AppHomePath {
-  return usesAnalystHome(grants) ? "/app/analistas" : "/app";
+  void grants;
+  return "/app";
 }
