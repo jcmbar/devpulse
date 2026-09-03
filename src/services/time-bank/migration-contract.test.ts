@@ -15,6 +15,10 @@ const phase3a = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260903121150_time_bank_phase3_atomic_closing_events.sql"),
   "utf8",
 );
+const phase3a2 = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260903121180_time_bank_phase3a2_legacy_write_compat.sql"),
+  "utf8",
+);
 const phase3 = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260903121200_time_bank_ledger_phase3_hardening.sql"),
   "utf8",
@@ -86,6 +90,24 @@ describe("time bank migration contract", () => {
     assert.match(phase3a, /'timeBankEntryId',\s*null/i);
     assert.match(
       phase3a,
+      /'timeBankReversalEntryId',\s*v_time_bank_reversal_entry_id/i,
+    );
+    assert.match(
+      phase3a2,
+      /create or replace function public\.finalize_monthly_closing_with_time_bank\s*\(\s*p_closing_id uuid\s*\)/i,
+    );
+    assert.match(
+      phase3a2,
+      /create or replace function public\.reopen_monthly_closing_with_time_bank\s*\(\s*p_closing_id uuid\s*\)/i,
+    );
+    assert.match(phase3a2, /hours_delta/i);
+    assert.match(phase3a2, /note/i);
+    assert.match(phase3a2, /returning id into v_time_bank_entry_id/i);
+    assert.match(phase3a2, /returning id into v_time_bank_reversal_entry_id/i);
+    assert.match(phase3a2, /'closingSequence',\s*v_event_closing_sequence/i);
+    assert.match(phase3a2, /'timeBankEntryId',\s*v_time_bank_entry_id/i);
+    assert.match(
+      phase3a2,
       /'timeBankReversalEntryId',\s*v_time_bank_reversal_entry_id/i,
     );
     assert.match(phase3, /time_bank_ledger_hardening_invalid_rows/i);

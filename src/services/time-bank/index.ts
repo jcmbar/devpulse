@@ -85,6 +85,11 @@ function mapRawEntry(row: Record<string, unknown>): RawEntry {
   };
 }
 
+function toLegacyHoursDelta(entryType: TimeBankEntryType, minutesAmount: number): number {
+  const signedMinutes = entryType === "credit" ? minutesAmount : -minutesAmount;
+  return Math.round((signedMinutes / 60) * 100) / 100;
+}
+
 function toProjectionRow(entry: RawEntry) {
   if (
     !entry.entry_type ||
@@ -231,10 +236,12 @@ export async function createManualTimeBankAdjustment(input: {
     .insert({
       developer_id: input.developerId,
       year_month: yearMonth,
+      hours_delta: toLegacyHoursDelta(input.entryType, minutesAmount),
       entry_date: entryDate,
       entry_type: input.entryType,
       source: "manual_adjustment",
       minutes_amount: minutesAmount,
+      note: description,
       description,
       created_by: input.actorUserId,
       metadata_json: input.metadata ?? {},
@@ -372,12 +379,14 @@ export async function reverseTimeBankEntry(input: {
     .insert({
       developer_id: original.developer_id,
       year_month: original.year_month,
+      hours_delta: toLegacyHoursDelta(reversalType, original.minutes_amount),
       entry_date: entryDate,
       entry_type: reversalType,
       source: "reversal",
       minutes_amount: original.minutes_amount,
       monthly_closing_id: original.monthly_closing_id,
       closing_sequence: original.closing_sequence,
+      note: description,
       description,
       created_by: input.actorUserId,
       reversed_entry_id: original.id,

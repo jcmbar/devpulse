@@ -33,5 +33,14 @@ describe("time bank service contract", () => {
       timeBankService,
       /const admin = createAdminClient\(\)[\s\S]+?\.from\("developer_time_bank_entries"\)\s*\.insert\(/,
     );
+    assert.match(timeBankService, /hours_delta:\s*toLegacyHoursDelta\(reversalType,\s*original\.minutes_amount\)/);
+    assert.match(timeBankService, /note:\s*description/);
+  });
+
+  it("keeps manual adjustments compatible with legacy pre-3B columns", () => {
+    assert.match(timeBankService, /function toLegacyHoursDelta\(/);
+    assert.match(timeBankService, /hours_delta:\s*toLegacyHoursDelta\(input\.entryType,\s*minutesAmount\)/);
+    assert.match(timeBankService, /source:\s*"manual_adjustment"/);
+    assert.match(timeBankService, /note:\s*description/);
   });
 });
