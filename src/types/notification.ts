@@ -27,6 +27,7 @@ export type NotificationSettings = {
   password_changed_enabled: boolean;
   stg_status_enabled: boolean;
   holiday_upcoming_enabled: boolean;
+  web_push_enabled: boolean;
   updated_at: string;
 };
 

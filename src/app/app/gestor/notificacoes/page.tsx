@@ -101,6 +101,7 @@ export default async function GestorNotificationsPage() {
                   ["passwordChangedEnabled", "Alteração de senha", settings.password_changed_enabled],
                   ["stgStatusEnabled", "STG Day / status", settings.stg_status_enabled],
                   ["holidayUpcomingEnabled", "Feriados próximos", settings.holiday_upcoming_enabled],
+                  ["webPushEnabled", "Web Push (navegador)", settings.web_push_enabled],
                 ] as const
               ).map(([name, label, checked]) => (
                 <label

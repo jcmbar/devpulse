@@ -9,7 +9,12 @@ import {
   markNotificationRead,
   updateNotificationSettings,
 } from "@/services/notifications";
+import {
+  deletePushSubscription,
+  upsertPushSubscription,
+} from "@/services/notifications/web-push";
 import type { NotificationAudienceType } from "@/types/notification";
+import { headers } from "next/headers";
 
 export async function markNotificationReadAction(notificationId: string) {
   const context = await getAppContext();
@@ -95,6 +100,52 @@ export async function updateNotificationSettingsAction(formData: FormData) {
     passwordChangedEnabled: formData.get("passwordChangedEnabled") === "on",
     stgStatusEnabled: formData.get("stgStatusEnabled") === "on",
     holidayUpcomingEnabled: formData.get("holidayUpcomingEnabled") === "on",
+    webPushEnabled: formData.get("webPushEnabled") === "on",
   });
   revalidatePath("/app/gestor/notificacoes");
+}
+
+export async function savePushSubscriptionAction(input: {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}): Promise<{ error: string | null }> {
+  try {
+    const context = await getAppContext();
+    const headerStore = await headers();
+    await upsertPushSubscription({
+      profileId: context.profile.id,
+      subscription: input,
+      userAgent: headerStore.get("user-agent"),
+    });
+    revalidatePath("/app/notificacoes");
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a inscrição push.",
+    };
+  }
+}
+
+export async function removePushSubscriptionAction(
+  endpoint: string,
+): Promise<{ error: string | null }> {
+  try {
+    const context = await getAppContext();
+    await deletePushSubscription({
+      profileId: context.profile.id,
+      endpoint,
+    });
+    revalidatePath("/app/notificacoes");
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível remover a inscrição push.",
+    };
+  }
 }

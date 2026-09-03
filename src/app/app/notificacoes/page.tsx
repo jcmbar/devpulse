@@ -2,6 +2,7 @@ import {
   markAllNotificationsReadAction,
   markNotificationReadAction,
 } from "@/app/app/notifications-actions";
+import { PushOptIn } from "@/components/notifications/push-opt-in";
 import { EmptyState, DataTable } from "@/components/surface";
 import { PageHeader } from "@/components/page-header";
 import { PageShell } from "@/components/page-shell";
@@ -16,15 +17,21 @@ import {
   listMyNotifications,
   triggerTypeLabel,
 } from "@/services/notifications";
+import {
+  countMyPushSubscriptions,
+  getPublicVapidKey,
+} from "@/services/notifications/web-push";
 import { Bell } from "lucide-react";
 import Link from "next/link";
 
 export default async function MyNotificationsPage() {
   const { profile } = await getAppContext();
-  const [items, unreadCount] = await Promise.all([
+  const [items, unreadCount, pushCount] = await Promise.all([
     listMyNotifications({ profileId: profile.id, limit: 100 }),
     countUnreadNotifications(profile.id),
+    countMyPushSubscriptions(profile.id),
   ]);
+  const vapidPublicKey = getPublicVapidKey();
 
   return (
     <PageShell size="full">
@@ -42,6 +49,16 @@ export default async function MyNotificationsPage() {
           ) : null
         }
       />
+
+      <SectionShell
+        title="Web Push"
+        description="Ative alertas do sistema operacional neste dispositivo. O navegador pedirá autorização, como no celular."
+      >
+        <PushOptIn
+          vapidPublicKey={vapidPublicKey}
+          initialSubscriptionCount={pushCount}
+        />
+      </SectionShell>
 
       {items.length === 0 ? (
         <EmptyState

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { sendWebPushToProfiles } from "@/services/notifications/web-push";
 import type {
   AppNotification,
   CreateManualNotificationInput,
@@ -21,6 +22,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   password_changed_enabled: true,
   stg_status_enabled: true,
   holiday_upcoming_enabled: true,
+  web_push_enabled: true,
   updated_at: new Date(0).toISOString(),
 };
 
@@ -62,8 +64,27 @@ function mapSettings(row: Record<string, unknown> | null): NotificationSettings 
     password_changed_enabled: Boolean(row.password_changed_enabled ?? true),
     stg_status_enabled: Boolean(row.stg_status_enabled ?? true),
     holiday_upcoming_enabled: Boolean(row.holiday_upcoming_enabled ?? true),
+    web_push_enabled: Boolean(row.web_push_enabled ?? true),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
+}
+
+async function maybeSendWebPush(input: {
+  recipientProfileIds: string[];
+  title: string;
+  body: string;
+  href?: string | null;
+  tag?: string | null;
+}): Promise<void> {
+  try {
+    const settings = await getNotificationSettingsAdmin();
+    if (!settings.web_push_enabled) {
+      return;
+    }
+    await sendWebPushToProfiles(input);
+  } catch (error) {
+    console.error("[notifications] web push dispatch failed:", error);
+  }
 }
 
 function mapCampaign(row: Record<string, unknown>): NotificationCampaign {
@@ -169,6 +190,7 @@ export async function updateNotificationSettings(input: {
   passwordChangedEnabled: boolean;
   stgStatusEnabled: boolean;
   holidayUpcomingEnabled: boolean;
+  webPushEnabled: boolean;
 }): Promise<NotificationSettings> {
   const day = Math.floor(input.closingPendingAfterDay);
   if (!Number.isFinite(day) || day < 1 || day > 28) {
@@ -191,6 +213,7 @@ export async function updateNotificationSettings(input: {
       password_changed_enabled: input.passwordChangedEnabled,
       stg_status_enabled: input.stgStatusEnabled,
       holiday_upcoming_enabled: input.holidayUpcomingEnabled,
+      web_push_enabled: input.webPushEnabled,
     })
     .eq("id", 1)
     .select("*")
@@ -315,6 +338,14 @@ export async function createManualNotificationCampaign(
     throw new Error(`Falha ao disparar notificações: ${insertError.message}`);
   }
 
+  await maybeSendWebPush({
+    recipientProfileIds: recipientIds,
+    title,
+    body,
+    href,
+    tag: `campaign:${campaign.id}`,
+  });
+
   return {
     ...mapCampaign(campaign as Record<string, unknown>),
     recipient_count: recipientIds.length,
@@ -381,7 +412,16 @@ export async function notifyProfiles(input: {
 
   if (insertError) {
     console.error("[notifications] inbox insert failed:", insertError.message);
+    return;
   }
+
+  await maybeSendWebPush({
+    recipientProfileIds: recipientIds,
+    title,
+    body,
+    href: input.href?.trim() || null,
+    tag: `campaign:${campaign.id}`,
+  });
 }
 
 export async function resolveProfileIdForDeveloper(
