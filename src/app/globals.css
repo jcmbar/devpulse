@@ -227,6 +227,58 @@ body {
   }
 }
 
+@keyframes notification-bell-glow {
+  0%,
+  100% {
+    border-color: color-mix(in oklab, var(--danger) 70%, var(--border));
+    box-shadow:
+      0 0 0 0 rgb(244 63 94 / 0.5),
+      var(--shadow-sm);
+    background-color: color-mix(in oklab, var(--danger) 12%, var(--card));
+  }
+  50% {
+    border-color: color-mix(in oklab, var(--danger) 90%, var(--border));
+    box-shadow:
+      0 0 0 8px rgb(244 63 94 / 0),
+      0 0 18px rgb(244 63 94 / 0.35),
+      var(--shadow-sm);
+    background-color: color-mix(in oklab, var(--danger) 18%, var(--card));
+  }
+}
+
+@keyframes notification-bell-ring {
+  0%,
+  55%,
+  100% {
+    transform: rotate(0deg);
+  }
+  60% {
+    transform: rotate(14deg);
+  }
+  68% {
+    transform: rotate(-12deg);
+  }
+  76% {
+    transform: rotate(10deg);
+  }
+  84% {
+    transform: rotate(-6deg);
+  }
+  92% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes notification-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
 @keyframes catalog-save-pulse {
   0%,
   100% {
@@ -332,7 +384,10 @@ body {
   .ui-stg-finding-pending,
   .ui-stg-traffic-active-dot,
   .ui-stg-floating-avatar,
-  .ui-stg-micro-avatar {
+  .ui-stg-micro-avatar,
+  .ui-notification-bell-attention,
+  .ui-notification-bell-icon,
+  .ui-notification-bell-badge {
     animation: none !important;
   }
 }
@@ -390,6 +445,21 @@ body {
   .ui-closing-attention-btn {
     @apply border border-rose-500/50 bg-rose-600 text-rose-50 shadow-[var(--shadow-sm)] hover:bg-rose-500;
     animation: closing-attention-btn 1.7s ease-in-out infinite;
+  }
+
+  .ui-notification-bell-attention {
+    border-color: color-mix(in oklab, var(--danger) 70%, var(--border));
+    color: color-mix(in oklab, var(--danger) 75%, var(--foreground));
+    animation: notification-bell-glow 1.5s ease-in-out infinite;
+  }
+
+  .ui-notification-bell-icon {
+    transform-origin: top center;
+    animation: notification-bell-ring 1.8s ease-in-out infinite;
+  }
+
+  .ui-notification-bell-badge {
+    animation: notification-badge-pulse 1.5s ease-in-out infinite;
   }
 
   .ui-stg-finding-pending {

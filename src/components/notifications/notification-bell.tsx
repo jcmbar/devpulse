@@ -77,18 +77,35 @@ export function NotificationBell({
     });
   }
 
+  const hasAttention = unreadCount > 0 && !open;
+
   return (
     <div className="relative">
       <button
         type="button"
-        className="ui-btn-secondary relative"
-        aria-label="Central de notificações"
+        className={cn(
+          "ui-btn-secondary relative",
+          hasAttention && "ui-notification-bell-attention",
+        )}
+        aria-label={
+          unreadCount > 0
+            ? `Central de notificações, ${unreadCount} não lida${unreadCount === 1 ? "" : "s"}`
+            : "Central de notificações"
+        }
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <Bell className="size-3.5" strokeWidth={1.9} />
+        <Bell
+          className={cn("size-3.5", hasAttention && "ui-notification-bell-icon")}
+          strokeWidth={1.9}
+        />
         {badgeLabel ? (
-          <span className="absolute -top-1.5 -right-1.5 inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
+          <span
+            className={cn(
+              "absolute -top-1.5 -right-1.5 inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white",
+              hasAttention && "ui-notification-bell-badge",
+            )}
+          >
             {badgeLabel}
           </span>
         ) : null}
