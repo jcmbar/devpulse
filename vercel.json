@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/jira-auto-sync",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/notification-digests",
+      "schedule": "0 12 * * *"
     }
   ]
 }

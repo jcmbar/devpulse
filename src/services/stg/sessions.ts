@@ -2,6 +2,10 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import {
+  notifyStgSessionOpened,
+  notifyStgSessionStatusChange,
+} from "@/services/notifications/emitters";
+import {
   blocksReleaseForImpact,
   deriveSessionResultFromBlockers,
   evaluateFindingBlocker,
@@ -407,6 +411,13 @@ export async function openStgSession(
     }
   }
 
+  void notifyStgSessionOpened({
+    sessionId: session.id,
+    versionLabel: session.version_label,
+    scheduledOn: session.scheduled_on,
+    actorUserId: input.createdByProfileId ?? null,
+  }).catch(() => undefined);
+
   return session;
 }
 
@@ -517,7 +528,13 @@ export async function updateStgScenarioRunStatus(input: {
 export async function updateStgSessionStatus(input: {
   sessionId: string;
   status: StgSessionStatus;
+  actorUserId?: string | null;
 }): Promise<StgSession> {
+  const existing = await getStgSession(input.sessionId);
+  if (!existing) {
+    throw new Error("Sessão STG não encontrada.");
+  }
+
   const supabase = await createClient();
   const payload: Record<string, unknown> = { status: input.status };
   if (input.status === "closed") {
@@ -536,6 +553,14 @@ export async function updateStgSessionStatus(input: {
   }
 
   const session = mapStgSession(data as Record<string, unknown>);
+  void notifyStgSessionStatusChange({
+    sessionId: session.id,
+    versionLabel: session.version_label,
+    fromStatus: existing.status,
+    toStatus: session.status,
+    actorUserId: input.actorUserId ?? null,
+  }).catch(() => undefined);
+
   return recalculateStgSessionResult(session.id);
 }
 

@@ -1,9 +1,8 @@
 import { isAuthorizedCronRequest } from "@/lib/cron/authorize";
-import { scheduleEligibleJiraAutoSyncs } from "@/services/integrations/jira/sync/schedule-eligible-auto-syncs";
+import { runNotificationDigests } from "@/services/notifications/digests";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Vercel Cron / long syncs — ignored on hosts without the limit. */
-export const maxDuration = 300;
+export const maxDuration = 120;
 export const runtime = "nodejs";
 
 async function handleCron(request: NextRequest) {
@@ -12,39 +11,30 @@ async function handleCron(request: NextRequest) {
   }
 
   try {
-    const result = await scheduleEligibleJiraAutoSyncs({
-      teamId: null,
-      trigger: "auto_cron",
-      actorUserId: null,
-    });
-
+    const result = await runNotificationDigests();
     return NextResponse.json({
       ok: true,
-      scheduled: result.scheduled,
-      skipped: result.skipped,
-      integrationIds: result.integrationIds,
+      ...result,
     });
   } catch (error) {
-    console.error("[cron/jira-auto-sync]", error);
+    console.error("[cron/notification-digests]", error);
     return NextResponse.json(
       {
         ok: false,
         error:
           error instanceof Error
             ? error.message
-            : "Falha ao agendar sync Jira.",
+            : "Falha ao processar digests de notificação.",
       },
       { status: 500 },
     );
   }
 }
 
-/** Vercel Cron invokes GET by default. */
 export async function GET(request: NextRequest) {
   return handleCron(request);
 }
 
-/** Also accepts POST for external schedulers. */
 export async function POST(request: NextRequest) {
   return handleCron(request);
 }

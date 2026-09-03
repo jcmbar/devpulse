@@ -185,12 +185,16 @@ export async function updateStgSessionStatusAction(
   _prev: StgActionState,
   formData: FormData,
 ): Promise<StgActionState> {
-  await requirePermission("stg", "edit");
+  const context = await requirePermission("stg", "edit");
   const sessionId = String(formData.get("sessionId") ?? "");
   const status = String(formData.get("status") ?? "") as StgSessionStatus;
 
   try {
-    await updateStgSessionStatus({ sessionId, status });
+    await updateStgSessionStatus({
+      sessionId,
+      status,
+      actorUserId: context.profile.id,
+    });
     revalidateStg(sessionId);
     return { error: null, success: "Status da sessão atualizado." };
   } catch (error) {

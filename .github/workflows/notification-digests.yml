@@ -1,0 +1,58 @@
+# Daily notification digests (closing pending + upcoming holidays).
+# For hosts that do not run vercel.json crons (e.g. Render).
+#
+# Required repository secrets:
+#   DEVPULSE_SITE_URL  — production origin, no trailing slash
+#   CRON_SECRET        — same value as CRON_SECRET on the host
+name: Notification digests
+
+on:
+  schedule:
+    # 12:00 UTC ≈ 09:00 America/Sao_Paulo
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/notification-digests
+        env:
+          SITE_URL: ${{ secrets.DEVPULSE_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing DEVPULSE_SITE_URL or CRON_SECRET repository secrets."
+            exit 1
+          fi
+          url="${SITE_URL%/}/api/cron/notification-digests"
+          echo "POST $url"
+          curl -fsS -X POST "$url" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            --max-time 120 \
+            -o /tmp/notification-digests.json \
+            -w "\nHTTP %{http_code}\n"
+          cat /tmp/notification-digests.json
+          echo
+          python3 - <<'PY'
+          import json, sys
+          data = json.load(open("/tmp/notification-digests.json"))
+          if not data.get("ok"):
+              print("Cron endpoint returned ok=false:", data, file=sys.stderr)
+              sys.exit(1)
+          closing = data.get("closing") or {}
+          holidays = data.get("holidays") or {}
+          print(
+              f"closing skipped={closing.get('skipped')} "
+              f"devs={closing.get('notifiedDevelopers')} "
+              f"managers={closing.get('notifiedManagers')}"
+          )
+          print(
+              f"holidays skipped={holidays.get('skipped')} "
+              f"count={holidays.get('holidayCount')} "
+              f"notified={holidays.get('notified')}"
+          )
+          PY
