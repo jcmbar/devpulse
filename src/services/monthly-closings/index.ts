@@ -707,8 +707,9 @@ export function buildMonthlyClosingAuditRows(input: {
   cards: JiraCard[];
   justifications: DelayJustificationRequest[];
   /**
-   * When false (analistas), atraso/retrabalho still appear in the audit but
-   * do not block submit. Developers keep the default (true).
+   * When false (Pessoas/valores: "Considerar horas Jira na NF" desligado),
+   * atraso/retrabalho still appear in the audit but do not block submit.
+   * Default true — same as consider_jira_hours on compensation.
    */
   requireDeliveryJustifications?: boolean;
 }): MonthlyClosingCardAuditRow[] {
@@ -917,8 +918,7 @@ export async function loadMonthlyClosingAuditForDeveloper(input: {
     ...(input.closingImportId ? [input.closingImportId] : []),
   ];
 
-  const supabase = await createClient();
-  const [cards, justifications, snapshotItems, developerRow] =
+  const [cards, justifications, snapshotItems, compensation] =
     await Promise.all([
       listJiraCardsByDeveloperAndImport({
         developerId: input.developerId,
@@ -934,16 +934,13 @@ export async function loadMonthlyClosingAuditForDeveloper(input: {
       input.closingId
         ? listMonthlyClosingItems(input.closingId)
         : Promise.resolve([] as MonthlyClosingItem[]),
-      supabase
-        .from("developers")
-        .select("job_title")
-        .eq("id", input.developerId)
-        .maybeSingle(),
+      getCurrentDeveloperCompensation(input.developerId),
     ]);
 
-  // Analistas may close without decided delay/rework justifications; developers may not.
+  // Same gate as Pessoas/valores "Considerar horas Jira no cálculo da NF":
+  // when off, ignore delay/rework as submit blockers (typical analyst without Jira).
   const requireDeliveryJustifications =
-    String(developerRow.data?.job_title ?? "developer") !== "analyst";
+    compensation?.consider_jira_hours !== false;
 
   let auditRows = buildMonthlyClosingAuditRows({
     cards,
