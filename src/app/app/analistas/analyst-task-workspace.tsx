@@ -5,6 +5,8 @@ import {
   completeAnalystTaskAction,
   createAnalystTaskAction,
   deleteAnalystTaskAction,
+  pauseAnalystTaskAction,
+  resumeAnalystTaskAction,
   updateAnalystTaskAction,
   type AnalystTaskActionState,
 } from "@/app/app/analistas/actions";
@@ -21,10 +23,12 @@ import type {
   AnalystTaskDay,
   AnalystTaskMetrics,
 } from "@/types/analyst-task";
+import { analystTaskElapsedMs } from "@/types/analyst-task";
 import {
   AlertTriangle,
   CalendarDays,
   Check,
+  Pause,
   Pencil,
   Play,
   Trash2,
@@ -107,11 +111,8 @@ function formatTime(value: string): string {
   return timeFormatter.format(new Date(value));
 }
 
-function formatElapsed(startedAt: string, now: number): string {
-  const seconds = Math.max(
-    0,
-    Math.floor((now - new Date(startedAt).getTime()) / 1000),
-  );
+function formatElapsedSeconds(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remaining = seconds % 60;
@@ -233,46 +234,61 @@ function classification(metrics: AnalystTaskMetrics): {
 }
 
 function ActiveTimer({
-  startedAt,
+  task,
   initialNow,
   className,
 }: {
-  startedAt: string;
+  task: Pick<
+    AnalystTask,
+    "started_at" | "ended_at" | "paused_at" | "total_paused_ms" | "status"
+  >;
   initialNow: string;
   className?: string;
 }) {
-  const startedMs = new Date(startedAt).getTime();
-  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
-    const elapsedMs = Math.max(0, new Date(initialNow).getTime() - startedMs);
-    return Math.floor(elapsedMs / 1000);
-  });
+  const isPaused = task.status === "paused";
+  const [elapsedSeconds, setElapsedSeconds] = useState(() =>
+    Math.floor(
+      analystTaskElapsedMs(task, new Date(initialNow).getTime()) / 1000,
+    ),
+  );
 
   useEffect(() => {
-    const elapsedMs = Math.max(0, new Date(initialNow).getTime() - startedMs);
-    const baseSeconds = Math.floor(elapsedMs / 1000);
-    const anchor = performance.now();
-
+    const baseMs = analystTaskElapsedMs(task, new Date(initialNow).getTime());
+    const baseSeconds = Math.floor(baseMs / 1000);
     setElapsedSeconds(baseSeconds);
 
+    if (isPaused || task.status === "completed") {
+      return;
+    }
+
+    const anchor = performance.now();
     const tick = () => {
       setElapsedSeconds(
         baseSeconds + Math.floor((performance.now() - anchor) / 1000),
       );
     };
-
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [startedAt, initialNow, startedMs]);
+  }, [
+    task.started_at,
+    task.ended_at,
+    task.paused_at,
+    task.total_paused_ms,
+    task.status,
+    initialNow,
+    isPaused,
+  ]);
 
   return (
     <span
       className={cn(
-        "font-mono font-semibold tabular-nums text-brand-foreground",
+        "font-mono font-semibold tabular-nums",
+        isPaused ? "text-amber-700 dark:text-amber-300" : "text-brand-foreground",
         className ?? "text-xl",
       )}
     >
-      {formatElapsed(startedAt, startedMs + elapsedSeconds * 1000)}
+      {formatElapsedSeconds(elapsedSeconds)}
     </span>
   );
 }
@@ -281,21 +297,35 @@ function TaskRow({
   task,
   initialNow,
   onEdit,
-  onContinue,
+  onOpenTimer,
+  onPause,
+  onResume,
+  pausePending,
+  resumePending,
   canDelete,
 }: {
   task: AnalystTask;
   initialNow: string;
   onEdit: () => void;
-  onContinue: () => void;
+  onOpenTimer: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  pausePending: boolean;
+  resumePending: boolean;
   canDelete: boolean;
 }) {
   const isRunning = task.status === "running";
+  const isPaused = task.status === "paused";
+  const isOpen = isRunning || isPaused;
 
   return (
     <div
       className={`flex flex-col gap-3 rounded-[var(--radius-sm)] border bg-card px-3 py-3 sm:flex-row sm:items-start sm:justify-between ${
-        isRunning ? "border-brand/40 bg-brand-soft/20" : "border-border"
+        isRunning
+          ? "border-brand/40 bg-brand-soft/20"
+          : isPaused
+            ? "border-amber-500/40 bg-amber-500/5"
+            : "border-border"
       }`}
     >
       <div className="min-w-0">
@@ -312,14 +342,23 @@ function TaskRow({
               Em andamento
             </span>
           ) : null}
+          {isPaused ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+              Pausada
+            </span>
+          ) : null}
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
             DevPulse
           </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {formatTime(task.started_at)} →{" "}
-          {task.ended_at ? formatTime(task.ended_at) : "em andamento"} ·{" "}
-          {formatHours(task.duration_hours)}
+          {task.ended_at
+            ? formatTime(task.ended_at)
+            : isPaused
+              ? "pausada"
+              : "em andamento"}{" "}
+          · {formatHours(task.duration_hours)}
         </p>
         {task.details ? (
           <details className="mt-2">
@@ -333,12 +372,38 @@ function TaskRow({
         ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
-        <div className="flex gap-2">
-          {isRunning ? (
-            <button type="button" onClick={onContinue} className="ui-btn-secondary">
-              <Play className="size-3.5" />
-              Continuar
-            </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          {isOpen ? (
+            <>
+              <button
+                type="button"
+                onClick={onOpenTimer}
+                className="ui-btn-secondary"
+              >
+                Cronômetro
+              </button>
+              {isRunning ? (
+                <button
+                  type="button"
+                  onClick={onPause}
+                  disabled={pausePending}
+                  className="ui-btn-ghost border border-red-500/40 text-red-600 dark:text-red-300"
+                >
+                  <Pause className="size-3.5" />
+                  {pausePending ? "Pausando…" : "Pausar"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onResume}
+                  disabled={resumePending}
+                  className="ui-btn-secondary"
+                >
+                  <Play className="size-3.5" />
+                  {resumePending ? "Continuando…" : "Continuar"}
+                </button>
+              )}
+            </>
           ) : (
             <button type="button" onClick={onEdit} className="ui-btn-secondary">
               <Pencil className="size-3.5" />
@@ -346,27 +411,30 @@ function TaskRow({
             </button>
           )}
           {canDelete ? (
-          <form
-            action={async (formData) => {
-              await deleteAnalystTaskAction(undefined, formData);
-            }}
-            onSubmit={(event) => {
-              if (!window.confirm("Excluir esta tarefa?")) {
-                event.preventDefault();
-              }
-            }}
-          >
-            <input type="hidden" name="taskId" value={task.id} />
-            <button type="submit" className="ui-btn-ghost text-red-600 dark:text-red-300">
-              <Trash2 className="size-3.5" />
-              Excluir
-            </button>
-          </form>
-        ) : null}
+            <form
+              action={async (formData) => {
+                await deleteAnalystTaskAction(undefined, formData);
+              }}
+              onSubmit={(event) => {
+                if (!window.confirm("Excluir esta tarefa?")) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="taskId" value={task.id} />
+              <button
+                type="submit"
+                className="ui-btn-ghost text-red-600 dark:text-red-300"
+              >
+                <Trash2 className="size-3.5" />
+                Excluir
+              </button>
+            </form>
+          ) : null}
         </div>
-        {isRunning ? (
+        {isOpen ? (
           <ActiveTimer
-            startedAt={task.started_at}
+            task={task}
             initialNow={initialNow}
             className="text-base"
           />
@@ -522,11 +590,19 @@ export function AnalystTaskWorkspace({
     completeAnalystTaskAction,
     initialState,
   );
-  const runningTasks = activeTasks;
-  const runningCount = runningTasks.length;
-  const focusedRunningTask =
+  const [pauseState, pauseAction, pausePending] = useActionState(
+    pauseAnalystTaskAction,
+    initialState,
+  );
+  const [resumeState, resumeAction, resumePending] = useActionState(
+    resumeAnalystTaskAction,
+    initialState,
+  );
+  const activeOpenTasks = activeTasks;
+  const runningCount = activeOpenTasks.length;
+  const focusedActiveTask =
     modalView.kind === "complete"
-      ? (runningTasks.find((task) => task.id === modalView.taskId) ?? null)
+      ? (activeOpenTasks.find((task) => task.id === modalView.taskId) ?? null)
       : null;
   const taskModalOpen = modalView.kind !== "closed";
   const classificationResult = classification(metrics);
@@ -542,8 +618,8 @@ export function AnalystTaskWorkspace({
       new Date(left.started_at).getTime() - new Date(right.started_at).getTime(),
   );
   const focusedTaskHasOverlap =
-    focusedRunningTask != null &&
-    taskHasActiveOverlap(focusedRunningTask, tasks, activeTasks, initialNow);
+    focusedActiveTask != null &&
+    taskHasActiveOverlap(focusedActiveTask, tasks, activeTasks, initialNow);
   const firstWeekday = new Date(`${month}-01T12:00:00Z`).getUTCDay();
   const calendarCells: Array<AnalystTaskDay | null> = [
     ...Array.from({ length: firstWeekday }, () => null),
@@ -588,7 +664,7 @@ export function AnalystTaskWorkspace({
     }
     handledCreateSuccess.current = createState.success;
     if (createState.success === "Tarefa iniciada." && runningCount > 0) {
-      const latestTask = runningTasks.reduce((latest, task) =>
+      const latestTask = activeOpenTasks.reduce((latest, task) =>
         new Date(task.started_at).getTime() > new Date(latest.started_at).getTime()
           ? task
           : latest,
@@ -597,7 +673,7 @@ export function AnalystTaskWorkspace({
       return;
     }
     setModalView({ kind: "closed" });
-  }, [createState.success, runningCount, runningTasks]);
+  }, [createState.success, runningCount, activeOpenTasks]);
 
   useEffect(() => {
     if (
@@ -611,10 +687,10 @@ export function AnalystTaskWorkspace({
   }, [completeState.success]);
 
   useEffect(() => {
-    if (modalView.kind === "complete" && focusedRunningTask == null) {
+    if (modalView.kind === "complete" && focusedActiveTask == null) {
       setModalView({ kind: "closed" });
     }
-  }, [focusedRunningTask, modalView.kind]);
+  }, [focusedActiveTask, modalView.kind]);
 
   useEffect(() => {
     if (!canEdit || taskModalOpen) {
@@ -812,7 +888,9 @@ export function AnalystTaskWorkspace({
                   className="mt-1 text-lg font-semibold text-foreground"
                 >
                   {modalView.kind === "complete"
-                    ? "Tarefa em andamento"
+                    ? focusedActiveTask?.status === "paused"
+                      ? "Tarefa pausada"
+                      : "Tarefa em andamento"
                     : "Iniciar tarefa"}
                 </h2>
               </div>
@@ -826,17 +904,29 @@ export function AnalystTaskWorkspace({
               </button>
             </div>
 
-            {modalView.kind === "complete" && focusedRunningTask ? (
+            {modalView.kind === "complete" && focusedActiveTask ? (
               <div className="mt-5 space-y-5">
-                <div className="rounded-[var(--radius-sm)] border border-brand/30 bg-brand-soft p-4">
+                <div
+                  className={cn(
+                    "rounded-[var(--radius-sm)] border p-4",
+                    focusedActiveTask.status === "paused"
+                      ? "border-amber-500/40 bg-amber-500/10"
+                      : "border-brand/30 bg-brand-soft",
+                  )}
+                >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-brand-foreground">
-                      {focusedRunningTask.description}
+                    <span className="font-medium text-foreground">
+                      {focusedActiveTask.description}
                     </span>
-                    {focusedRunningTask.is_urgent ? (
+                    {focusedActiveTask.is_urgent ? (
                       <span className="inline-flex animate-pulse items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
                         <AlertTriangle className="size-3" />
                         URGENTE
+                      </span>
+                    ) : null}
+                    {focusedActiveTask.status === "paused" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                        Pausada
                       </span>
                     ) : null}
                     {focusedTaskHasOverlap ? (
@@ -853,43 +943,84 @@ export function AnalystTaskWorkspace({
                     </p>
                   ) : null}
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Iniciada em {formatDateTime(focusedRunningTask.started_at)}
+                    Iniciada em {formatDateTime(focusedActiveTask.started_at)}
                   </p>
                   <div className="mt-4 text-center">
                     <ActiveTimer
-                      startedAt={focusedRunningTask.started_at}
+                      task={focusedActiveTask}
                       initialNow={initialNow}
                     />
                   </div>
                 </div>
-                <form action={completeAction} className="flex justify-end gap-2">
-                  <input
-                    type="hidden"
-                    name="taskId"
-                    value={focusedRunningTask.id}
-                  />
-                  <button
-                    type="button"
-                    onClick={hideTaskModal}
-                    className="ui-btn-secondary px-5 py-3"
-                  >
-                    Ocultar
-                    <span className="text-xs opacity-70">ESC</span>
-                  </button>
-                  <button
-                    ref={concludeRef}
-                    type="submit"
-                    disabled={completePending}
-                    className="ui-btn-primary px-6 py-3"
-                  >
-                    <Check className="size-4" />
-                    {completePending ? "Concluindo…" : "Concluir tarefa"}
-                    <span className="text-xs opacity-70">Enter</span>
-                  </button>
-                </form>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {focusedActiveTask.status === "running" ? (
+                    <form action={pauseAction}>
+                      <input
+                        type="hidden"
+                        name="taskId"
+                        value={focusedActiveTask.id}
+                      />
+                      <button
+                        type="submit"
+                        disabled={pausePending}
+                        className="ui-btn-ghost border border-red-500/40 px-5 py-3 text-red-600 dark:text-red-300"
+                      >
+                        <Pause className="size-4" />
+                        {pausePending ? "Pausando…" : "Pausar"}
+                      </button>
+                    </form>
+                  ) : (
+                    <form action={resumeAction}>
+                      <input
+                        type="hidden"
+                        name="taskId"
+                        value={focusedActiveTask.id}
+                      />
+                      <button
+                        type="submit"
+                        disabled={resumePending}
+                        className="ui-btn-secondary px-5 py-3"
+                      >
+                        <Play className="size-4" />
+                        {resumePending ? "Continuando…" : "Continuar"}
+                      </button>
+                    </form>
+                  )}
+                  <form action={completeAction} className="contents">
+                    <input
+                      type="hidden"
+                      name="taskId"
+                      value={focusedActiveTask.id}
+                    />
+                    <button
+                      type="button"
+                      onClick={hideTaskModal}
+                      className="ui-btn-secondary px-5 py-3"
+                    >
+                      Ocultar
+                      <span className="text-xs opacity-70">ESC</span>
+                    </button>
+                    <button
+                      ref={concludeRef}
+                      type="submit"
+                      disabled={completePending}
+                      className="ui-btn-primary px-6 py-3"
+                    >
+                      <Check className="size-4" />
+                      {completePending ? "Concluindo…" : "Concluir tarefa"}
+                      <span className="text-xs opacity-70">Enter</span>
+                    </button>
+                  </form>
+                </div>
                 <FormFeedback
-                  error={completeState.error}
-                  success={completeState.success}
+                  error={
+                    completeState.error ?? pauseState.error ?? resumeState.error
+                  }
+                  success={
+                    completeState.success ??
+                    pauseState.success ??
+                    resumeState.success
+                  }
                 />
               </div>
             ) : modalView.kind === "create" ? (
@@ -1053,7 +1184,19 @@ export function AnalystTaskWorkspace({
                   task={task}
                   initialNow={initialNow}
                   onEdit={() => setEditingTask(task)}
-                  onContinue={() => openCompleteModal(task.id)}
+                  onOpenTimer={() => openCompleteModal(task.id)}
+                  onPause={() => {
+                    const formData = new FormData();
+                    formData.set("taskId", task.id);
+                    pauseAction(formData);
+                  }}
+                  onResume={() => {
+                    const formData = new FormData();
+                    formData.set("taskId", task.id);
+                    resumeAction(formData);
+                  }}
+                  pausePending={pausePending}
+                  resumePending={resumePending}
                   canDelete={canDelete && task.status === "completed"}
                 />
               ))

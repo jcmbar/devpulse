@@ -136,6 +136,11 @@ export function AnalystDayTimeline({
                         Em andamento
                       </span>
                     ) : null}
+                    {segment.task.status === "paused" ? (
+                      <span className="text-[9px] font-medium text-amber-700 dark:text-amber-300">
+                        Pausada
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 

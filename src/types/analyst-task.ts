@@ -1,4 +1,4 @@
-export type AnalystTaskStatus = "running" | "completed";
+export type AnalystTaskStatus = "running" | "paused" | "completed";
 
 export type AnalystTask = {
   id: string;
@@ -8,6 +8,10 @@ export type AnalystTask = {
   details: string | null;
   started_at: string;
   ended_at: string | null;
+  /** Set while status is paused; cleared on resume/complete. */
+  paused_at: string | null;
+  /** Accumulated paused milliseconds across prior pause intervals. */
+  total_paused_ms: number;
   status: AnalystTaskStatus;
   is_urgent: boolean;
   source: "devpulse";
@@ -36,3 +40,21 @@ export type AnalystTaskMetrics = {
   delta_hours: number;
   daily: AnalystTaskDay[];
 };
+
+/** Net elapsed ms excluding completed pauses (and the open pause if currently paused). */
+export function analystTaskElapsedMs(
+  task: Pick<
+    AnalystTask,
+    "started_at" | "ended_at" | "paused_at" | "total_paused_ms" | "status"
+  >,
+  nowMs: number = Date.now(),
+): number {
+  const startedMs = new Date(task.started_at).getTime();
+  const endMs =
+    task.ended_at != null ? new Date(task.ended_at).getTime() : nowMs;
+  let pausedMs = Math.max(0, Number(task.total_paused_ms) || 0);
+  if (task.status === "paused" && task.paused_at) {
+    pausedMs += Math.max(0, nowMs - new Date(task.paused_at).getTime());
+  }
+  return Math.max(0, endMs - startedMs - pausedMs);
+}

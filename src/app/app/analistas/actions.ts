@@ -227,16 +227,30 @@ export async function completeAnalystTaskAction(
     const supabase = await createClient();
     const { data: task } = await supabase
       .from("analyst_tasks")
-      .select("started_at")
+      .select("started_at, status, paused_at, total_paused_ms")
       .eq("id", taskId)
       .is("deleted_at", null)
       .single();
     if (!task || new Date(endedAt) <= new Date(task.started_at)) {
       throw new Error("O término deve ser posterior ao início.");
     }
+
+    let totalPausedMs = Math.max(0, Number(task.total_paused_ms) || 0);
+    if (task.status === "paused" && task.paused_at) {
+      totalPausedMs += Math.max(
+        0,
+        new Date(endedAt).getTime() - new Date(String(task.paused_at)).getTime(),
+      );
+    }
+
     const { error } = await supabase
       .from("analyst_tasks")
-      .update({ ended_at: endedAt, status: "completed" })
+      .update({
+        ended_at: endedAt,
+        status: "completed",
+        paused_at: null,
+        total_paused_ms: totalPausedMs,
+      })
       .eq("id", taskId)
       .is("deleted_at", null);
     if (error) {
@@ -247,6 +261,54 @@ export async function completeAnalystTaskAction(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "Não foi possível concluir a tarefa.",
+      success: null,
+    };
+  }
+}
+
+export async function pauseAnalystTaskAction(
+  _previous: AnalystTaskActionState = EMPTY_STATE,
+  formData: FormData,
+): Promise<AnalystTaskActionState> {
+  void _previous;
+  try {
+    const context = await requirePermission("analistas", "edit");
+    const taskId = String(formData.get("taskId") ?? "").trim();
+    await canManageTask(context, taskId);
+    const { pauseAnalystTask } = await import("@/services/analyst-tasks");
+    await pauseAnalystTask(taskId);
+    revalidatePath("/app/analistas");
+    return { error: null, success: "Tarefa pausada." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível pausar a tarefa.",
+      success: null,
+    };
+  }
+}
+
+export async function resumeAnalystTaskAction(
+  _previous: AnalystTaskActionState = EMPTY_STATE,
+  formData: FormData,
+): Promise<AnalystTaskActionState> {
+  void _previous;
+  try {
+    const context = await requirePermission("analistas", "edit");
+    const taskId = String(formData.get("taskId") ?? "").trim();
+    await canManageTask(context, taskId);
+    const { resumeAnalystTask } = await import("@/services/analyst-tasks");
+    await resumeAnalystTask(taskId);
+    revalidatePath("/app/analistas");
+    return { error: null, success: "Tarefa retomada." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível continuar a tarefa.",
       success: null,
     };
   }

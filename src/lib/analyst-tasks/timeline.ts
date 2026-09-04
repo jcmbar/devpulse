@@ -90,7 +90,9 @@ export function tasksOverlappingDay(
     const endAt =
       task.status === "running"
         ? nowEnd
-        : task.ended_at ?? task.started_at;
+        : task.status === "paused"
+          ? (task.paused_at ?? nowEnd)
+          : (task.ended_at ?? task.started_at);
     return clipSegmentToDay({
       startedAt: task.started_at,
       endedAt: endAt,
@@ -187,7 +189,11 @@ export function buildDayTimeline(input: {
   const rawSegments = dayTasks
     .map((task) => {
       const endAt =
-        task.status === "running" ? nowEnd : task.ended_at ?? task.started_at;
+        task.status === "running"
+          ? nowEnd
+          : task.status === "paused"
+            ? (task.paused_at ?? nowEnd)
+            : (task.ended_at ?? task.started_at);
       const clip = clipSegmentToDay({
         startedAt: task.started_at,
         endedAt: endAt,

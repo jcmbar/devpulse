@@ -8,6 +8,7 @@ import type {
   AnalystTaskMetrics,
   AnalystTaskStatus,
 } from "@/types/analyst-task";
+import { analystTaskElapsedMs } from "@/types/analyst-task";
 
 const DISPLAY_TIME_ZONE = "America/Sao_Paulo";
 const BRAZIL_OFFSET = "-03:00";
@@ -51,15 +52,23 @@ function monthBounds(yearMonth: string): { start: string; end: string } {
 function mapTask(row: Record<string, unknown>): AnalystTask {
   const startedAt = String(row.started_at);
   const endedAt = (row.ended_at as string | null) ?? null;
+  const pausedAt = (row.paused_at as string | null) ?? null;
+  const totalPausedMs = Math.max(0, Number(row.total_paused_ms) || 0);
+  const status = String(row.status) as AnalystTaskStatus;
   const durationHours =
     endedAt == null
       ? null
       : roundHours(
-          Math.max(
-            0,
-            (new Date(endedAt).getTime() - new Date(startedAt).getTime()) /
-              3_600_000,
-          ),
+          analystTaskElapsedMs(
+            {
+              started_at: startedAt,
+              ended_at: endedAt,
+              paused_at: null,
+              total_paused_ms: totalPausedMs,
+              status: "completed",
+            },
+            new Date(endedAt).getTime(),
+          ) / 3_600_000,
         );
 
   return {
@@ -70,7 +79,9 @@ function mapTask(row: Record<string, unknown>): AnalystTask {
     details: (row.details as string | null) ?? null,
     started_at: startedAt,
     ended_at: endedAt,
-    status: String(row.status) as AnalystTaskStatus,
+    paused_at: pausedAt,
+    total_paused_ms: totalPausedMs,
+    status,
     is_urgent: Boolean(row.is_urgent),
     source: "devpulse",
     duration_hours: durationHours,
@@ -110,7 +121,7 @@ export async function listActiveAnalystTasks(
     .from("analyst_tasks")
     .select("*")
     .eq("developer_id", developerId)
-    .eq("status", "running")
+    .in("status", ["running", "paused"])
     .is("deleted_at", null)
     .order("started_at", { ascending: false });
 
@@ -171,6 +182,12 @@ export function computeAnalystTaskMetrics(input: {
 
     const startMs = new Date(task.started_at).getTime();
     const endMs = new Date(task.ended_at!).getTime();
+    const wallMs = Math.max(0, endMs - startMs);
+    const netMs = Math.max(
+      0,
+      wallMs - Math.max(0, Number(task.total_paused_ms) || 0),
+    );
+    const scale = wallMs > 0 ? netMs / wallMs : 0;
     let date = localDateFromInstant(task.started_at);
     const endDate = localDateFromInstant(task.ended_at!);
     while (date <= endDate) {
@@ -182,7 +199,9 @@ export function computeAnalystTaskMetrics(input: {
           localDateStart(nextLocalDate(date)),
         );
         const hours =
-          sliceEnd > sliceStart ? (sliceEnd - sliceStart) / 3_600_000 : 0;
+          sliceEnd > sliceStart
+            ? ((sliceEnd - sliceStart) / 3_600_000) * scale
+            : 0;
         day.hours = roundHours(day.hours + hours);
         day.task_count += 1;
         if (task.is_urgent) {
@@ -208,8 +227,77 @@ export function computeAnalystTaskMetrics(input: {
 }
 
 export function validateAnalystTaskStatus(status: string): AnalystTaskStatus {
-  if (status === "running" || status === "completed") {
+  if (status === "running" || status === "paused" || status === "completed") {
     return status;
   }
   throw new Error("Status de tarefa inválido.");
+}
+
+export async function pauseAnalystTask(taskId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data, error: loadError } = await supabase
+    .from("analyst_tasks")
+    .select("id, status")
+    .eq("id", taskId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (loadError) {
+    throw new Error(`Falha ao carregar tarefa: ${loadError.message}`);
+  }
+  if (!data) {
+    throw new Error("Tarefa não encontrada.");
+  }
+  if (data.status !== "running") {
+    throw new Error("Só é possível pausar uma tarefa em andamento.");
+  }
+
+  const { error } = await supabase
+    .from("analyst_tasks")
+    .update({
+      status: "paused",
+      paused_at: new Date().toISOString(),
+    })
+    .eq("id", taskId)
+    .eq("status", "running")
+    .is("deleted_at", null);
+  if (error) {
+    throw new Error(`Não foi possível pausar a tarefa: ${error.message}`);
+  }
+}
+
+export async function resumeAnalystTask(taskId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data, error: loadError } = await supabase
+    .from("analyst_tasks")
+    .select("id, status, paused_at, total_paused_ms")
+    .eq("id", taskId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (loadError) {
+    throw new Error(`Falha ao carregar tarefa: ${loadError.message}`);
+  }
+  if (!data) {
+    throw new Error("Tarefa não encontrada.");
+  }
+  if (data.status !== "paused" || !data.paused_at) {
+    throw new Error("Só é possível continuar uma tarefa pausada.");
+  }
+
+  const pausedAtMs = new Date(String(data.paused_at)).getTime();
+  const added = Math.max(0, Date.now() - pausedAtMs);
+  const totalPausedMs = Math.max(0, Number(data.total_paused_ms) || 0) + added;
+
+  const { error } = await supabase
+    .from("analyst_tasks")
+    .update({
+      status: "running",
+      paused_at: null,
+      total_paused_ms: totalPausedMs,
+    })
+    .eq("id", taskId)
+    .eq("status", "paused")
+    .is("deleted_at", null);
+  if (error) {
+    throw new Error(`Não foi possível continuar a tarefa: ${error.message}`);
+  }
 }
