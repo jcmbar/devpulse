@@ -23,20 +23,39 @@ export type AnalystTask = {
 
 export type AnalystTaskDay = {
   date: string;
+  /**
+   * Horas realizadas: união líquida dos intervalos do dia (sem duplicar
+   * simultaneidade). Mantido em `hours` por compatibilidade com o calendário.
+   */
   hours: number;
+  /** Soma simples das durações líquidas lançadas no dia. */
+  launched_hours: number;
+  /** Excesso lançado por simultaneidade: launched − realized. */
+  conflict_hours: number;
+  /**
+   * (conflict / realized) * 100, ou null quando não há horas realizadas.
+   */
+  simultaneity_percent: number | null;
   task_count: number;
   urgent_hours: number;
   contracted_hours: number;
+  /** Saldo do dia: horas realizadas − jornada contratada. */
   delta_hours: number;
   is_holiday: boolean;
 };
 
 export type AnalystTaskMetrics = {
   total_tasks: number;
+  /** Soma mensal das horas realizadas (uniões diárias), em bruto antes do format. */
   total_hours: number;
+  /** Soma mensal das horas lançadas. */
+  total_launched_hours: number;
+  /** Soma mensal das horas conflitantes. */
+  total_conflict_hours: number;
   average_hours: number | null;
   urgent_hours: number;
   contracted_hours: number;
+  /** Saldo mensal: horas realizadas − jornada mensal contratada. */
   delta_hours: number;
   daily: AnalystTaskDay[];
 };

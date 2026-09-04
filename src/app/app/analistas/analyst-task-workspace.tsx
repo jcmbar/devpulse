@@ -18,6 +18,10 @@ import {
   taskHasActiveOverlap,
   tasksOverlappingDay,
 } from "@/lib/analyst-tasks/timeline";
+import {
+  resolveSimultaneityAlertLevel,
+  type SimultaneityAlertLevel,
+} from "@/lib/analyst-tasks/simultaneous-hours";
 import type {
   AnalystTask,
   AnalystTaskDay,
@@ -28,6 +32,7 @@ import {
   AlertTriangle,
   CalendarDays,
   Check,
+  Layers,
   Pause,
   Pencil,
   Play,
@@ -103,6 +108,56 @@ function formatHours(value: number | null): string {
   )}`;
 }
 
+function formatPercent(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "—";
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
+}
+
+function simultaneityAlertTone(
+  level: SimultaneityAlertLevel,
+): "neutral" | "warning" | "danger" {
+  if (level === "none") {
+    return "neutral";
+  }
+  if (level === "low" || level === "attention") {
+    return "warning";
+  }
+  return "danger";
+}
+
+function simultaneityAlertClass(level: SimultaneityAlertLevel): string {
+  switch (level) {
+    case "none":
+      return "text-muted-foreground";
+    case "low":
+      return "text-amber-600/90 dark:text-amber-300/90";
+    case "attention":
+      return "text-amber-700 dark:text-amber-200";
+    case "high":
+      return "text-rose-600 dark:text-rose-300";
+    case "critical":
+      return "text-rose-700 font-semibold dark:text-rose-200";
+  }
+}
+
+const DAY_METRIC_HINTS = {
+  realized:
+    "Tempo líquido trabalhado no dia. Períodos com tarefas simultâneas são contados apenas uma vez.",
+  conflict:
+    "Tempo lançado em duplicidade por tarefas que ocorreram ao mesmo tempo.",
+  simultaneity:
+    "Percentual de tempo adicional lançado em paralelo em relação ao tempo líquido realizado. O indicador pode ultrapassar 100% quando três ou mais tarefas ocorrem simultaneamente.",
+  balance: "Horas realizadas menos a jornada contratada do dia.",
+  contracted: "Carga diária prevista no cadastro do analista.",
+  launched: "Soma simples das durações de todas as tarefas concluídas do dia.",
+} as const;
+
+/** Vertical day KPI column between calendar and task list. */
+const DAY_KPI_CARD_CLASS =
+  "!overflow-visible p-2.5 sm:p-2.5 lg:p-2.5 [&_.ui-kpi-card__label]:break-words [&_.ui-kpi-card__label]:leading-snug [&_.ui-kpi-card__label]:text-[10px] [&_.ui-kpi-card__label]:tracking-[0.06em] [&_.ui-kpi-card__label]:sm:text-[10px] [&_.ui-kpi-card__value]:mt-0.5 [&_.ui-kpi-card__value]:text-lg [&_.ui-kpi-card__value]:sm:text-lg [&_.ui-kpi-card__value]:lg:text-lg [&_.ui-kpi-card__hint]:mt-0.5 [&_.ui-kpi-card__hint]:text-[10px] [&_.ui-kpi-card__hint]:leading-snug [&_.ui-kpi-card__hint]:break-words [&_.ui-kpi-card__hint]:sm:text-[10px]";
+
 function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
 }
@@ -140,17 +195,6 @@ function nowInputValue(): string {
   return localInputValue(new Date().toISOString());
 }
 
-function isoDateFromInstant(value: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(value));
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
 function DayCell({
   day,
   selected,
@@ -172,38 +216,53 @@ function DayCell({
             ? "Feriado sem tarefa registrada"
             : "Nenhuma tarefa registrada"
       }
-      className={`min-h-[4.5rem] rounded-[var(--radius-sm)] border p-1.5 text-left transition ${
+      className={`min-h-[3.25rem] rounded-[var(--radius-sm)] border p-1 text-left transition ${
         selected
           ? "border-brand bg-brand-soft shadow-[var(--shadow-sm)]"
           : "border-border bg-card hover:border-brand/50 hover:bg-muted/30"
       }`}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="text-xs font-semibold text-foreground">{dayNumber}</span>
+        <span className="text-[11px] font-semibold text-foreground">{dayNumber}</span>
       </div>
       {day.task_count > 0 ? (
-        <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+        <span className="mt-1 inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
           <span className="size-1.5 rounded-full bg-emerald-500" />
-          Registrado
+          OK
         </span>
       ) : (
-        <span className="mt-1.5 inline-flex animate-pulse items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+        <span className="mt-1 inline-flex items-center gap-1 text-[9px] font-semibold text-amber-700 dark:text-amber-300">
           <span className="size-1.5 rounded-full bg-amber-500" />
-          Ausente
+          —
         </span>
       )}
-      {day.contracted_hours > 0 || day.hours > 0 ? (
-        <div className="mt-1 space-y-0.5">
-          <p className="text-[10px] font-semibold tabular-nums text-foreground">
+      {day.contracted_hours > 0 || day.hours > 0 || day.launched_hours > 0 ? (
+        <div className="mt-0.5 space-y-0.5">
+          <p
+            className="text-[9px] font-semibold tabular-nums text-foreground"
+            title={DAY_METRIC_HINTS.realized}
+          >
             {formatHours(day.hours)}
           </p>
+          {day.conflict_hours > 0 ? (
+            <p
+              className={`inline-flex items-center gap-0.5 text-[8px] tabular-nums ${simultaneityAlertClass(
+                resolveSimultaneityAlertLevel(day.simultaneity_percent),
+              )}`}
+              title={DAY_METRIC_HINTS.conflict}
+            >
+              <Layers className="size-2" aria-hidden />
+              {formatHours(day.conflict_hours)}
+            </p>
+          ) : null}
           {day.contracted_hours > 0 ? (
             <p
-              className={`text-[9px] tabular-nums ${
+              className={`text-[8px] tabular-nums ${
                 day.delta_hours >= 0
                   ? "text-emerald-600/90 dark:text-emerald-400/90"
                   : "text-amber-700/90 dark:text-amber-300/90"
               }`}
+              title={DAY_METRIC_HINTS.balance}
             >
               {day.delta_hours >= 0 ? "+" : ""}
               {formatHours(day.delta_hours)}
@@ -755,14 +814,34 @@ export function AnalystTaskWorkspace({
             variant="hero"
             label="Horas realizadas"
             value={formatHours(metrics.total_hours)}
-            hint={`Contratado: ${formatHours(metrics.contracted_hours)}`}
+            hint={`Lançadas: ${formatHours(metrics.total_launched_hours)} · Contratado: ${formatHours(metrics.contracted_hours)}`}
+            title="Tempo líquido do mês. Períodos com tarefas simultâneas contam uma vez."
             tone="brand"
+          />
+          <KpiMetricCard
+            variant="hero"
+            label="Horas conflitantes"
+            value={formatHours(metrics.total_conflict_hours)}
+            hint="Duplicidade por simultaneidade no mês"
+            title={DAY_METRIC_HINTS.conflict}
+            tone={
+              metrics.total_conflict_hours > 0
+                ? simultaneityAlertTone(
+                    resolveSimultaneityAlertLevel(
+                      metrics.total_hours > 0
+                        ? (metrics.total_conflict_hours / metrics.total_hours) *
+                            100
+                        : null,
+                    ),
+                  )
+                : "neutral"
+            }
           />
           <KpiMetricCard
             variant="hero"
             label="Média por tarefa"
             value={formatHours(metrics.average_hours)}
-            hint="Duração média"
+            hint="Duração média lançada"
             tone="success"
           />
           <KpiMetricCard
@@ -774,9 +853,10 @@ export function AnalystTaskWorkspace({
           />
           <KpiMetricCard
             variant="hero"
-            label="Diferença mensal"
+            label="Saldo mensal"
             value={`${metrics.delta_hours >= 0 ? "+" : ""}${formatHours(metrics.delta_hours)}`}
-            hint="Realizado − contratado"
+            hint="Realizadas − jornada contratada"
+            title="Saldo com base nas horas realizadas (união), nunca nas lançadas."
             tone={metrics.delta_hours >= 0 ? "success" : "danger"}
           />
           <KpiMetricCard
@@ -1133,10 +1213,10 @@ export function AnalystTaskWorkspace({
         </div>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_13.5rem_minmax(0,1fr)] xl:items-start">
         <SectionShell
-          title="Calendário de atividades"
-          description="Selecione um dia para consultar os registros realizados."
+          title="Calendário"
+          description="Selecione um dia."
           actions={
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <CalendarDays className="size-3.5" />
@@ -1144,11 +1224,11 @@ export function AnalystTaskWorkspace({
             </span>
           }
         >
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1">
             {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
               <div
                 key={day}
-                className="px-1 py-1 text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
+                className="px-0.5 py-0.5 text-center text-[9px] font-semibold tracking-wide text-muted-foreground uppercase"
               >
                 {day}
               </div>
@@ -1162,17 +1242,91 @@ export function AnalystTaskWorkspace({
                   onSelect={() => setSelectedDate(day.date)}
                 />
               ) : (
-                <div key={`empty-${index}`} className="min-h-[4.5rem]" />
+                <div key={`empty-${index}`} className="min-h-[3.25rem]" />
               ),
             )}
           </div>
         </SectionShell>
 
         <SectionShell
+          title="Resumo do dia"
+          description={
+            selectedDay ? formatDayLabel(selectedDate) : "Selecione um dia"
+          }
+        >
+          {selectedDay ? (
+            <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+              <KpiMetricCard
+                label="Horas realizadas"
+                value={formatHours(selectedDay.hours)}
+                hint={`Lançadas ${formatHours(selectedDay.launched_hours)}`}
+                title={DAY_METRIC_HINTS.realized}
+                tone="brand"
+                className={DAY_KPI_CARD_CLASS}
+              />
+              <KpiMetricCard
+                label="Horas conflitantes"
+                value={formatHours(selectedDay.conflict_hours)}
+                hint="Só simultaneidade"
+                title={DAY_METRIC_HINTS.conflict}
+                tone={
+                  selectedDay.conflict_hours > 0
+                    ? simultaneityAlertTone(
+                        resolveSimultaneityAlertLevel(
+                          selectedDay.simultaneity_percent,
+                        ),
+                      )
+                    : "neutral"
+                }
+                className={DAY_KPI_CARD_CLASS}
+              />
+              <KpiMetricCard
+                label="Jornada contratada"
+                value={formatHours(selectedDay.contracted_hours)}
+                hint="Cadastro do dia"
+                title={DAY_METRIC_HINTS.contracted}
+                tone="neutral"
+                className={DAY_KPI_CARD_CLASS}
+              />
+              <KpiMetricCard
+                label="Saldo do dia"
+                value={`${selectedDay.delta_hours >= 0 ? "+" : ""}${formatHours(selectedDay.delta_hours)}`}
+                hint="Realizadas − jornada"
+                title={DAY_METRIC_HINTS.balance}
+                tone={selectedDay.delta_hours >= 0 ? "success" : "danger"}
+                className={DAY_KPI_CARD_CLASS}
+              />
+              <KpiMetricCard
+                label="Intensidade de simultaneidade"
+                value={formatPercent(selectedDay.simultaneity_percent)}
+                hint={
+                  selectedDay.simultaneity_percent == null
+                    ? "Sem horas realizadas"
+                    : resolveSimultaneityAlertLevel(
+                        selectedDay.simultaneity_percent,
+                      )
+                }
+                title={DAY_METRIC_HINTS.simultaneity}
+                tone={simultaneityAlertTone(
+                  resolveSimultaneityAlertLevel(
+                    selectedDay.simultaneity_percent,
+                  ),
+                )}
+                className={cn(DAY_KPI_CARD_CLASS, "col-span-2 xl:col-span-1")}
+              />
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Escolha um dia no calendário para ver o resumo.
+            </p>
+          )}
+        </SectionShell>
+
+        <SectionShell
           title={selectedDay ? `Tarefas de ${formatDayLabel(selectedDate)}` : "Tarefas do dia"}
           description={
             selectedDay
-              ? `${formatHours(selectedDay.hours)} realizados · ${selectedDay.delta_hours >= 0 ? "+" : ""}${formatHours(selectedDay.delta_hours)} contra o dia contratado`
+              ? `${formatHours(selectedDay.hours)} realizados · ${selectedDay.delta_hours >= 0 ? "+" : ""}${formatHours(selectedDay.delta_hours)} saldo do dia`
               : undefined
           }
         >
@@ -1211,7 +1365,7 @@ export function AnalystTaskWorkspace({
 
       <SectionShell
         title="Linha do tempo"
-        description={`Atividades de ${formatDayLabel(selectedDate)} em formato de cronograma. Marcações pontilhadas indicam sobreposição simultânea.`}
+        description={`Atividades de ${formatDayLabel(selectedDate)} em formato de cronograma. Faixas tracejadas indicam janelas de simultaneidade; números consolidados usam só tarefas concluídas.`}
       >
         <AnalystDayTimeline
           dateIso={selectedDate}

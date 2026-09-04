@@ -1,7 +1,12 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import {
+  localDatesSpannedByInterval,
+  msToHours,
+  summarizeTasksForDay,
+} from "@/lib/analyst-tasks/simultaneous-hours";
 import { listDatesInMonth } from "@/lib/metrics/business-days";
+import { createClient } from "@/lib/supabase/server";
 import type {
   AnalystTask,
   AnalystTaskDay,
@@ -10,30 +15,10 @@ import type {
 } from "@/types/analyst-task";
 import { analystTaskElapsedMs } from "@/types/analyst-task";
 
-const DISPLAY_TIME_ZONE = "America/Sao_Paulo";
 const BRAZIL_OFFSET = "-03:00";
 
 function roundHours(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function localDateFromInstant(value: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: DISPLAY_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(value));
-}
-
-function localDateStart(date: string): number {
-  return Date.parse(`${date}T00:00:00${BRAZIL_OFFSET}`);
-}
-
-function nextLocalDate(date: string): string {
-  const value = new Date(`${date}T12:00:00${BRAZIL_OFFSET}`);
-  value.setUTCDate(value.getUTCDate() + 1);
-  return value.toISOString().slice(0, 10);
 }
 
 function monthBounds(yearMonth: string): { start: string; end: string } {
@@ -157,6 +142,9 @@ export function computeAnalystTaskMetrics(input: {
         {
           date,
           hours: 0,
+          launched_hours: 0,
+          conflict_hours: 0,
+          simultaneity_percent: null,
           task_count: 0,
           urgent_hours: 0,
           contracted_hours: contractedHours,
@@ -167,61 +155,108 @@ export function computeAnalystTaskMetrics(input: {
     }),
   );
 
+  const completed = input.tasks.filter(
+    (task) =>
+      task.status === "completed" &&
+      task.ended_at != null &&
+      task.duration_hours != null,
+  );
+
   let totalTasks = 0;
-  let totalHours = 0;
   let urgentHours = 0;
-  for (const task of input.tasks) {
-    if (task.status !== "completed" || task.duration_hours == null) {
-      continue;
-    }
+  let sumDurationHours = 0;
+  const tasksByDay = new Map<
+    string,
+    Array<{
+      id: string;
+      startedAt: string;
+      endedAt: string;
+      totalPausedMs: number;
+      isUrgent: boolean;
+    }>
+  >();
+
+  for (const task of completed) {
     totalTasks += 1;
-    totalHours += task.duration_hours;
+    sumDurationHours += task.duration_hours ?? 0;
     if (task.is_urgent) {
-      urgentHours += task.duration_hours;
+      urgentHours += task.duration_hours ?? 0;
     }
 
-    const startMs = new Date(task.started_at).getTime();
-    const endMs = new Date(task.ended_at!).getTime();
-    const wallMs = Math.max(0, endMs - startMs);
-    const netMs = Math.max(
-      0,
-      wallMs - Math.max(0, Number(task.total_paused_ms) || 0),
-    );
-    const scale = wallMs > 0 ? netMs / wallMs : 0;
-    let date = localDateFromInstant(task.started_at);
-    const endDate = localDateFromInstant(task.ended_at!);
-    while (date <= endDate) {
-      const day = daily.get(date);
-      if (day) {
-        const sliceStart = Math.max(startMs, localDateStart(date));
-        const sliceEnd = Math.min(
-          endMs,
-          localDateStart(nextLocalDate(date)),
-        );
-        const hours =
-          sliceEnd > sliceStart
-            ? ((sliceEnd - sliceStart) / 3_600_000) * scale
-            : 0;
-        day.hours = roundHours(day.hours + hours);
-        day.task_count += 1;
-        if (task.is_urgent) {
-          day.urgent_hours = roundHours(day.urgent_hours + hours);
-        }
-        day.delta_hours = roundHours(day.hours - day.contracted_hours);
+    const interval = {
+      id: task.id,
+      startedAt: task.started_at,
+      endedAt: task.ended_at!,
+      totalPausedMs: Math.max(0, Number(task.total_paused_ms) || 0),
+      isUrgent: task.is_urgent,
+    };
+
+    for (const date of localDatesSpannedByInterval(
+      interval.startedAt,
+      interval.endedAt,
+    )) {
+      if (!daily.has(date)) {
+        continue;
       }
-      date = nextLocalDate(date);
+      const bucket = tasksByDay.get(date) ?? [];
+      bucket.push(interval);
+      tasksByDay.set(date, bucket);
     }
   }
 
+  let totalRealizedMs = 0;
+  let totalLaunchedMs = 0;
+  let totalConflictMs = 0;
+
+  for (const date of dates) {
+    const day = daily.get(date);
+    if (!day) {
+      continue;
+    }
+    const dayTasks = tasksByDay.get(date) ?? [];
+    day.task_count = dayTasks.length;
+
+    if (dayTasks.length === 0) {
+      day.delta_hours = -day.contracted_hours;
+      continue;
+    }
+
+    const summary = summarizeTasksForDay(dayTasks, date);
+    day.hours = summary.realizedHours;
+    day.launched_hours = summary.launchedHours;
+    day.conflict_hours = summary.conflictHours;
+    day.simultaneity_percent = summary.simultaneityPercent;
+    day.delta_hours = summary.realizedHours - day.contracted_hours;
+
+    totalRealizedMs += summary.realizedMs;
+    totalLaunchedMs += summary.launchedMs;
+    totalConflictMs += summary.conflictMs;
+
+    let urgentMs = 0;
+    for (const task of dayTasks) {
+      if (!task.isUrgent) {
+        continue;
+      }
+      urgentMs += summarizeTasksForDay([task], date).launchedMs;
+    }
+    day.urgent_hours = msToHours(urgentMs);
+  }
+
   const contractedHours = Math.max(0, input.contractedHoursPerMonth);
-  const roundedTotal = roundHours(totalHours);
+  const totalHours = msToHours(totalRealizedMs);
+  const totalLaunchedHours = msToHours(totalLaunchedMs);
+  const totalConflictHours = msToHours(totalConflictMs);
+
   return {
     total_tasks: totalTasks,
-    total_hours: roundedTotal,
-    average_hours: totalTasks > 0 ? roundHours(totalHours / totalTasks) : null,
+    total_hours: totalHours,
+    total_launched_hours: totalLaunchedHours,
+    total_conflict_hours: totalConflictHours,
+    average_hours:
+      totalTasks > 0 ? roundHours(sumDurationHours / totalTasks) : null,
     urgent_hours: roundHours(urgentHours),
     contracted_hours: contractedHours,
-    delta_hours: roundHours(roundedTotal - contractedHours),
+    delta_hours: totalHours - contractedHours,
     daily: [...daily.values()],
   };
 }

@@ -1,4 +1,8 @@
 import type { AnalystTask } from "@/types/analyst-task";
+import {
+  summarizeTasksForDay,
+  type SimultaneityWindow,
+} from "@/lib/analyst-tasks/simultaneous-hours";
 
 const SAO_PAULO = "America/Sao_Paulo";
 
@@ -13,6 +17,7 @@ export type TimelineOverlap = {
   startMinutes: number;
   endMinutes: number;
   taskIds: string[];
+  maxConcurrency: number;
 };
 
 export type DayTimeline = {
@@ -63,10 +68,23 @@ function clipSegmentToDay(input: {
   }
   const clippedStart = Math.max(startMs, dayStartMs);
   const clippedEnd = Math.min(endMs, dayEndMs);
+  if (clippedEnd <= clippedStart) {
+    return null;
+  }
   return {
     startMinutes: (clippedStart - dayStartMs) / 60_000,
     endMinutes: (clippedEnd - dayStartMs) / 60_000,
   };
+}
+
+function effectiveEndAt(task: AnalystTask, nowEnd: string): string {
+  if (task.status === "running") {
+    return nowEnd;
+  }
+  if (task.status === "paused") {
+    return task.paused_at ?? nowEnd;
+  }
+  return task.ended_at ?? task.started_at;
 }
 
 export function tasksOverlappingDay(
@@ -87,12 +105,7 @@ export function tasksOverlappingDay(
   const nowEnd = isToday ? nowIso : `${dateIso}T23:59:59-03:00`;
 
   return [...merged.values()].filter((task) => {
-    const endAt =
-      task.status === "running"
-        ? nowEnd
-        : task.status === "paused"
-          ? (task.paused_at ?? nowEnd)
-          : (task.ended_at ?? task.started_at);
+    const endAt = effectiveEndAt(task, nowEnd);
     return clipSegmentToDay({
       startedAt: task.started_at,
       endedAt: endAt,
@@ -101,55 +114,13 @@ export function tasksOverlappingDay(
   });
 }
 
-function intersection(
-  aStart: number,
-  aEnd: number,
-  bStart: number,
-  bEnd: number,
-): { start: number; end: number } | null {
-  const start = Math.max(aStart, bStart);
-  const end = Math.min(aEnd, bEnd);
-  if (end <= start) {
-    return null;
-  }
-  return { start, end };
-}
-
-export function computeOverlaps(
-  segments: Array<{ taskId: string; startMinutes: number; endMinutes: number }>,
-): TimelineOverlap[] {
-  const overlaps: TimelineOverlap[] = [];
-  for (let index = 0; index < segments.length; index += 1) {
-    for (let other = index + 1; other < segments.length; other += 1) {
-      const left = segments[index];
-      const right = segments[other];
-      const hit = intersection(
-        left.startMinutes,
-        left.endMinutes,
-        right.startMinutes,
-        right.endMinutes,
-      );
-      if (!hit) {
-        continue;
-      }
-      const existing = overlaps.find(
-        (row) =>
-          row.startMinutes === hit.start &&
-          row.endMinutes === hit.end &&
-          row.taskIds.includes(left.taskId) &&
-          row.taskIds.includes(right.taskId),
-      );
-      if (existing) {
-        continue;
-      }
-      overlaps.push({
-        startMinutes: hit.start,
-        endMinutes: hit.end,
-        taskIds: [left.taskId, right.taskId],
-      });
-    }
-  }
-  return overlaps.sort((a, b) => a.startMinutes - b.startMinutes);
+function windowsToOverlaps(windows: SimultaneityWindow[]): TimelineOverlap[] {
+  return windows.map((window) => ({
+    startMinutes: window.startMinutes,
+    endMinutes: window.endMinutes,
+    taskIds: window.taskIds,
+    maxConcurrency: window.maxConcurrency,
+  }));
 }
 
 function formatHourLabel(totalMinutes: number): string {
@@ -188,12 +159,7 @@ export function buildDayTimeline(input: {
 
   const rawSegments = dayTasks
     .map((task) => {
-      const endAt =
-        task.status === "running"
-          ? nowEnd
-          : task.status === "paused"
-            ? (task.paused_at ?? nowEnd)
-            : (task.ended_at ?? task.started_at);
+      const endAt = effectiveEndAt(task, nowEnd);
       const clip = clipSegmentToDay({
         startedAt: task.started_at,
         endedAt: endAt,
@@ -211,12 +177,16 @@ export function buildDayTimeline(input: {
     .filter((row): row is Omit<TimelineSegment, "hasOverlap"> => row != null)
     .sort((a, b) => a.startMinutes - b.startMinutes);
 
-  const overlapInput = rawSegments.map((row) => ({
-    taskId: row.task.id,
-    startMinutes: row.startMinutes,
-    endMinutes: row.endMinutes,
-  }));
-  const overlaps = computeOverlaps(overlapInput);
+  const summary = summarizeTasksForDay(
+    dayTasks.map((task) => ({
+      id: task.id,
+      startedAt: task.started_at,
+      endedAt: effectiveEndAt(task, nowEnd),
+      totalPausedMs: Math.max(0, Number(task.total_paused_ms) || 0),
+    })),
+    input.dateIso,
+  );
+  const overlaps = windowsToOverlaps(summary.windows);
   const overlappingIds = new Set(overlaps.flatMap((row) => row.taskIds));
 
   const segments: TimelineSegment[] = rawSegments.map((row) => ({
