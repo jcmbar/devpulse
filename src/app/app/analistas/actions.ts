@@ -404,3 +404,67 @@ export async function deleteAnalystTaskAction(
     };
   }
 }
+
+export async function acknowledgeAnalystTaskAction(
+  _previous: AnalystTaskActionState = EMPTY_STATE,
+  formData: FormData,
+): Promise<AnalystTaskActionState> {
+  void _previous;
+  try {
+    const context = await requirePermission("analistas", "edit");
+    if (!isManager(context.profile.role)) {
+      throw new Error("Apenas gestor ou administrador pode dar ciência.");
+    }
+    const taskId = String(formData.get("taskId") ?? "").trim();
+    await canManageTask(context, taskId);
+    const name =
+      (context.profile.full_name ?? "").trim() ||
+      context.profile.email ||
+      "Gestor";
+    const { acknowledgeAnalystTask } = await import("@/services/analyst-tasks");
+    await acknowledgeAnalystTask({
+      taskId,
+      acknowledgedBy: context.profile.id,
+      acknowledgedByName: name,
+    });
+    revalidatePath("/app/analistas");
+    return { error: null, success: "Ciência registrada." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar a ciência.",
+      success: null,
+    };
+  }
+}
+
+export async function clearAnalystTaskAcknowledgmentAction(
+  _previous: AnalystTaskActionState = EMPTY_STATE,
+  formData: FormData,
+): Promise<AnalystTaskActionState> {
+  void _previous;
+  try {
+    const context = await requirePermission("analistas", "edit");
+    if (!isManager(context.profile.role)) {
+      throw new Error("Apenas gestor ou administrador pode remover a ciência.");
+    }
+    const taskId = String(formData.get("taskId") ?? "").trim();
+    await canManageTask(context, taskId);
+    const { clearAnalystTaskAcknowledgment } = await import(
+      "@/services/analyst-tasks"
+    );
+    await clearAnalystTaskAcknowledgment(taskId);
+    revalidatePath("/app/analistas");
+    return { error: null, success: "Ciência removida." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível remover a ciência.",
+      success: null,
+    };
+  }
+}

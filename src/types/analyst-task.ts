@@ -16,6 +16,10 @@ export type AnalystTask = {
   is_urgent: boolean;
   source: "devpulse";
   duration_hours: number | null;
+  /** Manager/admin acknowledgment timestamp. */
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  acknowledged_by_name: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

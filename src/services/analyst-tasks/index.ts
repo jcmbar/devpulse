@@ -70,6 +70,9 @@ function mapTask(row: Record<string, unknown>): AnalystTask {
     is_urgent: Boolean(row.is_urgent),
     source: "devpulse",
     duration_hours: durationHours,
+    acknowledged_at: (row.acknowledged_at as string | null) ?? null,
+    acknowledged_by: (row.acknowledged_by as string | null) ?? null,
+    acknowledged_by_name: (row.acknowledged_by_name as string | null) ?? null,
     deleted_at: (row.deleted_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
@@ -334,5 +337,64 @@ export async function resumeAnalystTask(taskId: string): Promise<void> {
     .is("deleted_at", null);
   if (error) {
     throw new Error(`Não foi possível continuar a tarefa: ${error.message}`);
+  }
+}
+
+export async function acknowledgeAnalystTask(input: {
+  taskId: string;
+  acknowledgedBy: string;
+  acknowledgedByName: string;
+}): Promise<void> {
+  const name = input.acknowledgedByName.trim();
+  if (!name) {
+    throw new Error("Nome do gestor inválido para ciência.");
+  }
+  const supabase = await createClient();
+  const { data, error: loadError } = await supabase
+    .from("analyst_tasks")
+    .select("id, status")
+    .eq("id", input.taskId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (loadError) {
+    throw new Error(`Falha ao carregar tarefa: ${loadError.message}`);
+  }
+  if (!data) {
+    throw new Error("Tarefa não encontrada.");
+  }
+  if (data.status !== "completed") {
+    throw new Error("Só é possível dar ciência em tarefas concluídas.");
+  }
+
+  const { error } = await supabase
+    .from("analyst_tasks")
+    .update({
+      acknowledged_at: new Date().toISOString(),
+      acknowledged_by: input.acknowledgedBy,
+      acknowledged_by_name: name,
+    })
+    .eq("id", input.taskId)
+    .eq("status", "completed")
+    .is("deleted_at", null);
+  if (error) {
+    throw new Error(`Não foi possível registrar a ciência: ${error.message}`);
+  }
+}
+
+export async function clearAnalystTaskAcknowledgment(
+  taskId: string,
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("analyst_tasks")
+    .update({
+      acknowledged_at: null,
+      acknowledged_by: null,
+      acknowledged_by_name: null,
+    })
+    .eq("id", taskId)
+    .is("deleted_at", null);
+  if (error) {
+    throw new Error(`Não foi possível remover a ciência: ${error.message}`);
   }
 }

@@ -2,6 +2,8 @@
 
 import { AnalystDayTimeline } from "@/app/app/analistas/analyst-day-timeline";
 import {
+  acknowledgeAnalystTaskAction,
+  clearAnalystTaskAcknowledgmentAction,
   completeAnalystTaskAction,
   createAnalystTaskAction,
   deleteAnalystTaskAction,
@@ -43,6 +45,7 @@ import {
   Pause,
   Pencil,
   Play,
+  ThumbsUp,
   Trash2,
   X,
 } from "lucide-react";
@@ -371,6 +374,10 @@ function TaskRow({
   canEditRecord,
   canDelete,
   canOperateTimer,
+  canAcknowledge,
+  onAcknowledge,
+  onClearAcknowledgment,
+  acknowledgePending,
 }: {
   task: AnalystTask;
   initialNow: string;
@@ -383,10 +390,15 @@ function TaskRow({
   canEditRecord: boolean;
   canDelete: boolean;
   canOperateTimer: boolean;
+  canAcknowledge: boolean;
+  onAcknowledge: () => void;
+  onClearAcknowledgment: () => void;
+  acknowledgePending: boolean;
 }) {
   const isRunning = task.status === "running";
   const isPaused = task.status === "paused";
   const isOpen = isRunning || isPaused;
+  const isAcknowledged = Boolean(task.acknowledged_at);
 
   return (
     <div
@@ -395,7 +407,9 @@ function TaskRow({
           ? "border-brand/40 bg-brand-soft/20"
           : isPaused
             ? "border-amber-500/40 bg-amber-500/5"
-            : "border-border"
+            : isAcknowledged
+              ? "border-emerald-500/35 bg-emerald-500/5"
+              : "border-border"
       }`}
     >
       <div className="min-w-0">
@@ -415,6 +429,22 @@ function TaskRow({
           {isPaused ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
               Pausada
+            </span>
+          ) : null}
+          {isAcknowledged ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+              title={
+                task.acknowledged_at
+                  ? `Ciência em ${formatDateTime(task.acknowledged_at)}`
+                  : "Gestor ciente"
+              }
+            >
+              <ThumbsUp className="size-3" aria-hidden />
+              Ciente
+              {task.acknowledged_by_name
+                ? ` · ${task.acknowledged_by_name}`
+                : ""}
             </span>
           ) : null}
           {!canEditRecord && !isOpen ? (
@@ -509,6 +539,31 @@ function TaskRow({
               Editar
             </button>
           )}
+          {canAcknowledge && task.status === "completed" ? (
+            isAcknowledged ? (
+              <button
+                type="button"
+                onClick={onClearAcknowledgment}
+                disabled={acknowledgePending}
+                title="Remover ciência"
+                className="ui-btn-ghost border border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+              >
+                <ThumbsUp className="size-3.5 fill-current" />
+                {acknowledgePending ? "…" : "Ciente"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onAcknowledge}
+                disabled={acknowledgePending}
+                title="Dar ciência nesta tarefa"
+                className="ui-btn-secondary"
+              >
+                <ThumbsUp className="size-3.5" />
+                {acknowledgePending ? "…" : "Ciência"}
+              </button>
+            )
+          ) : null}
           {canDelete ? (
             <form
               action={async (formData) => {
@@ -697,6 +752,15 @@ export function AnalystTaskWorkspace({
     resumeAnalystTaskAction,
     initialState,
   );
+  const [ackState, ackAction, ackPending] = useActionState(
+    acknowledgeAnalystTaskAction,
+    initialState,
+  );
+  const [clearAckState, clearAckAction, clearAckPending] = useActionState(
+    clearAnalystTaskAcknowledgmentAction,
+    initialState,
+  );
+  const acknowledgePending = ackPending || clearAckPending;
   const activeOpenTasks = activeTasks;
   const runningCount = activeOpenTasks.length;
   const focusedActiveTask =
@@ -1382,6 +1446,10 @@ export function AnalystTaskWorkspace({
               </p>
             </div>
           ) : null}
+          <FormFeedback
+            error={ackState.error ?? clearAckState.error}
+            success={ackState.success ?? clearAckState.success}
+          />
           <div className="max-h-[30rem] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-[36rem]">
             {selectedTasks.length > 0 ? (
               selectedTasks.map((task) => {
@@ -1429,6 +1497,18 @@ export function AnalystTaskWorkspace({
                       canEditRecord
                     }
                     canOperateTimer={canOperateTimer}
+                    canAcknowledge={canManageAll}
+                    acknowledgePending={acknowledgePending}
+                    onAcknowledge={() => {
+                      const formData = new FormData();
+                      formData.set("taskId", task.id);
+                      ackAction(formData);
+                    }}
+                    onClearAcknowledgment={() => {
+                      const formData = new FormData();
+                      formData.set("taskId", task.id);
+                      clearAckAction(formData);
+                    }}
                   />
                 );
               })
