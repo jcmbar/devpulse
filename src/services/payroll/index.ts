@@ -763,7 +763,14 @@ function sameNullableNumber(
   return Number(left) === Number(right);
 }
 
-/** True when Folha snapshot already matches current cadastro compensation. */
+/**
+ * True when Folha snapshot already matches current cadastro compensation.
+ *
+ * For variable lines, `base_amount` is often the *computed* calendar base
+ * (dias úteis × 6h × rate), not the cadastral month amount — comparing it
+ * would false-trigger sync on every page load, recalculate, and clear
+ * `is_reviewed`.
+ */
 function itemMatchesCurrentCompensation(
   item: PayrollClosingItem,
   comp: {
@@ -776,8 +783,12 @@ function itemMatchesCurrentCompensation(
     daily_meal_amount: number;
   },
 ): boolean {
+  const baseAmountMatches =
+    item.base_type === "variable" ||
+    Number(item.base_amount) === Number(comp.base_amount);
+
   return (
-    Number(item.base_amount) === Number(comp.base_amount) &&
+    baseAmountMatches &&
     item.base_type === comp.base_type &&
     sameNullableNumber(item.hourly_rate, comp.hourly_rate) &&
     Number(item.contracted_hours_per_day) ===

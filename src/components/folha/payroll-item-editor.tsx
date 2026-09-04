@@ -98,12 +98,17 @@ export function PayrollItemEditor({
   const [reviewPending, setReviewPending] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewedOptimistic, setReviewedOptimistic] = useState<boolean | null>(
+    null,
+  );
 
   const lockedByFinalized = finalizedClosingId != null;
   const inputsDisabled = readOnly || lockedByFinalized;
   const busy = isPending || restorePending || reviewPending;
   const hasManualAutoField =
     item.differential_manual || item.travel_manual || item.meal_manual;
+  const isReviewed =
+    reviewedOptimistic != null ? reviewedOptimistic : item.is_reviewed;
   const [issuerId, setIssuerId] = useState(item.invoice_issuer_id ?? "");
   const [issuerSyncedFrom, setIssuerSyncedFrom] = useState(
     item.invoice_issuer_id ?? "",
@@ -116,15 +121,23 @@ export function PayrollItemEditor({
     setIssuerId(issuerFromServer);
   }
 
+  // Drop optimistic review once the server prop catches up.
+  if (
+    reviewedOptimistic != null &&
+    reviewedOptimistic === item.is_reviewed
+  ) {
+    setReviewedOptimistic(null);
+  }
+
   function restore(fields: PayrollAutoAmountField) {
     setRestoreError(null);
     setRestorePending(true);
     void (async () => {
       try {
+        // Do not pass page jiraHours — force a fresh Compilado resolve when needed.
         const result = await restorePayrollItemCalculatedAction({
           itemId: item.id,
           fields,
-          jiraHours,
         });
         if (!result.ok) {
           setRestoreError(result.error);
@@ -146,18 +159,22 @@ export function PayrollItemEditor({
 
   function toggleReviewed() {
     setReviewError(null);
+    const nextReviewed = !isReviewed;
+    setReviewedOptimistic(nextReviewed);
     setReviewPending(true);
     void (async () => {
       try {
         const result = await setPayrollItemReviewedAction({
           itemId: item.id,
-          reviewed: !item.is_reviewed,
+          reviewed: nextReviewed,
         });
         if (!result.ok) {
+          setReviewedOptimistic(null);
           setReviewError(result.error);
           return;
         }
       } catch (error) {
+        setReviewedOptimistic(null);
         setReviewError(
           error instanceof Error
             ? error.message
@@ -172,7 +189,7 @@ export function PayrollItemEditor({
   }
 
   return (
-    <tr className={cn(item.is_reviewed && "bg-emerald-500/[0.04]")}>
+    <tr className={cn(isReviewed && "bg-emerald-500/[0.04]")}>
       <td className="align-top">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -209,7 +226,7 @@ export function PayrollItemEditor({
                 )}
               </button>
             ) : null}
-            {item.is_reviewed ? (
+            {isReviewed ? (
               <span className="inline-flex items-center gap-1 rounded-[calc(var(--radius-sm)-2px)] border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="size-3" aria-hidden />
                 Conferido
@@ -448,11 +465,11 @@ export function PayrollItemEditor({
                   type="button"
                   className={cn(
                     "inline-flex items-center gap-1.5",
-                    item.is_reviewed ? "ui-btn-secondary" : "ui-btn-primary",
+                    isReviewed ? "ui-btn-secondary" : "ui-btn-primary",
                   )}
                   disabled={busy}
                   title={
-                    item.is_reviewed
+                    isReviewed
                       ? "Remove a marcação de conferido"
                       : "Marca que você já conferiu os ajustes desta pessoa no mês"
                   }
@@ -461,12 +478,12 @@ export function PayrollItemEditor({
                   <CheckCircle2 className="size-3.5" aria-hidden />
                   {reviewPending
                     ? "Atualizando..."
-                    : item.is_reviewed
+                    : isReviewed
                       ? "Desfazer conferido"
                       : "Marcar como conferido"}
                 </button>
               </>
-            ) : item.is_reviewed ? (
+            ) : isReviewed ? (
               <span className="text-xs text-emerald-700 dark:text-emerald-300">
                 Conferido
                 {item.reviewed_at
