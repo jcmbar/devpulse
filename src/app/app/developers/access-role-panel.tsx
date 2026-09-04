@@ -120,7 +120,7 @@ export function AccessPermissionsPanel({
       ? "O preset selecionado será aplicado ao salvar."
       : inferredPreset
         ? `Matriz atual corresponde ao preset ${PRESET_OPTIONS.find((option) => option.value === inferredPreset)?.label ?? inferredPreset}.`
-        : "Matriz personalizada. O papel (RLS) será recalculado ao salvar.";
+        : "Matriz personalizada. Módulos de gestão elevam o papel RLS para Gestor; Analistas e STG sozinhos permanecem como Desenvolvedor.";
 
   return (
     <form action={formAction} className="space-y-4">

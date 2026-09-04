@@ -13,6 +13,21 @@ export type ModuleGrantFlags = {
 
 export type ModuleGrantsMap = Record<AppModuleKey, ModuleGrantFlags>;
 
+/**
+ * Modules an individual contributor may hold without elevating RLS to gestor.
+ * Management modules (gestor, pessoas, jira, folha helpers, etc.) still force gestor.
+ */
+export const DEV_COMPATIBLE_MODULE_KEYS = [
+  "analistas",
+  "stg",
+] as const satisfies readonly AppModuleKey[];
+
+const DEV_COMPATIBLE_MODULE_SET = new Set<string>(DEV_COMPATIBLE_MODULE_KEYS);
+
+export function isDevCompatibleModule(key: AppModuleKey): boolean {
+  return DEV_COMPATIBLE_MODULE_SET.has(key);
+}
+
 export function emptyModuleGrants(): ModuleGrantsMap {
   const map = {} as ModuleGrantsMap;
   for (const key of APP_MODULE_KEYS) {
@@ -57,7 +72,7 @@ export function presetGrantsForAnalyst(): ModuleGrantsMap {
 
 /**
  * Ceiling role for RLS:
- * - only the analyst self-service module (or no module access) → dev
+ * - only contributor modules (analistas, stg) or no module access → dev
  * - delete on every module → admin
  * - otherwise keep admin if already admin, else gestor
  */
@@ -66,7 +81,7 @@ export function roleCeilingFromGrants(
   currentRole: UserRole,
 ): UserRole {
   const hasElevatedModuleAccess = APP_MODULE_KEYS.some(
-    (key) => key !== "analistas" && grants[key]?.can_access,
+    (key) => !isDevCompatibleModule(key) && grants[key]?.can_access,
   );
   if (!hasElevatedModuleAccess) {
     if (currentRole === "admin") {
