@@ -344,11 +344,13 @@ export async function acknowledgeAnalystTask(input: {
   taskId: string;
   acknowledgedBy: string;
   acknowledgedByName: string;
-}): Promise<void> {
+  acknowledgedAt?: string;
+}): Promise<{ acknowledgedAt: string }> {
   const name = input.acknowledgedByName.trim();
   if (!name) {
     throw new Error("Nome do gestor inválido para ciência.");
   }
+  const acknowledgedAt = input.acknowledgedAt ?? new Date().toISOString();
   const supabase = await createClient();
   const { data, error: loadError } = await supabase
     .from("analyst_tasks")
@@ -369,7 +371,7 @@ export async function acknowledgeAnalystTask(input: {
   const { error } = await supabase
     .from("analyst_tasks")
     .update({
-      acknowledged_at: new Date().toISOString(),
+      acknowledged_at: acknowledgedAt,
       acknowledged_by: input.acknowledgedBy,
       acknowledged_by_name: name,
     })
@@ -379,6 +381,7 @@ export async function acknowledgeAnalystTask(input: {
   if (error) {
     throw new Error(`Não foi possível registrar a ciência: ${error.message}`);
   }
+  return { acknowledgedAt };
 }
 
 export async function clearAnalystTaskAcknowledgment(

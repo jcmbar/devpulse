@@ -14,11 +14,20 @@ import { createClient } from "@/lib/supabase/server";
 export type AnalystTaskActionState = {
   error: string | null;
   success: string | null;
+  /** Used by ciência actions to update the card without a full page refresh. */
+  taskId?: string | null;
+  acknowledgment?: {
+    acknowledged_at: string | null;
+    acknowledged_by: string | null;
+    acknowledged_by_name: string | null;
+  } | null;
 };
 
 const EMPTY_STATE: AnalystTaskActionState = {
   error: null,
   success: null,
+  taskId: null,
+  acknowledgment: null,
 };
 
 function parseDateTime(value: FormDataEntryValue | null, label: string): string {
@@ -421,14 +430,24 @@ export async function acknowledgeAnalystTaskAction(
       (context.profile.full_name ?? "").trim() ||
       context.profile.email ||
       "Gestor";
+    const acknowledgedAt = new Date().toISOString();
     const { acknowledgeAnalystTask } = await import("@/services/analyst-tasks");
-    await acknowledgeAnalystTask({
+    const result = await acknowledgeAnalystTask({
       taskId,
       acknowledgedBy: context.profile.id,
       acknowledgedByName: name,
+      acknowledgedAt,
     });
-    revalidatePath("/app/analistas");
-    return { error: null, success: "Ciência registrada." };
+    return {
+      error: null,
+      success: "Ciência registrada.",
+      taskId,
+      acknowledgment: {
+        acknowledged_at: result.acknowledgedAt,
+        acknowledged_by: context.profile.id,
+        acknowledged_by_name: name,
+      },
+    };
   } catch (error) {
     return {
       error:
@@ -436,6 +455,8 @@ export async function acknowledgeAnalystTaskAction(
           ? error.message
           : "Não foi possível registrar a ciência.",
       success: null,
+      taskId: null,
+      acknowledgment: null,
     };
   }
 }
@@ -456,8 +477,16 @@ export async function clearAnalystTaskAcknowledgmentAction(
       "@/services/analyst-tasks"
     );
     await clearAnalystTaskAcknowledgment(taskId);
-    revalidatePath("/app/analistas");
-    return { error: null, success: "Ciência removida." };
+    return {
+      error: null,
+      success: "Ciência removida.",
+      taskId,
+      acknowledgment: {
+        acknowledged_at: null,
+        acknowledged_by: null,
+        acknowledged_by_name: null,
+      },
+    };
   } catch (error) {
     return {
       error:
@@ -465,6 +494,8 @@ export async function clearAnalystTaskAcknowledgmentAction(
           ? error.message
           : "Não foi possível remover a ciência.",
       success: null,
+      taskId: null,
+      acknowledgment: null,
     };
   }
 }

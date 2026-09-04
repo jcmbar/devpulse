@@ -78,7 +78,12 @@ type Props = {
   canDelete: boolean;
 };
 
-const initialState: AnalystTaskActionState = { error: null, success: null };
+const initialState: AnalystTaskActionState = {
+  error: null,
+  success: null,
+  taskId: null,
+  acknowledgment: null,
+};
 
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
@@ -760,6 +765,50 @@ export function AnalystTaskWorkspace({
     clearAnalystTaskAcknowledgmentAction,
     initialState,
   );
+  const [localTasks, setLocalTasks] = useState(tasks);
+  const [ackTaskId, setAckTaskId] = useState<string | null>(null);
+  const handledAckKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
+
+  useEffect(() => {
+    const state = ackState.success
+      ? ackState
+      : clearAckState.success
+        ? clearAckState
+        : null;
+    if (!state?.success || !state.taskId || !state.acknowledgment) {
+      return;
+    }
+    const key = `${state.success}:${state.taskId}:${state.acknowledgment.acknowledged_at ?? "cleared"}`;
+    if (handledAckKey.current === key) {
+      return;
+    }
+    handledAckKey.current = key;
+    const acknowledgment = state.acknowledgment;
+    setLocalTasks((previous) =>
+      previous.map((task) =>
+        task.id === state.taskId
+          ? {
+              ...task,
+              acknowledged_at: acknowledgment.acknowledged_at,
+              acknowledged_by: acknowledgment.acknowledged_by,
+              acknowledged_by_name: acknowledgment.acknowledged_by_name,
+            }
+          : task,
+      ),
+    );
+    setAckTaskId(null);
+  }, [ackState, clearAckState]);
+
+  useEffect(() => {
+    if (!ackPending && !clearAckPending) {
+      setAckTaskId(null);
+    }
+  }, [ackPending, clearAckPending]);
+
   const acknowledgePending = ackPending || clearAckPending;
   const activeOpenTasks = activeTasks;
   const runningCount = activeOpenTasks.length;
@@ -775,7 +824,7 @@ export function AnalystTaskWorkspace({
   const selectedDayClosedForUser =
     !canManageAll && isAnalystTaskDayClosed(selectedDate, todayIso);
   const selectedTasks = tasksOverlappingDay(
-    tasks,
+    localTasks,
     activeTasks,
     selectedDate,
     initialNow,
@@ -785,7 +834,7 @@ export function AnalystTaskWorkspace({
   );
   const focusedTaskHasOverlap =
     focusedActiveTask != null &&
-    taskHasActiveOverlap(focusedActiveTask, tasks, activeTasks, initialNow);
+    taskHasActiveOverlap(focusedActiveTask, localTasks, activeTasks, initialNow);
   const firstWeekday = new Date(`${month}-01T12:00:00Z`).getUTCDay();
   const calendarCells: Array<AnalystTaskDay | null> = [
     ...Array.from({ length: firstWeekday }, () => null),
@@ -1498,13 +1547,17 @@ export function AnalystTaskWorkspace({
                     }
                     canOperateTimer={canOperateTimer}
                     canAcknowledge={canManageAll}
-                    acknowledgePending={acknowledgePending}
+                    acknowledgePending={
+                      acknowledgePending && ackTaskId === task.id
+                    }
                     onAcknowledge={() => {
+                      setAckTaskId(task.id);
                       const formData = new FormData();
                       formData.set("taskId", task.id);
                       ackAction(formData);
                     }}
                     onClearAcknowledgment={() => {
+                      setAckTaskId(task.id);
                       const formData = new FormData();
                       formData.set("taskId", task.id);
                       clearAckAction(formData);
@@ -1528,7 +1581,7 @@ export function AnalystTaskWorkspace({
         <AnalystDayTimeline
           dateIso={selectedDate}
           dateLabel={formatDayLabel(selectedDate)}
-          tasks={tasks}
+          tasks={localTasks}
           activeTasks={activeTasks}
           initialNow={initialNow}
         />
