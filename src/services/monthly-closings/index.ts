@@ -6,6 +6,7 @@ import {
   startOfMonth,
 } from "@/lib/metrics/date-range";
 import { computeClosingSubmitValues } from "@/lib/metrics/closing-submit-values";
+import { countMonthBusinessDaysExcludingHolidays } from "@/lib/metrics/business-days";
 import { getCardDeliveryFlags } from "@/lib/metrics/developer-period";
 import {
   assertCanAccessMonthlyClosingAttachment,
@@ -14,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDeveloperCompensation } from "@/services/developers/compensation";
 import { listDelayJustificationsForDeveloperImports } from "@/services/delay-justifications";
+import { listApplicableHolidayDatesForDeveloperMonth } from "@/services/holidays";
 import { listImportBatches } from "@/services/imports";
 import {
   listJiraCardsByDeveloperAndImport,
@@ -1029,6 +1031,15 @@ export async function saveMonthlyClosingValuesDraft(input: {
 
   const absenceDays = input.absenceDays ?? [];
   const makeupDays = input.makeupDays ?? [];
+  const { dates: holidayDates } =
+    await listApplicableHolidayDatesForDeveloperMonth({
+      developerId: input.developerId,
+      yearMonth: closing.year_month,
+    });
+  const calendarBusinessDays = countMonthBusinessDaysExcludingHolidays(
+    closing.year_month,
+    holidayDates,
+  );
   const computed = computeClosingSubmitValues({
     baseType: input.compensation.baseType,
     baseAmount: input.compensation.baseAmount,
@@ -1044,6 +1055,8 @@ export async function saveMonthlyClosingValuesDraft(input: {
     makeupDays,
     timeBankEnabled: input.compensation.timeBankEnabled,
     considerJiraHours: input.compensation.considerJiraHours,
+    yearMonth: closing.year_month,
+    calendarBusinessDays,
   });
 
   const supabase = await createClient();
@@ -1214,6 +1227,15 @@ export async function submitMonthlyClosingForReview(input: {
 
   const absenceDays = input.values.absenceDays ?? [];
   const makeupDays = input.values.makeupDays ?? [];
+  const { dates: holidayDates } =
+    await listApplicableHolidayDatesForDeveloperMonth({
+      developerId: input.developerId,
+      yearMonth: closing.year_month,
+    });
+  const calendarBusinessDays = countMonthBusinessDaysExcludingHolidays(
+    closing.year_month,
+    holidayDates,
+  );
   const computed = computeClosingSubmitValues({
     baseType: input.values.compensation.baseType,
     baseAmount: input.values.compensation.baseAmount,
@@ -1229,6 +1251,8 @@ export async function submitMonthlyClosingForReview(input: {
     makeupDays,
     timeBankEnabled: input.values.compensation.timeBankEnabled,
     considerJiraHours: input.values.compensation.considerJiraHours,
+    yearMonth: closing.year_month,
+    calendarBusinessDays,
   });
 
   const audit = await loadMonthlyClosingAuditForDeveloper({

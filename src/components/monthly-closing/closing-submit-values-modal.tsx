@@ -5,6 +5,7 @@ import {
   computeClosingSubmitValues,
   formatClosingMoney,
 } from "@/lib/metrics/closing-submit-values";
+import { countMonthBusinessDaysExcludingHolidays } from "@/lib/metrics/business-days";
 import {
   formatHoursAsTimeBank,
   formatTimeBankMinutes,
@@ -386,6 +387,15 @@ export function ClosingSubmitValuesModal({
     return map;
   }, [holidays]);
 
+  const calendarBusinessDays = useMemo(
+    () =>
+      countMonthBusinessDaysExcludingHolidays(
+        yearMonth,
+        new Set(holidayNameByDate.keys()),
+      ),
+    [yearMonth, holidayNameByDate],
+  );
+
   const showAbsenceCalendar =
     compensation.base_type === "fixed" && !compensation.consider_jira_hours;
   const considerJiraHours =
@@ -434,6 +444,8 @@ export function ClosingSubmitValuesModal({
         makeupDays: showAbsenceCalendar ? [...makeupSelected] : [],
         timeBankEnabled: compensation.time_bank_enabled,
         considerJiraHours: compensation.consider_jira_hours,
+        yearMonth,
+        calendarBusinessDays,
       }),
     [
       compensation,
@@ -443,6 +455,8 @@ export function ClosingSubmitValuesModal({
       absenceSelected,
       makeupSelected,
       showAbsenceCalendar,
+      yearMonth,
+      calendarBusinessDays,
     ],
   );
 
@@ -657,9 +671,11 @@ export function ClosingSubmitValuesModal({
                   {formatClosingMoney(preview.invoiceAmount)}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground text-pretty">
-                  {considerJiraHours
-                    ? "Estimativa com base no cadastro e nas horas Jira do mês."
-                    : "Estimativa com base no cadastro, faltas e compensações (sem horas Jira)."}{" "}
+                  {isVariable && preview.usesCalendarVariableBase
+                    ? "Estimativa com base nos dias úteis do mês (calendário). Horas Jira só descontam se ficarem abaixo da carga contratual."
+                    : considerJiraHours
+                      ? "Estimativa com base no cadastro e nas horas Jira do mês."
+                      : "Estimativa com base no cadastro, faltas e compensações (sem horas Jira)."}{" "}
                   Fechamentos já finalizados/pagos não são recalculados.
                 </p>
               </div>
@@ -670,8 +686,18 @@ export function ClosingSubmitValuesModal({
                     Base contratual
                   </p>
                   <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
-                    {formatClosingMoney(compensation.base_amount)}
+                    {formatClosingMoney(preview.compensationBaseAmount)}
                   </p>
+                  {preview.usesCalendarVariableBase &&
+                  preview.calendarBusinessDaysUsed != null ? (
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                      {preview.calendarBusinessDaysUsed} dias úteis ×{" "}
+                      {compensation.contracted_hours_per_day.toLocaleString(
+                        "pt-BR",
+                      )}{" "}
+                      h × {formatClosingMoney(compensation.hourly_rate)}
+                    </p>
+                  ) : null}
                 </div>
 
                 {considerJiraHours ? (
@@ -806,7 +832,7 @@ export function ClosingSubmitValuesModal({
               <p className="text-xs leading-snug text-muted-foreground text-pretty">
                 {isVariable
                   ? compensation.contracted_hours_per_day === 6
-                    ? "Variável 6h/dia: dias de deslocamento incluem 2h extras. Carga mínima mensal via Jira."
+                    ? "Variável 6h/dia: base = dias úteis × 6h; dias de deslocamento incluem 2h extras. Déficit Jira só se abaixo da carga contratual."
                     : "Variável: carga mínima mensal via Jira; deslocamento e refeição pelos dias marcados."
                   : showAbsenceCalendar
                     ? "Fixo sem Jira: base − saldo de faltas + deslocamento + refeição."

@@ -159,6 +159,85 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     assert.equal(result.presencialExtraAmount, 300); // 3 × 2 × 50
     assert.equal(result.jiraDeficitAmount, 0);
     assert.equal(result.invoiceAmount, 3120 + 300 + 60 + 28);
+    assert.equal(result.usesCalendarVariableBase, false);
+  });
+
+  it("variável 6h desde 2026-08: base = dias úteis × 6h × taxa", () => {
+    const travelDays = [
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-11",
+      "2026-08-17",
+      "2026-08-18",
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-31",
+    ];
+    const result = computeClosingSubmitValues({
+      baseType: "variable",
+      baseAmount: 3120,
+      hourlyRate: 26,
+      contractedHoursPerDay: 6,
+      contractedHoursPerMonth: 120,
+      dailyTravelAmount: 18,
+      dailyMealAmount: 18,
+      workedHours: 145.5,
+      travelDays,
+      mealDays: travelDays,
+      timeBankEnabled: false,
+      yearMonth: "2026-08",
+      calendarBusinessDays: 21,
+    });
+    assert.equal(result.usesCalendarVariableBase, true);
+    assert.equal(result.calendarBusinessDaysUsed, 21);
+    assert.equal(result.compensationBaseAmount, 3276); // 21 × 6 × 26
+    assert.equal(result.presencialExtraAmount, 416); // 8 × 2 × 26
+    assert.equal(result.jiraDeficitAmount, 0);
+    assert.equal(result.travelAmount, 144);
+    assert.equal(result.mealAmount, 144);
+    assert.equal(result.invoiceAmount, 3276 + 416 + 144 + 144);
+  });
+
+  it("variável 6h antes de 2026-08: mantém base cadastral", () => {
+    const result = computeClosingSubmitValues({
+      baseType: "variable",
+      baseAmount: 3120,
+      hourlyRate: 26,
+      contractedHoursPerDay: 6,
+      contractedHoursPerMonth: 120,
+      dailyTravelAmount: 18,
+      dailyMealAmount: 18,
+      workedHours: 145.5,
+      travelDays: ["2026-07-07", "2026-07-08"],
+      mealDays: ["2026-07-07", "2026-07-08"],
+      timeBankEnabled: false,
+      yearMonth: "2026-07",
+      calendarBusinessDays: 23,
+    });
+    assert.equal(result.usesCalendarVariableBase, false);
+    assert.equal(result.compensationBaseAmount, 3120);
+    assert.equal(result.presencialExtraAmount, 104); // 2 × 2 × 26
+  });
+
+  it("variável 6h desde 2026-08: déficit Jira ainda vs carga contratual", () => {
+    const result = computeClosingSubmitValues({
+      baseType: "variable",
+      baseAmount: 3120,
+      hourlyRate: 26,
+      contractedHoursPerDay: 6,
+      contractedHoursPerMonth: 120,
+      dailyTravelAmount: 0,
+      dailyMealAmount: 0,
+      workedHours: 100,
+      travelDays: [],
+      mealDays: [],
+      timeBankEnabled: false,
+      yearMonth: "2026-08",
+      calendarBusinessDays: 21,
+    });
+    assert.equal(result.compensationBaseAmount, 3276);
+    assert.equal(result.jiraDeficitAmount, 520); // 20 × 26
+    assert.equal(result.invoiceAmount, 3276 - 520);
   });
 
   it("variável 8h: sem excedente presencial", () => {

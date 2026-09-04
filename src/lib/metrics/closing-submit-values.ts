@@ -3,6 +3,12 @@ import type { CompensationBaseType } from "@/types/developer-compensation";
 /** Extra hours billed per presencial (travel) day when variable + 6h/day contract. */
 export const PRESENCIAL_EXTRA_HOURS = 2;
 
+/**
+ * Variable 6h/day NF base switches from cadastral base_amount to
+ * calendarBusinessDays × hours/day × rate from this month onward.
+ */
+export const VARIABLE_CALENDAR_BASE_FROM = "2026-08";
+
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -64,6 +70,13 @@ export type ClosingSubmitValuesInput = {
    * Variable always uses Jira (this flag is ignored).
    */
   considerJiraHours?: boolean;
+  /** Closing month YYYY-MM — gates calendar variable base. */
+  yearMonth?: string;
+  /**
+   * Business days in the month (Mon–Fri minus applicable holidays).
+   * Required to activate calendar base for variable 6h from 2026-08.
+   */
+  calendarBusinessDays?: number;
 };
 
 export type ClosingSubmitValuesResult = {
@@ -93,17 +106,54 @@ export type ClosingSubmitValuesResult = {
   /** Variable + ~6h/day: travelDays × 2h × rate. */
   presencialExtraAmount: number;
   compensationBaseAmount: number;
+  /** True when base came from calendar business days × 6h × rate. */
+  usesCalendarVariableBase: boolean;
+  /** Business days used for calendar base; null when not applied. */
+  calendarBusinessDaysUsed: number | null;
   compensationBaseType: CompensationBaseType;
   compensationHourlyRate: number | null;
   compensationDailyTravelAmount: number;
   compensationDailyMealAmount: number;
 };
 
+export function usesVariableCalendarBase(input: {
+  baseType: CompensationBaseType;
+  contractedHoursPerDay: number;
+  yearMonth?: string;
+  calendarBusinessDays?: number;
+  hourlyRate: number | null;
+}): boolean {
+  if (input.baseType !== "variable") {
+    return false;
+  }
+  if (!isSixHourContractDay(input.contractedHoursPerDay)) {
+    return false;
+  }
+  if (input.hourlyRate == null || !Number.isFinite(input.hourlyRate)) {
+    return false;
+  }
+  const yearMonth = input.yearMonth?.trim() ?? "";
+  if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+    return false;
+  }
+  if (yearMonth < VARIABLE_CALENDAR_BASE_FROM) {
+    return false;
+  }
+  return (
+    input.calendarBusinessDays != null &&
+    Number.isFinite(input.calendarBusinessDays) &&
+    input.calendarBusinessDays >= 0
+  );
+}
+
 /**
  * NF amounts frozen on monthly closing submit.
  *
  * Variável / Fixo+Jira ON: base − déficit Jira + extras + desloc. + refeição
  * Fixo+Jira OFF:           base − max(0, faltas−compensações)×h/dia×R$/h + desloc. + refeição
+ *
+ * Variable 6h from 2026-08: base = calendarBusinessDays × 6h × rate
+ * (Jira deficit still vs contractedHoursPerMonth).
  *
  * Does not rewrite historical closings; only used on new submit/draft.
  */
@@ -123,7 +173,9 @@ export function computeClosingSubmitValues(
   const absenceDaysCount = Math.max(0, absenceDeclaredCount - makeupDaysCount);
   const dailyTravel = Math.max(0, input.dailyTravelAmount);
   const dailyMeal = Math.max(0, input.dailyMealAmount);
-  const baseAmount = Number.isFinite(input.baseAmount) ? input.baseAmount : 0;
+  const cadastralBaseAmount = Number.isFinite(input.baseAmount)
+    ? input.baseAmount
+    : 0;
   const contractedMonth = Math.max(
     0,
     Number.isFinite(input.contractedHoursPerMonth)
@@ -151,6 +203,21 @@ export function computeClosingSubmitValues(
     input.baseType === "variable"
       ? true
       : input.considerJiraHours !== false;
+
+  const calendarBaseActive = usesVariableCalendarBase({
+    baseType: input.baseType,
+    contractedHoursPerDay: input.contractedHoursPerDay,
+    yearMonth: input.yearMonth,
+    calendarBusinessDays: input.calendarBusinessDays,
+    hourlyRate: rate,
+  });
+  const calendarBusinessDaysUsed = calendarBaseActive
+    ? Math.max(0, Math.floor(input.calendarBusinessDays as number))
+    : null;
+  const baseAmount =
+    calendarBaseActive && rate != null && calendarBusinessDaysUsed != null
+      ? roundMoney(calendarBusinessDaysUsed * contractedDay * rate)
+      : cadastralBaseAmount;
 
   const hoursDelta = considerJiraHours
     ? roundHours(workedHours - contractedMonth)
@@ -218,6 +285,8 @@ export function computeClosingSubmitValues(
     absenceAmount,
     presencialExtraAmount,
     compensationBaseAmount: baseAmount,
+    usesCalendarVariableBase: calendarBaseActive,
+    calendarBusinessDaysUsed,
     compensationBaseType: input.baseType,
     compensationHourlyRate: input.hourlyRate,
     compensationDailyTravelAmount: dailyTravel,

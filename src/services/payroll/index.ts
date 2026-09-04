@@ -266,6 +266,7 @@ export async function setPayrollItemReviewed(input: {
 async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   presencialDays: number;
   mealDays: number;
+  baseAmount: number;
   differential: number;
   travel: number;
   meal: number;
@@ -316,6 +317,22 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   });
   const jiraHours = jiraMapForMonth.get(item.developer_id) ?? 0;
 
+  const { listApplicableHolidayDatesForDeveloperMonth } = await import(
+    "@/services/holidays"
+  );
+  const { countMonthBusinessDaysExcludingHolidays } = await import(
+    "@/lib/metrics/business-days"
+  );
+  const { dates: holidayDates } =
+    await listApplicableHolidayDatesForDeveloperMonth({
+      developerId: item.developer_id,
+      yearMonth,
+    });
+  const calendarBusinessDays = countMonthBusinessDaysExcludingHolidays(
+    yearMonth,
+    holidayDates,
+  );
+
   const computed = computeClosingSubmitValues({
     baseType: item.base_type,
     baseAmount: item.base_amount,
@@ -331,11 +348,14 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
     makeupDays,
     timeBankEnabled: compensation?.time_bank_enabled ?? false,
     considerJiraHours,
+    yearMonth,
+    calendarBusinessDays,
   });
 
   return {
     presencialDays: computed.travelPresencialDays,
     mealDays: computed.mealPresencialDays,
+    baseAmount: computed.compensationBaseAmount,
     differential: computed.differentialAmount,
     travel: computed.travelAmount,
     meal: computed.mealAmount,
@@ -362,13 +382,14 @@ export async function recalculatePayrollItem(
   const suggested = await suggestPayrollItemAmounts(item);
   const presencialDays = suggested.presencialDays;
 
+  const baseAmount = suggested.baseAmount;
   const differential = item.differential_manual
     ? item.differential_amount
     : suggested.differential;
   const travel = item.travel_manual ? item.travel_amount : suggested.travel;
   const meal = item.meal_manual ? item.meal_amount : suggested.meal;
   const invoice = computeInvoiceAmount({
-    baseAmount: item.base_amount,
+    baseAmount,
     differentialAmount: differential,
     discountsAmount: item.discounts_amount,
     travelAmount: travel,
@@ -377,6 +398,7 @@ export async function recalculatePayrollItem(
 
   const amountsChanged =
     item.presencial_days_count !== presencialDays ||
+    !sameMoney(item.base_amount, baseAmount) ||
     !sameMoney(item.differential_amount, differential) ||
     !sameMoney(item.travel_amount, travel) ||
     !sameMoney(item.meal_amount, meal) ||
@@ -384,6 +406,7 @@ export async function recalculatePayrollItem(
 
   const patch: Record<string, unknown> = {
     presencial_days_count: presencialDays,
+    base_amount: baseAmount,
     differential_amount: differential,
     travel_amount: travel,
     meal_amount: meal,

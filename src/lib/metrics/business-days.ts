@@ -141,3 +141,28 @@ export function isoWeekday(isoDate: string): number {
   const day = parseIsoDate(isoDate).getUTCDay(); // 0=Sun
   return day === 0 ? 7 : day;
 }
+
+/**
+ * Count Mon–Fri days in a YYYY-MM month, optionally excluding holiday dates.
+ */
+export function countMonthBusinessDaysExcludingHolidays(
+  yearMonth: string,
+  holidayDates?: Set<string> | ReadonlySet<string>,
+): number {
+  if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+    return 0;
+  }
+  const [year, month] = yearMonth.split("-").map(Number);
+  const dates = listDatesInMonth(year, month);
+  let count = 0;
+  for (const isoDate of dates) {
+    if (isWeekend(parseIsoDate(isoDate))) {
+      continue;
+    }
+    if (holidayDates?.has(isoDate)) {
+      continue;
+    }
+    count += 1;
+  }
+  return count;
+}
