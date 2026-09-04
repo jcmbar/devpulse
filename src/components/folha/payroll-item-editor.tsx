@@ -40,6 +40,9 @@ type PayrollItemEditorProps = {
   onOpenAttendance: () => void;
   jiraHours: number;
   contractedHoursDelta: number;
+  /** When set (variable 6h calendar), hours column shows considered/diff hours. */
+  consideredHours?: number | null;
+  differentialHours?: number | null;
   readOnly?: boolean;
   /** When set, monthly closing is finalized — line is locked. */
   finalizedClosingId?: string | null;
@@ -83,6 +86,8 @@ export function PayrollItemEditor({
   onOpenAttendance,
   jiraHours,
   contractedHoursDelta,
+  consideredHours = null,
+  differentialHours = null,
   readOnly = false,
   finalizedClosingId = null,
   moneyVisible = false,
@@ -259,25 +264,45 @@ export function PayrollItemEditor({
           : MASKED_MONEY}
       </td>
       <td className="align-top">
-        <p className="tabular-nums font-medium">{formatHours(jiraHours)}</p>
-        <p className="text-[11px] text-muted-foreground">
-          Contratado: {formatHours(item.contracted_hours_per_month)}
-        </p>
+        {consideredHours != null && differentialHours != null ? (
+          <>
+            <p className="tabular-nums font-medium">
+              {formatHours(consideredHours)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Consideradas · Jira {formatHours(jiraHours)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Contratado: {formatHours(item.contracted_hours_per_month)}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="tabular-nums font-medium">{formatHours(jiraHours)}</p>
+            <p className="text-[11px] text-muted-foreground">
+              Contratado: {formatHours(item.contracted_hours_per_month)}
+            </p>
+          </>
+        )}
       </td>
       <td className="align-top">
         <p
           className={cn(
             "tabular-nums font-semibold",
-            contractedHoursDelta < 0 &&
+            (differentialHours ?? contractedHoursDelta) < 0 &&
               "text-red-600 dark:text-red-400",
-            contractedHoursDelta > 0 &&
+            (differentialHours ?? contractedHoursDelta) > 0 &&
               "text-sky-600 dark:text-sky-400",
-            contractedHoursDelta === 0 && "text-muted-foreground",
+            (differentialHours ?? contractedHoursDelta) === 0 &&
+              "text-muted-foreground",
           )}
         >
-          {contractedHoursDelta > 0 ? "+" : ""}
-          {formatHours(contractedHoursDelta)}
+          {(differentialHours ?? contractedHoursDelta) > 0 ? "+" : ""}
+          {formatHours(differentialHours ?? contractedHoursDelta)}
         </p>
+        {differentialHours != null ? (
+          <p className="text-[11px] text-muted-foreground">Horas do diferencial</p>
+        ) : null}
       </td>
       <td className="align-top" colSpan={5}>
         <form

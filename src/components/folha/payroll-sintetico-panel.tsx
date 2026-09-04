@@ -3,13 +3,15 @@
 import { PayrollAttendanceModal } from "@/components/folha/payroll-attendance-modal";
 import { PayrollItemEditor } from "@/components/folha/payroll-item-editor";
 import { DataTable, EmptyState } from "@/components/surface";
+import { countMonthBusinessDaysExcludingHolidays } from "@/lib/metrics/business-days";
+import { computeVariableCalendarHoursForDisplay } from "@/lib/metrics/closing-submit-values";
 import { computeContractedHoursDelta } from "@/lib/metrics/payroll-calc";
 import { cn } from "@/lib/utils";
 import type { InvoiceIssuer } from "@/types/invoice-issuer";
 import type { PayrollClosingItemWithIssuer } from "@/types/payroll-closing";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 function formatMoney(value: number): string {
   return value.toLocaleString("pt-BR", {
@@ -119,6 +121,11 @@ export function PayrollSinteticoPanel({
     });
   }, [router]);
 
+  const monthBusinessDays = useMemo(
+    () => countMonthBusinessDaysExcludingHolidays(month, new Set()),
+    [month],
+  );
+
   const toggleAll = useCallback(() => {
     setRevealAll((current) => {
       const next = !current;
@@ -219,8 +226,8 @@ export function PayrollSinteticoPanel({
             <tr>
               <th>Pessoa</th>
               <th>Base</th>
-              <th>Total horas Jira</th>
-              <th>Diferença contratada</th>
+              <th>Horas</th>
+              <th>Diferença</th>
               <th colSpan={5}>Valores do mês / NF</th>
             </tr>
           </thead>
@@ -230,6 +237,15 @@ export function PayrollSinteticoPanel({
               const finalizedClosingId =
                 finalizedByDeveloper[item.developer_id] ?? null;
               const moneyVisible = isRowVisible(item.id);
+              const calendarHours = computeVariableCalendarHoursForDisplay({
+                baseType: item.base_type,
+                contractedHoursPerDay: item.contracted_hours_per_day,
+                contractedHoursPerMonth: item.contracted_hours_per_month,
+                hourlyRate: item.hourly_rate,
+                yearMonth: month,
+                calendarBusinessDays: monthBusinessDays,
+                presencialDays: item.presencial_days_count,
+              });
               return (
                 <PayrollItemEditor
                   key={item.id}
@@ -242,6 +258,8 @@ export function PayrollSinteticoPanel({
                     jiraHours,
                     contractedHoursPerMonth: item.contracted_hours_per_month,
                   })}
+                  consideredHours={calendarHours?.consideredHours ?? null}
+                  differentialHours={calendarHours?.differentialHours ?? null}
                   onOpenAttendance={() => setAttendanceItemId(item.id)}
                   moneyVisible={moneyVisible}
                   onToggleMoneyVisible={() => toggleRow(item.id)}

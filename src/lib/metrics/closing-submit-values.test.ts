@@ -162,7 +162,7 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     assert.equal(result.usesCalendarVariableBase, false);
   });
 
-  it("variável 6h desde 2026-08: base = dias úteis × 6h × taxa", () => {
+  it("variável 6h desde 2026-08: base contratual + diferencial por horas consideradas", () => {
     const travelDays = [
       "2026-08-03",
       "2026-08-04",
@@ -190,12 +190,16 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     });
     assert.equal(result.usesCalendarVariableBase, true);
     assert.equal(result.calendarBusinessDaysUsed, 21);
-    assert.equal(result.compensationBaseAmount, 3276); // 21 × 6 × 26
+    assert.equal(result.compensationBaseAmount, 3120); // contratual 120 × 26
+    assert.equal(result.consideredHours, 142); // 21×6 + 8×2
+    assert.equal(result.differentialHours, 22); // 142 − 120
+    assert.equal(result.calendarUpliftAmount, 156); // 126×26 − 3120
     assert.equal(result.presencialExtraAmount, 416); // 8 × 2 × 26
+    assert.equal(result.differentialAmount, 572); // 22 × 26
     assert.equal(result.jiraDeficitAmount, 0);
     assert.equal(result.travelAmount, 144);
     assert.equal(result.mealAmount, 144);
-    assert.equal(result.invoiceAmount, 3276 + 416 + 144 + 144);
+    assert.equal(result.invoiceAmount, 3120 + 572 + 144 + 144);
   });
 
   it("variável 6h antes de 2026-08: mantém base cadastral", () => {
@@ -216,6 +220,9 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
     });
     assert.equal(result.usesCalendarVariableBase, false);
     assert.equal(result.compensationBaseAmount, 3120);
+    assert.equal(result.consideredHours, null);
+    assert.equal(result.differentialHours, null);
+    assert.equal(result.calendarUpliftAmount, 0);
     assert.equal(result.presencialExtraAmount, 104); // 2 × 2 × 26
   });
 
@@ -235,9 +242,13 @@ describe("computeClosingSubmitValues (nova fórmula)", () => {
       yearMonth: "2026-08",
       calendarBusinessDays: 21,
     });
-    assert.equal(result.compensationBaseAmount, 3276);
+    assert.equal(result.compensationBaseAmount, 3120);
+    assert.equal(result.consideredHours, 126); // 21×6
+    assert.equal(result.differentialHours, 6); // 126 − 120
+    assert.equal(result.calendarUpliftAmount, 156);
     assert.equal(result.jiraDeficitAmount, 520); // 20 × 26
-    assert.equal(result.invoiceAmount, 3276 - 520);
+    assert.equal(result.differentialAmount, 156 - 520);
+    assert.equal(result.invoiceAmount, 3120 + (156 - 520));
   });
 
   it("variável 8h: sem excedente presencial", () => {

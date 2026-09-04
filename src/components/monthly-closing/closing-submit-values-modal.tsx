@@ -672,7 +672,7 @@ export function ClosingSubmitValuesModal({
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground text-pretty">
                   {isVariable && preview.usesCalendarVariableBase
-                    ? "Estimativa com base nos dias úteis do mês (calendário). Horas Jira só descontam se ficarem abaixo da carga contratual."
+                    ? "Base contratual + diferencial pelas horas consideradas (dias úteis × 6h + presencial × 2h). Horas Jira só descontam se ficarem abaixo da carga contratual."
                     : considerJiraHours
                       ? "Estimativa com base no cadastro e nas horas Jira do mês."
                       : "Estimativa com base no cadastro, faltas e compensações (sem horas Jira)."}{" "}
@@ -688,17 +688,49 @@ export function ClosingSubmitValuesModal({
                   <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
                     {formatClosingMoney(preview.compensationBaseAmount)}
                   </p>
-                  {preview.usesCalendarVariableBase &&
-                  preview.calendarBusinessDaysUsed != null ? (
+                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
+                    {compensation.contracted_hours_per_month.toLocaleString(
+                      "pt-BR",
+                      { maximumFractionDigits: 1 },
+                    )}{" "}
+                    h × {formatClosingMoney(compensation.hourly_rate)}
+                  </p>
+                </div>
+
+                {preview.usesCalendarVariableBase &&
+                preview.consideredHours != null &&
+                preview.differentialHours != null ? (
+                  <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      Horas consideradas
+                    </p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
+                      {preview.consideredHours.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 1,
+                      })}{" "}
+                      h
+                      <span className="text-muted-foreground font-medium">
+                        {" "}
+                        ·{" "}
+                        {preview.differentialHours > 0 ? "+" : ""}
+                        {preview.differentialHours.toLocaleString("pt-BR", {
+                          maximumFractionDigits: 1,
+                        })}{" "}
+                        h diff.
+                      </span>
+                    </p>
                     <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
-                      {preview.calendarBusinessDaysUsed} dias úteis ×{" "}
+                      {preview.calendarBusinessDaysUsed ?? 0} dias úteis ×{" "}
                       {compensation.contracted_hours_per_day.toLocaleString(
                         "pt-BR",
                       )}{" "}
-                      h × {formatClosingMoney(compensation.hourly_rate)}
+                      h
+                      {preview.travelPresencialDays > 0
+                        ? ` + ${preview.travelPresencialDays} presencial × 2 h`
+                        : ""}
                     </p>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
                 {considerJiraHours ? (
                   <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
@@ -723,7 +755,7 @@ export function ClosingSubmitValuesModal({
                           : `Banco de horas · ${preview.timeBankHoursDelta > 0 ? "+" : ""}${preview.timeBankHoursDelta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`
                         : preview.jiraDeficitAmount > 0
                           ? `Déficit −${formatClosingMoney(preview.jiraDeficitAmount)}`
-                          : "Sem déficit"}
+                          : "Sem déficit (horas acima da carga não pagam em dinheiro)"}
                     </p>
                   </div>
                 ) : (
@@ -755,17 +787,30 @@ export function ClosingSubmitValuesModal({
                   </div>
                 )}
 
-                {preview.presencialExtraAmount > 0 ? (
+                {preview.usesCalendarVariableBase ||
+                preview.presencialExtraAmount > 0 ||
+                preview.calendarUpliftAmount !== 0 ? (
                   <div className="rounded-[var(--radius-sm)] border border-border/70 bg-[var(--surface)]/80 px-3 py-2.5">
                     <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                      Excedente presencial
+                      Diferencial
                     </p>
                     <p className="mt-1 text-sm font-semibold tabular-nums tracking-tight text-foreground">
-                      {formatClosingMoney(preview.presencialExtraAmount)}
+                      {formatClosingMoney(preview.differentialAmount)}
                     </p>
                     <p className="mt-1 text-[11px] leading-snug text-muted-foreground text-pretty">
-                      {preview.travelPresencialDays} × 2 h ×{" "}
-                      {formatClosingMoney(compensation.hourly_rate)}
+                      {preview.usesCalendarVariableBase &&
+                      preview.differentialHours != null
+                        ? `${preview.differentialHours > 0 ? "+" : ""}${preview.differentialHours.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h × ${formatClosingMoney(compensation.hourly_rate)}`
+                        : null}
+                      {preview.calendarUpliftAmount !== 0
+                        ? `${preview.usesCalendarVariableBase ? " · " : ""}calendário ${preview.calendarUpliftAmount > 0 ? "+" : ""}${formatClosingMoney(preview.calendarUpliftAmount)}`
+                        : ""}
+                      {preview.presencialExtraAmount > 0
+                        ? ` · presencial +${formatClosingMoney(preview.presencialExtraAmount)}`
+                        : ""}
+                      {preview.jiraDeficitAmount > 0
+                        ? ` · déficit −${formatClosingMoney(preview.jiraDeficitAmount)}`
+                        : ""}
                     </p>
                   </div>
                 ) : null}
@@ -832,7 +877,7 @@ export function ClosingSubmitValuesModal({
               <p className="text-xs leading-snug text-muted-foreground text-pretty">
                 {isVariable
                   ? compensation.contracted_hours_per_day === 6
-                    ? "Variável 6h/dia: base = dias úteis × 6h; dias de deslocamento incluem 2h extras. Déficit Jira só se abaixo da carga contratual."
+                    ? "Variável 6h/dia: base contratual; diferencial = (dias úteis×6h + presencial×2h − carga) × taxa. Déficit Jira só se abaixo da carga contratual."
                     : "Variável: carga mínima mensal via Jira; deslocamento e refeição pelos dias marcados."
                   : showAbsenceCalendar
                     ? "Fixo sem Jira: base − saldo de faltas + deslocamento + refeição."

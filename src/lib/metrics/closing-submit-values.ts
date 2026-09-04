@@ -4,8 +4,8 @@ import type { CompensationBaseType } from "@/types/developer-compensation";
 export const PRESENCIAL_EXTRA_HOURS = 2;
 
 /**
- * Variable 6h/day NF base switches from cadastral base_amount to
- * calendarBusinessDays × hours/day × rate from this month onward.
+ * Variable 6h/day from this month: keep cadastral/contractual base, and put
+ * (dias úteis × 6h − carga contratual) + (presencial × 2h) into the differential.
  */
 export const VARIABLE_CALENDAR_BASE_FROM = "2026-08";
 
@@ -74,7 +74,7 @@ export type ClosingSubmitValuesInput = {
   yearMonth?: string;
   /**
    * Business days in the month (Mon–Fri minus applicable holidays).
-   * Required to activate calendar base for variable 6h from 2026-08.
+   * Required to activate calendar differential for variable 6h from 2026-08.
    */
   calendarBusinessDays?: number;
 };
@@ -90,7 +90,10 @@ export type ClosingSubmitValuesResult = {
   absenceDaysCount: number;
   travelAmount: number;
   mealAmount: number;
-  /** −jiraDeficitAmount − absenceAmount + presencialExtraAmount. */
+  /**
+   * −jiraDeficitAmount − absenceAmount + presencialExtraAmount
+   * (+ calendar uplift vs contractual base when calendar mode is on).
+   */
   differentialAmount: number;
   invoiceAmount: number;
   workedHoursSnapshot: number;
@@ -105,10 +108,25 @@ export type ClosingSubmitValuesResult = {
   absenceAmount: number;
   /** Variable + ~6h/day: travelDays × 2h × rate. */
   presencialExtraAmount: number;
+  /**
+   * Calendar money above/below cadastral base when calendar mode is on
+   * (dias úteis × 6h × rate − base contratual); else 0.
+   */
+  calendarUpliftAmount: number;
+  /**
+   * Hours that compose the variable calendar differential:
+   * dias úteis × 6h + presencial × 2h. Null when calendar mode is off.
+   */
+  consideredHours: number | null;
+  /**
+   * consideredHours − carga contratual (e.g. +22). Null when calendar mode is off.
+   */
+  differentialHours: number | null;
+  /** Always the cadastral/contractual base (not the calendar recomputation). */
   compensationBaseAmount: number;
-  /** True when base came from calendar business days × 6h × rate. */
+  /** True when variable 6h calendar differential rules apply (from 2026-08). */
   usesCalendarVariableBase: boolean;
-  /** Business days used for calendar base; null when not applied. */
+  /** Business days used for calendar hours; null when not applied. */
   calendarBusinessDaysUsed: number | null;
   compensationBaseType: CompensationBaseType;
   compensationHourlyRate: number | null;
@@ -152,8 +170,11 @@ export function usesVariableCalendarBase(input: {
  * Variável / Fixo+Jira ON: base − déficit Jira + extras + desloc. + refeição
  * Fixo+Jira OFF:           base − max(0, faltas−compensações)×h/dia×R$/h + desloc. + refeição
  *
- * Variable 6h from 2026-08: base = calendarBusinessDays × 6h × rate
- * (Jira deficit still vs contractedHoursPerMonth).
+ * Variable 6h from 2026-08:
+ *   base = valor contratual (cadastro)
+ *   diferencial = (dias úteis×6h + presencial×2h − carga contratual)×rate
+ *                 − déficit Jira (ainda vs contractedHoursPerMonth)
+ *   horas consideradas = dias úteis×6h + presencial×2h
  *
  * Does not rewrite historical closings; only used on new submit/draft.
  */
@@ -214,10 +235,20 @@ export function computeClosingSubmitValues(
   const calendarBusinessDaysUsed = calendarBaseActive
     ? Math.max(0, Math.floor(input.calendarBusinessDays as number))
     : null;
-  const baseAmount =
-    calendarBaseActive && rate != null && calendarBusinessDaysUsed != null
-      ? roundMoney(calendarBusinessDaysUsed * contractedDay * rate)
-      : cadastralBaseAmount;
+
+  // Base column stays contractual/cadastral; calendar hours feed the differential.
+  const baseAmount = cadastralBaseAmount;
+  const calendarHours =
+    calendarBaseActive && calendarBusinessDaysUsed != null
+      ? roundHours(calendarBusinessDaysUsed * contractedDay)
+      : 0;
+  const calendarMoney =
+    calendarBaseActive && rate != null
+      ? roundMoney(calendarHours * rate)
+      : 0;
+  const calendarUpliftAmount = calendarBaseActive
+    ? roundMoney(calendarMoney - cadastralBaseAmount)
+    : 0;
 
   const hoursDelta = considerJiraHours
     ? roundHours(workedHours - contractedMonth)
@@ -237,13 +268,26 @@ export function computeClosingSubmitValues(
       ? roundMoney(absenceDaysCount * contractedDay * rate)
       : 0;
 
-  const presencialExtraAmount = qualifiesPresencialExtra({
-    baseType: input.baseType,
-    contractedHoursPerDay: input.contractedHoursPerDay,
-    hourlyRate: rate,
-  })
-    ? roundMoney(travelPresencialDays * PRESENCIAL_EXTRA_HOURS * (rate as number))
-    : 0;
+  const presencialExtraHours =
+    qualifiesPresencialExtra({
+      baseType: input.baseType,
+      contractedHoursPerDay: input.contractedHoursPerDay,
+      hourlyRate: rate,
+    })
+      ? roundHours(travelPresencialDays * PRESENCIAL_EXTRA_HOURS)
+      : 0;
+  const presencialExtraAmount =
+    rate != null && presencialExtraHours > 0
+      ? roundMoney(presencialExtraHours * rate)
+      : 0;
+
+  const consideredHours = calendarBaseActive
+    ? roundHours(calendarHours + presencialExtraHours)
+    : null;
+  const differentialHours =
+    consideredHours != null
+      ? roundHours(consideredHours - contractedMonth)
+      : null;
 
   const travelAmount = computeTravelAmount({
     presencialDays: travelPresencialDays,
@@ -255,7 +299,10 @@ export function computeClosingSubmitValues(
   });
 
   const differentialAmount = roundMoney(
-    -jiraDeficitAmount - absenceAmount + presencialExtraAmount,
+    calendarUpliftAmount +
+      presencialExtraAmount -
+      jiraDeficitAmount -
+      absenceAmount,
   );
 
   const invoiceAmount = computeInvoiceAmount({
@@ -284,6 +331,9 @@ export function computeClosingSubmitValues(
     jiraDeficitAmount,
     absenceAmount,
     presencialExtraAmount,
+    calendarUpliftAmount,
+    consideredHours,
+    differentialHours,
     compensationBaseAmount: baseAmount,
     usesCalendarVariableBase: calendarBaseActive,
     calendarBusinessDaysUsed,
@@ -310,6 +360,48 @@ export function qualifiesPresencialExtra(input: {
 
 export function isSixHourContractDay(hoursPerDay: number): boolean {
   return Number.isFinite(hoursPerDay) && Math.abs(hoursPerDay - 6) < 0.05;
+}
+
+/** Folha / UI helper: hours that drive the variable calendar differential. */
+export function computeVariableCalendarHoursForDisplay(input: {
+  baseType: CompensationBaseType;
+  contractedHoursPerDay: number;
+  contractedHoursPerMonth: number;
+  hourlyRate: number | null;
+  yearMonth: string;
+  calendarBusinessDays: number;
+  presencialDays: number;
+}): { consideredHours: number; differentialHours: number } | null {
+  if (
+    !usesVariableCalendarBase({
+      baseType: input.baseType,
+      contractedHoursPerDay: input.contractedHoursPerDay,
+      yearMonth: input.yearMonth,
+      calendarBusinessDays: input.calendarBusinessDays,
+      hourlyRate: input.hourlyRate,
+    })
+  ) {
+    return null;
+  }
+
+  const contractedDay = Math.max(0, input.contractedHoursPerDay);
+  const contractedMonth = Math.max(0, input.contractedHoursPerMonth);
+  const calendarHours = roundHours(
+    Math.max(0, Math.floor(input.calendarBusinessDays)) * contractedDay,
+  );
+  const presencialExtraHours = qualifiesPresencialExtra({
+    baseType: input.baseType,
+    contractedHoursPerDay: input.contractedHoursPerDay,
+    hourlyRate: input.hourlyRate,
+  })
+    ? roundHours(Math.max(0, input.presencialDays) * PRESENCIAL_EXTRA_HOURS)
+    : 0;
+  const consideredHours = roundHours(calendarHours + presencialExtraHours);
+
+  return {
+    consideredHours,
+    differentialHours: roundHours(consideredHours - contractedMonth),
+  };
 }
 
 function roundHours(value: number): number {
