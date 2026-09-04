@@ -19,6 +19,12 @@ import {
   tasksOverlappingDay,
 } from "@/lib/analyst-tasks/timeline";
 import {
+  ANALYST_CLOSED_DAY_MESSAGE,
+  canOperateActiveAnalystTimer,
+  isAnalystTaskDayClosed,
+  localDateIsoFromInstant,
+} from "@/lib/analyst-tasks/day-lock";
+import {
   resolveSimultaneityAlertLevel,
   type SimultaneityAlertLevel,
 } from "@/lib/analyst-tasks/simultaneous-hours";
@@ -33,6 +39,7 @@ import {
   CalendarDays,
   Check,
   Layers,
+  Lock,
   Pause,
   Pencil,
   Play,
@@ -361,7 +368,9 @@ function TaskRow({
   onResume,
   pausePending,
   resumePending,
+  canEditRecord,
   canDelete,
+  canOperateTimer,
 }: {
   task: AnalystTask;
   initialNow: string;
@@ -371,7 +380,9 @@ function TaskRow({
   onResume: () => void;
   pausePending: boolean;
   resumePending: boolean;
+  canEditRecord: boolean;
   canDelete: boolean;
+  canOperateTimer: boolean;
 }) {
   const isRunning = task.status === "running";
   const isPaused = task.status === "paused";
@@ -406,6 +417,15 @@ function TaskRow({
               Pausada
             </span>
           ) : null}
+          {!canEditRecord && !isOpen ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+              title={ANALYST_CLOSED_DAY_MESSAGE}
+            >
+              <Lock className="size-3" aria-hidden />
+              Dia encerrado
+            </span>
+          ) : null}
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
             DevPulse
           </span>
@@ -433,39 +453,59 @@ function TaskRow({
       <div className="flex shrink-0 flex-col items-end gap-2">
         <div className="flex flex-wrap justify-end gap-2">
           {isOpen ? (
-            <>
-              <button
-                type="button"
-                onClick={onOpenTimer}
-                className="ui-btn-secondary"
-              >
-                Cronômetro
-              </button>
-              {isRunning ? (
+            canOperateTimer ? (
+              <>
                 <button
                   type="button"
-                  onClick={onPause}
-                  disabled={pausePending}
-                  className="ui-btn-ghost border border-red-500/40 text-red-600 dark:text-red-300"
-                >
-                  <Pause className="size-3.5" />
-                  {pausePending ? "Pausando…" : "Pausar"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onResume}
-                  disabled={resumePending}
+                  onClick={onOpenTimer}
                   className="ui-btn-secondary"
                 >
-                  <Play className="size-3.5" />
-                  {resumePending ? "Continuando…" : "Continuar"}
+                  Cronômetro
                 </button>
-              )}
-            </>
-          ) : (
+                {isRunning ? (
+                  <button
+                    type="button"
+                    onClick={onPause}
+                    disabled={pausePending}
+                    className="ui-btn-ghost border border-red-500/40 text-red-600 dark:text-red-300"
+                  >
+                    <Pause className="size-3.5" />
+                    {pausePending ? "Pausando…" : "Pausar"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onResume}
+                    disabled={resumePending}
+                    className="ui-btn-secondary"
+                  >
+                    <Play className="size-3.5" />
+                    {resumePending ? "Continuando…" : "Continuar"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                title={ANALYST_CLOSED_DAY_MESSAGE}
+              >
+                <Lock className="size-3.5" aria-hidden />
+                Encerrado
+              </span>
+            )
+          ) : canEditRecord ? (
             <button type="button" onClick={onEdit} className="ui-btn-secondary">
               <Pencil className="size-3.5" />
+              Editar
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title={ANALYST_CLOSED_DAY_MESSAGE}
+              className="ui-btn-secondary opacity-60"
+            >
+              <Lock className="size-3.5" />
               Editar
             </button>
           )}
@@ -667,6 +707,9 @@ export function AnalystTaskWorkspace({
   const classificationResult = classification(metrics);
   const dailyByDate = new Map(metrics.daily.map((day) => [day.date, day]));
   const selectedDay = dailyByDate.get(selectedDate) ?? metrics.daily[0];
+  const todayIso = timelineIsoDate(initialNow);
+  const selectedDayClosedForUser =
+    !canManageAll && isAnalystTaskDayClosed(selectedDate, todayIso);
   const selectedTasks = tasksOverlappingDay(
     tasks,
     activeTasks,
@@ -1330,30 +1373,65 @@ export function AnalystTaskWorkspace({
               : undefined
           }
         >
+          {selectedDayClosedForUser ? (
+            <div className="mb-3 flex items-start gap-2 rounded-[var(--radius-sm)] border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-100">
+              <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <p>
+                Este dia já foi encerrado. Não é mais possível editar ou excluir
+                apontamentos. Solicite a alteração ao gestor.
+              </p>
+            </div>
+          ) : null}
           <div className="max-h-[30rem] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-[36rem]">
             {selectedTasks.length > 0 ? (
-              selectedTasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  initialNow={initialNow}
-                  onEdit={() => setEditingTask(task)}
-                  onOpenTimer={() => openCompleteModal(task.id)}
-                  onPause={() => {
-                    const formData = new FormData();
-                    formData.set("taskId", task.id);
-                    pauseAction(formData);
-                  }}
-                  onResume={() => {
-                    const formData = new FormData();
-                    formData.set("taskId", task.id);
-                    resumeAction(formData);
-                  }}
-                  pausePending={pausePending}
-                  resumePending={resumePending}
-                  canDelete={canDelete && task.status === "completed"}
-                />
-              ))
+              selectedTasks.map((task) => {
+                const taskDayIso = localDateIsoFromInstant(task.started_at);
+                const taskDayClosed =
+                  !canManageAll &&
+                  isAnalystTaskDayClosed(taskDayIso, todayIso);
+                const canEditRecord = canEdit && !taskDayClosed;
+                const canOperateTimer =
+                  canEdit &&
+                  canOperateActiveAnalystTimer({
+                    isManager: canManageAll,
+                    status: task.status,
+                    taskDayIso,
+                    todayIso,
+                  });
+                return (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    initialNow={initialNow}
+                    onEdit={() => {
+                      if (!canEditRecord) {
+                        return;
+                      }
+                      setEditingTask(task);
+                    }}
+                    onOpenTimer={() => openCompleteModal(task.id)}
+                    onPause={() => {
+                      const formData = new FormData();
+                      formData.set("taskId", task.id);
+                      pauseAction(formData);
+                    }}
+                    onResume={() => {
+                      const formData = new FormData();
+                      formData.set("taskId", task.id);
+                      resumeAction(formData);
+                    }}
+                    pausePending={pausePending}
+                    resumePending={resumePending}
+                    canEditRecord={canEditRecord}
+                    canDelete={
+                      canDelete &&
+                      task.status === "completed" &&
+                      canEditRecord
+                    }
+                    canOperateTimer={canOperateTimer}
+                  />
+                );
+              })
             ) : (
               <div className="rounded-[var(--radius-sm)] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                 Nenhuma tarefa neste dia.

@@ -1,11 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  assertCanMutateAnalystTaskDay,
+  canOperateActiveAnalystTimer,
+  localDateIsoFromInstant,
+} from "@/lib/analyst-tasks/day-lock";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDeveloperAdmin } from "@/services/developers";
-import {
-  validateAnalystTaskStatus,
-} from "@/services/analyst-tasks";
+import { validateAnalystTaskStatus } from "@/services/analyst-tasks";
 import { createClient } from "@/lib/supabase/server";
 
 export type AnalystTaskActionState = {
@@ -93,7 +96,7 @@ async function loadTask(taskId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("analyst_tasks")
-    .select("id, developer_id")
+    .select("id, developer_id, started_at, status")
     .eq("id", taskId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -103,7 +106,12 @@ async function loadTask(taskId: string) {
   if (!data) {
     throw new Error("Tarefa não encontrada.");
   }
-  return data as { id: string; developer_id: string };
+  return data as {
+    id: string;
+    developer_id: string;
+    started_at: string;
+    status: string;
+  };
 }
 
 async function canManageTask(
@@ -123,6 +131,36 @@ async function canManageTask(
   return task;
 }
 
+function assertEditableDay(
+  context: Awaited<ReturnType<typeof requirePermission>>,
+  startedAt: string,
+) {
+  assertCanMutateAnalystTaskDay({
+    isManager: isManager(context.profile.role),
+    taskDayIso: localDateIsoFromInstant(startedAt),
+  });
+}
+
+function assertActiveTimerOrOpenDay(
+  context: Awaited<ReturnType<typeof requirePermission>>,
+  task: { started_at: string; status: string },
+) {
+  const manager = isManager(context.profile.role);
+  if (
+    canOperateActiveAnalystTimer({
+      isManager: manager,
+      status: task.status,
+      taskDayIso: localDateIsoFromInstant(task.started_at),
+    })
+  ) {
+    return;
+  }
+  assertCanMutateAnalystTaskDay({
+    isManager: manager,
+    taskDayIso: localDateIsoFromInstant(task.started_at),
+  });
+}
+
 export async function createAnalystTaskAction(
   _previous: AnalystTaskActionState = EMPTY_STATE,
   formData: FormData,
@@ -138,6 +176,7 @@ export async function createAnalystTaskAction(
       formData.get("useCurrentStart") === "on"
         ? new Date().toISOString()
         : parseDateTime(formData.get("startedAt"), "o início");
+    assertEditableDay(context, startedAt);
     const endedAt = parseOptionalDateTime(formData.get("endedAt"), "o término");
     if (endedAt && new Date(endedAt) <= new Date(startedAt)) {
       throw new Error("O término deve ser posterior ao início.");
@@ -159,10 +198,16 @@ export async function createAnalystTaskAction(
     }
 
     revalidatePath("/app/analistas");
-    return { error: null, success: endedAt ? "Tarefa registrada." : "Tarefa iniciada." };
+    return {
+      error: null,
+      success: endedAt ? "Tarefa registrada." : "Tarefa iniciada.",
+    };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Não foi possível registrar a tarefa.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar a tarefa.",
       success: null,
     };
   }
@@ -176,10 +221,12 @@ export async function updateAnalystTaskAction(
   try {
     const context = await requirePermission("analistas", "edit");
     const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
+    const existing = await canManageTask(context, taskId);
+    assertEditableDay(context, existing.started_at);
     const description = readDescription(formData);
     const details = readDetails(formData);
     const startedAt = parseDateTime(formData.get("startedAt"), "o início");
+    assertEditableDay(context, startedAt);
     const endedAt = parseOptionalDateTime(formData.get("endedAt"), "o término");
     if (endedAt && new Date(endedAt) <= new Date(startedAt)) {
       throw new Error("O término deve ser posterior ao início.");
@@ -206,7 +253,10 @@ export async function updateAnalystTaskAction(
     return { error: null, success: "Tarefa atualizada." };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Não foi possível atualizar a tarefa.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar a tarefa.",
       success: null,
     };
   }
@@ -220,7 +270,8 @@ export async function completeAnalystTaskAction(
   try {
     const context = await requirePermission("analistas", "edit");
     const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
+    const existing = await canManageTask(context, taskId);
+    assertActiveTimerOrOpenDay(context, existing);
     const endedAt = formData.get("endedAt")
       ? parseDateTime(formData.get("endedAt"), "o término")
       : new Date().toISOString();
@@ -260,7 +311,10 @@ export async function completeAnalystTaskAction(
     return { error: null, success: "Tarefa concluída." };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Não foi possível concluir a tarefa.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível concluir a tarefa.",
       success: null,
     };
   }
@@ -274,7 +328,8 @@ export async function pauseAnalystTaskAction(
   try {
     const context = await requirePermission("analistas", "edit");
     const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
+    const existing = await canManageTask(context, taskId);
+    assertActiveTimerOrOpenDay(context, existing);
     const { pauseAnalystTask } = await import("@/services/analyst-tasks");
     await pauseAnalystTask(taskId);
     revalidatePath("/app/analistas");
@@ -298,7 +353,8 @@ export async function resumeAnalystTaskAction(
   try {
     const context = await requirePermission("analistas", "edit");
     const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
+    const existing = await canManageTask(context, taskId);
+    assertActiveTimerOrOpenDay(context, existing);
     const { resumeAnalystTask } = await import("@/services/analyst-tasks");
     await resumeAnalystTask(taskId);
     revalidatePath("/app/analistas");
@@ -322,7 +378,8 @@ export async function deleteAnalystTaskAction(
   try {
     const context = await requirePermission("analistas", "edit");
     const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
+    const existing = await canManageTask(context, taskId);
+    assertEditableDay(context, existing.started_at);
     const supabase = await createClient();
     const { error } = await supabase
       .from("analyst_tasks")
@@ -339,7 +396,10 @@ export async function deleteAnalystTaskAction(
     return { error: null, success: "Tarefa excluída." };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Não foi possível excluir a tarefa.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir a tarefa.",
       success: null,
     };
   }
