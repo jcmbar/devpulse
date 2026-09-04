@@ -505,6 +505,8 @@ export async function setPayrollItemReviewedAction(input: {
 export async function restorePayrollItemCalculatedAction(input: {
   itemId: string;
   fields?: PayrollAutoAmountField;
+  /** Hours already shown on the Folha row — skips Compilado re-resolve. */
+  jiraHours?: number;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   await requirePermission("gestor", "edit");
 
@@ -525,7 +527,14 @@ export async function restorePayrollItemCalculatedAction(input: {
 
   try {
     await assertPayrollItemEditable(itemId);
-    await restorePayrollItemCalculatedAmounts({ itemId, fields });
+    await restorePayrollItemCalculatedAmounts({
+      itemId,
+      fields,
+      jiraHours:
+        input.jiraHours != null && Number.isFinite(input.jiraHours)
+          ? input.jiraHours
+          : undefined,
+    });
   } catch (error) {
     return {
       ok: false,

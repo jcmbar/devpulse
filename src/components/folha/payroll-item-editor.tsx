@@ -94,7 +94,7 @@ export function PayrollItemEditor({
     updatePayrollItemAction,
     initialState,
   );
-  const [restorePending, startRestore] = useTransition();
+  const [restorePending, setRestorePending] = useState(false);
   const [reviewPending, startReview] = useTransition();
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -118,17 +118,30 @@ export function PayrollItemEditor({
 
   function restore(fields: PayrollAutoAmountField) {
     setRestoreError(null);
-    startRestore(async () => {
-      const result = await restorePayrollItemCalculatedAction({
-        itemId: item.id,
-        fields,
-      });
-      if (!result.ok) {
-        setRestoreError(result.error);
+    setRestorePending(true);
+    void (async () => {
+      try {
+        const result = await restorePayrollItemCalculatedAction({
+          itemId: item.id,
+          fields,
+          jiraHours,
+        });
+        if (!result.ok) {
+          setRestoreError(result.error);
+          return;
+        }
+      } catch (error) {
+        setRestoreError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível restaurar os valores calculados.",
+        );
         return;
+      } finally {
+        setRestorePending(false);
       }
       router.refresh();
-    });
+    })();
   }
 
   function toggleReviewed() {

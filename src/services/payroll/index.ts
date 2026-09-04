@@ -263,7 +263,10 @@ export async function setPayrollItemReviewed(input: {
 }
 
 /** Auto-calculated amounts for an item, before manual overrides. */
-async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
+async function suggestPayrollItemAmounts(
+  item: PayrollClosingItem,
+  options?: { jiraHours?: number },
+): Promise<{
   presencialDays: number;
   mealDays: number;
   baseAmount: number;
@@ -298,11 +301,11 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
   const { getCurrentDeveloperCompensation } = await import(
     "@/services/developers/compensation"
   );
-  const { mapJiraDeliveryHoursByDeveloperForMonth } = await import(
-    "@/services/payroll/jira-hours"
-  );
   const { computeClosingSubmitValues } = await import(
     "@/lib/metrics/closing-submit-values"
+  );
+  const { countMonthBusinessDaysExcludingHolidays } = await import(
+    "@/lib/metrics/business-days"
   );
 
   const compensation = await getCurrentDeveloperCompensation(item.developer_id);
@@ -310,24 +313,45 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
     item.base_type === "variable"
       ? true
       : (compensation?.consider_jira_hours ?? true);
-  const jiraMapForMonth = await mapJiraDeliveryHoursByDeveloperForMonth({
-    yearMonth,
-    developers: [{ id: item.developer_id, teamId: item.team_id }],
-    teamId: item.team_id,
-  });
-  const jiraHours = jiraMapForMonth.get(item.developer_id) ?? 0;
+  const timeBankEnabled = compensation?.time_bank_enabled ?? false;
 
-  const { listApplicableHolidayDatesForDeveloperMonth } = await import(
-    "@/services/holidays"
-  );
-  const { countMonthBusinessDaysExcludingHolidays } = await import(
-    "@/lib/metrics/business-days"
-  );
-  const { dates: holidayDates } =
-    await listApplicableHolidayDatesForDeveloperMonth({
+  let jiraHours = 0;
+  if (
+    options?.jiraHours != null &&
+    Number.isFinite(options.jiraHours) &&
+    options.jiraHours >= 0
+  ) {
+    jiraHours = Math.round(options.jiraHours * 100) / 100;
+  } else if (considerJiraHours && !timeBankEnabled) {
+    // Only needed for cash deficit; Compilado resolve is expensive.
+    const { mapJiraDeliveryHoursByDeveloperForMonth } = await import(
+      "@/services/payroll/jira-hours"
+    );
+    const jiraMapForMonth = await mapJiraDeliveryHoursByDeveloperForMonth({
+      yearMonth,
+      developers: [{ id: item.developer_id, teamId: item.team_id }],
+      teamId: item.team_id,
+    });
+    jiraHours = jiraMapForMonth.get(item.developer_id) ?? 0;
+  }
+
+  let holidayDates = new Set<string>();
+  try {
+    const { listApplicableHolidayDatesForDeveloperMonth } = await import(
+      "@/services/holidays"
+    );
+    const holidays = await listApplicableHolidayDatesForDeveloperMonth({
       developerId: item.developer_id,
       yearMonth,
     });
+    holidayDates = holidays.dates;
+  } catch (error) {
+    console.error(
+      "[payroll] holiday lookup failed; using raw business days:",
+      error,
+    );
+  }
+
   const calendarBusinessDays = countMonthBusinessDaysExcludingHolidays(
     yearMonth,
     holidayDates,
@@ -346,7 +370,7 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
     mealDays: mealDayList,
     absenceDays,
     makeupDays,
-    timeBankEnabled: compensation?.time_bank_enabled ?? false,
+    timeBankEnabled,
     considerJiraHours,
     yearMonth,
     calendarBusinessDays,
@@ -364,6 +388,7 @@ async function suggestPayrollItemAmounts(item: PayrollClosingItem): Promise<{
 
 export async function recalculatePayrollItem(
   itemId: string,
+  options?: { jiraHours?: number },
 ): Promise<PayrollClosingItem> {
   const supabase = await createClient();
   const { data: row, error } = await supabase
@@ -379,7 +404,9 @@ export async function recalculatePayrollItem(
   }
 
   const item = mapItem(row as Record<string, unknown>);
-  const suggested = await suggestPayrollItemAmounts(item);
+  const suggested = await suggestPayrollItemAmounts(item, {
+    jiraHours: options?.jiraHours,
+  });
   const presencialDays = suggested.presencialDays;
 
   const baseAmount = suggested.baseAmount;
@@ -860,6 +887,7 @@ export async function syncPayrollItemsFromCompensation(input: {
 export async function restorePayrollItemCalculatedAmounts(input: {
   itemId: string;
   fields?: PayrollAutoAmountField;
+  jiraHours?: number;
 }): Promise<PayrollClosingItem> {
   const supabase = await createClient();
   const { data: row, error } = await supabase
@@ -914,7 +942,7 @@ export async function restorePayrollItemCalculatedAmounts(input: {
     }
   }
 
-  return recalculatePayrollItem(item.id);
+  return recalculatePayrollItem(item.id, { jiraHours: input.jiraHours });
 }
 
 export async function updatePayrollItemAmounts(input: {
