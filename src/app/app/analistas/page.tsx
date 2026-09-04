@@ -135,6 +135,10 @@ export default async function AnalystTasksPage({ searchParams }: PageProps) {
         tasks={tasks}
         activeTasks={activeTasks}
         metrics={metrics}
+        holidays={[...holidayData.byDate.entries()].map(([date, name]) => ({
+          date,
+          name,
+        }))}
         canManageAll={managers}
         canEdit={canEdit}
         canDelete={canDelete}

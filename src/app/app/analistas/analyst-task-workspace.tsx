@@ -28,6 +28,13 @@ import {
   resolveSimultaneityAlertLevel,
   type SimultaneityAlertLevel,
 } from "@/lib/analyst-tasks/simultaneous-hours";
+import {
+  HOLIDAY_OVERLAY_CELL_CLASS,
+  HOLIDAY_OVERLAY_RING_CLASS,
+  toHolidayOverlay,
+  type HolidayOverlayEntry,
+} from "@/lib/metrics/holiday-overlay";
+import { isCalendarWeekend } from "@/lib/metrics/payroll-attendance-batch";
 import type {
   AnalystTask,
   AnalystTaskDay,
@@ -38,6 +45,7 @@ import {
   AlertTriangle,
   CalendarDays,
   Check,
+  Info,
   Layers,
   Lock,
   Pause,
@@ -71,6 +79,8 @@ type Props = {
   tasks: AnalystTask[];
   activeTasks: AnalystTask[];
   metrics: AnalystTaskMetrics;
+  /** Visual overlay only — does not block launches. */
+  holidays?: ReadonlyArray<HolidayOverlayEntry>;
   canManageAll: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -214,32 +224,74 @@ function nowInputValue(): string {
 function DayCell({
   day,
   selected,
+  holidayName,
   onSelect,
 }: {
   day: AnalystTaskDay;
   selected: boolean;
+  holidayName?: string;
   onSelect: () => void;
 }) {
   const dayNumber = day.date.slice(-2);
+  const isHoliday = day.is_holiday || holidayName != null;
+  const weekend = isCalendarWeekend(day.date);
+  const holidayLabel = holidayName
+    ? `Feriado: ${holidayName}`
+    : isHoliday
+      ? "Feriado"
+      : null;
+  const titleParts: string[] = [];
+  if (weekend && !isHoliday) {
+    titleParts.push("Fim de semana");
+  }
+  if (day.task_count > 0) {
+    titleParts.push(`${day.task_count} tarefa(s) registrada(s)`);
+  } else if (!isHoliday) {
+    titleParts.push("Nenhuma tarefa registrada");
+  }
+
   return (
     <button
       type="button"
       onClick={onSelect}
-      title={
-        day.task_count > 0
-          ? `${day.task_count} tarefa(s) registrada(s)`
-          : day.is_holiday
-            ? "Feriado sem tarefa registrada"
-            : "Nenhuma tarefa registrada"
-      }
-      className={`min-h-[3.25rem] rounded-[var(--radius-sm)] border p-1 text-left transition ${
+      title={titleParts.join(" · ") || undefined}
+      className={cn(
+        "min-h-[3.25rem] rounded-[var(--radius-sm)] border p-1 text-left transition",
         selected
           ? "border-brand bg-brand-soft shadow-[var(--shadow-sm)]"
-          : "border-border bg-card hover:border-brand/50 hover:bg-muted/30"
-      }`}
+          : isHoliday
+            ? HOLIDAY_OVERLAY_CELL_CLASS
+            : weekend
+              ? "border-violet-500/25 bg-violet-500/10 text-violet-950/80 hover:border-violet-500/40 hover:bg-violet-500/15 dark:text-violet-100/85"
+              : "border-border bg-card hover:border-brand/50 hover:bg-muted/30",
+        selected && isHoliday ? HOLIDAY_OVERLAY_RING_CLASS : null,
+      )}
     >
-      <div className="flex items-center justify-between gap-1">
-        <span className="text-[11px] font-semibold text-foreground">{dayNumber}</span>
+      <div className="flex items-center justify-between gap-0.5">
+        <span
+          className={cn(
+            "text-[11px] font-semibold",
+            selected
+              ? "text-foreground"
+              : isHoliday
+                ? "text-rose-900 dark:text-rose-100"
+                : weekend
+                  ? "text-violet-900/90 dark:text-violet-100/90"
+                  : "text-foreground",
+          )}
+        >
+          {dayNumber}
+        </span>
+        {holidayLabel ? (
+          <span
+            title={holidayLabel}
+            aria-label={holidayLabel}
+            className="inline-flex shrink-0 text-rose-700 dark:text-rose-300"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Info className="size-3" aria-hidden />
+          </span>
+        ) : null}
       </div>
       {day.task_count > 0 ? (
         <span className="mt-1 inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
@@ -712,6 +764,7 @@ export function AnalystTaskWorkspace({
   tasks,
   activeTasks,
   metrics,
+  holidays = [],
   canManageAll,
   canEdit,
   canDelete,
@@ -836,6 +889,7 @@ export function AnalystTaskWorkspace({
   const taskModalOpen = modalView.kind !== "closed";
   const classificationResult = classification(metrics);
   const dailyByDate = new Map(metrics.daily.map((day) => [day.date, day]));
+  const holidayOverlay = toHolidayOverlay(holidays);
   const selectedDay = dailyByDate.get(selectedDate) ?? metrics.daily[0];
   const todayIso = timelineIsoDate(initialNow);
   const selectedDayClosedForUser =
@@ -1389,7 +1443,7 @@ export function AnalystTaskWorkspace({
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_13.5rem_minmax(0,1fr)] xl:items-start">
         <SectionShell
           title="Calendário"
-          description="Selecione um dia."
+          description="Feriados em vermelho e fins de semana em lilás — apenas visual, sem bloquear lançamentos."
           actions={
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <CalendarDays className="size-3.5" />
@@ -1401,7 +1455,12 @@ export function AnalystTaskWorkspace({
             {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
               <div
                 key={day}
-                className="px-0.5 py-0.5 text-center text-[9px] font-semibold tracking-wide text-muted-foreground uppercase"
+                className={cn(
+                  "px-0.5 py-0.5 text-center text-[9px] font-semibold tracking-wide uppercase",
+                  day === "Dom" || day === "Sáb"
+                    ? "text-violet-700/80 dark:text-violet-300/80"
+                    : "text-muted-foreground",
+                )}
               >
                 {day}
               </div>
@@ -1412,6 +1471,7 @@ export function AnalystTaskWorkspace({
                   key={day.date}
                   day={day}
                   selected={day.date === selectedDate}
+                  holidayName={holidayOverlay.byDate.get(day.date)}
                   onSelect={() => setSelectedDate(day.date)}
                 />
               ) : (
