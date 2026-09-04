@@ -208,6 +208,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
                 preservedParams={{ month }}
                 persistScope="gestor-folha"
                 embedded
+                form="folha-month-filter"
               />
             </div>
             <div className="ui-filter-bar__field">
@@ -229,9 +230,6 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             id="folha-month-filter"
             className="flex shrink-0 justify-end sm:ml-auto"
           >
-            {teamParam ? (
-              <input type="hidden" name="teamId" value={teamParam} />
-            ) : null}
             <button type="submit" className="ui-btn-secondary shrink-0">
               Aplicar
             </button>

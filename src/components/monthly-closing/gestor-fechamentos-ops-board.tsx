@@ -9,6 +9,7 @@ import { GestorTeamFilter } from "@/components/gestor-team-filter";
 import { PersonAvatar } from "@/components/person-avatar";
 import { KpiMetricCard } from "@/components/ui/kpi-metric-card";
 import { FilterBar } from "@/components/ui/section-shell";
+import { persistFiltersFromHref } from "@/lib/filters/persist-client";
 import {
   buildFechamentoOpsCell,
   docStateLabel,
@@ -29,7 +30,13 @@ import type { Team } from "@/types/team";
 import { RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 
 export type { FechamentoOpsCellData, FechamentoOpsDeveloperData };
 
@@ -184,6 +191,17 @@ export function GestorFechamentosOpsBoard({
   const [drawerTarget, setDrawerTarget] =
     useState<ClosingOpsDrawerTarget | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [draftMonth, setDraftMonth] = useState(month);
+  const [draftYear, setDraftYear] = useState(year);
+  const [draftStatus, setDraftStatus] = useState(statusFilter);
+  const [draftQuery, setDraftQuery] = useState(query);
+
+  useEffect(() => {
+    setDraftMonth(month);
+    setDraftYear(year);
+    setDraftStatus(statusFilter);
+    setDraftQuery(query);
+  }, [month, year, statusFilter, query]);
 
   const selectedYearMonth = yearMonthKey(year, month);
   const months = monthKeys(year);
@@ -268,40 +286,49 @@ export function GestorFechamentosOpsBoard({
   }
 
   const preservedParams = {
-    closingYear: String(year),
-    closingMonth: String(month),
+    closingYear: String(draftYear),
+    closingMonth: String(draftMonth),
     view: view === "year" ? "year" : undefined,
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    q: query.trim() || undefined,
+    status: draftStatus !== "all" ? draftStatus : undefined,
+    q: draftQuery.trim() || undefined,
   };
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const nextTeam = String(form.get("teamId") ?? "").trim() || undefined;
+    const nextQ = String(form.get("q") ?? draftQuery);
+    const href = buildHref({
+      teamId: nextTeam,
+      closingYear: draftYear,
+      closingMonth: draftMonth,
+      view,
+      status: draftStatus,
+      q: nextQ,
+    });
+    persistFiltersFromHref("gestor-fechamentos", href);
+    router.push(href);
+  }
 
   return (
     <>
       <FilterBar>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <form
+          className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"
+          onSubmit={applyFilters}
+        >
           <div className="ui-filter-bar__fields min-w-0 flex-1 md:grid-cols-2 xl:grid-cols-5">
             <div className="ui-filter-bar__field">
               <p className="ui-filter-bar__label">Mês</p>
               <select
                 className="ui-select w-full min-w-0"
-                value={month}
+                value={draftMonth}
                 aria-label="Mês"
-                onChange={(event) => {
-                  router.push(
-                    buildHref({
-                      teamId: teamParam,
-                      closingYear: year,
-                      closingMonth: Number(event.target.value),
-                      view,
-                      status: statusFilter,
-                      q: query,
-                    }),
-                  );
-                }}
+                onChange={(event) => setDraftMonth(Number(event.target.value))}
               >
                 {Array.from({ length: 12 }, (_, index) => {
                   const value = index + 1;
-                  const label = shortMonthLabel(yearMonthKey(year, value));
+                  const label = shortMonthLabel(yearMonthKey(draftYear, value));
                   return (
                     <option key={value} value={value}>
                       {label}
@@ -314,20 +341,9 @@ export function GestorFechamentosOpsBoard({
               <p className="ui-filter-bar__label">Ano</p>
               <select
                 className="ui-select w-full min-w-0"
-                value={year}
+                value={draftYear}
                 aria-label="Ano"
-                onChange={(event) => {
-                  router.push(
-                    buildHref({
-                      teamId: teamParam,
-                      closingYear: Number(event.target.value),
-                      closingMonth: month,
-                      view,
-                      status: statusFilter,
-                      q: query,
-                    }),
-                  );
-                }}
+                onChange={(event) => setDraftYear(Number(event.target.value))}
               >
                 {years.map((item) => (
                   <option key={item} value={item}>
@@ -351,20 +367,11 @@ export function GestorFechamentosOpsBoard({
               <p className="ui-filter-bar__label">Status</p>
               <select
                 className="ui-select w-full min-w-0"
-                value={statusFilter}
+                value={draftStatus}
                 aria-label="Status"
-                onChange={(event) => {
-                  router.push(
-                    buildHref({
-                      teamId: teamParam,
-                      closingYear: year,
-                      closingMonth: month,
-                      view,
-                      status: event.target.value,
-                      q: query,
-                    }),
-                  );
-                }}
+                onChange={(event) =>
+                  setDraftStatus(event.target.value as typeof draftStatus)
+                }
               >
                 <option value="all">Todos</option>
                 {FECHAMENTO_OPS_STATUS_ORDER.map((status) => (
@@ -376,53 +383,37 @@ export function GestorFechamentosOpsBoard({
             </div>
             <div className="ui-filter-bar__field">
               <p className="ui-filter-bar__label">Developer</p>
-              <form
-                className="flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const form = new FormData(event.currentTarget);
-                  const nextQ = String(form.get("q") ?? "");
-                  router.push(
-                    buildHref({
-                      teamId: teamParam,
-                      closingYear: year,
-                      closingMonth: month,
-                      view,
-                      status: statusFilter,
-                      q: nextQ,
-                    }),
-                  );
-                }}
-              >
-                <input
-                  name="q"
-                  defaultValue={query}
-                  placeholder="Buscar…"
-                  className="ui-input min-w-0 flex-1"
-                  aria-label="Buscar developer"
-                />
-                <button type="submit" className="ui-btn-secondary text-sm">
-                  Buscar
-                </button>
-              </form>
+              <input
+                name="q"
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                placeholder="Buscar…"
+                className="ui-input min-w-0 w-full"
+                aria-label="Buscar developer"
+              />
             </div>
           </div>
-          <button
-            type="button"
-            className="ui-btn-secondary shrink-0 self-end"
-            disabled={refreshPending}
-            onClick={() => {
-              startRefresh(() => {
-                router.refresh();
-              });
-            }}
-          >
-            <RefreshCw
-              className={cn("size-3.5", refreshPending && "animate-spin")}
-            />
-            Atualizar
-          </button>
-        </div>
+          <div className="flex shrink-0 flex-wrap gap-2 self-end">
+            <button type="submit" className="ui-btn-primary text-sm">
+              Buscar
+            </button>
+            <button
+              type="button"
+              className="ui-btn-secondary text-sm"
+              disabled={refreshPending}
+              onClick={() => {
+                startRefresh(() => {
+                  router.refresh();
+                });
+              }}
+            >
+              <RefreshCw
+                className={cn("size-3.5", refreshPending && "animate-spin")}
+              />
+              Atualizar
+            </button>
+          </div>
+        </form>
       </FilterBar>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

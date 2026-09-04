@@ -491,6 +491,8 @@ export function AnalystTaskWorkspace({
   const router = useRouter();
   const pathname = usePathname();
   const [pendingNavigation, startNavigation] = useTransition();
+  const [draftMonth, setDraftMonth] = useState(month);
+  const [draftDeveloperId, setDraftDeveloperId] = useState(selectedDeveloperId);
   const [selectedDate, setSelectedDate] = useState(() => {
     const todayIso = timelineIsoDate(initialNow);
     if (month === todayIso.slice(0, 7)) {
@@ -500,6 +502,11 @@ export function AnalystTaskWorkspace({
       metrics.daily.find((day) => day.hours > 0)?.date ?? `${month}-01`
     );
   });
+
+  useEffect(() => {
+    setDraftMonth(month);
+    setDraftDeveloperId(selectedDeveloperId);
+  }, [month, selectedDeveloperId]);
   const [editingTask, setEditingTask] = useState<AnalystTask | null>(null);
   const [modalView, setModalView] = useState<TaskModalView>({ kind: "closed" });
   const startedAtEdited = useRef(false);
@@ -640,6 +647,10 @@ export function AnalystTaskWorkspace({
     startNavigation(() => router.push(`${pathname}?${params.toString()}`));
   }
 
+  function applyContextFilters() {
+    navigate(draftMonth, draftDeveloperId);
+  }
+
   function openCreateModal() {
     startedAtEdited.current = false;
     setModalView({ kind: "create" });
@@ -708,9 +719,9 @@ export function AnalystTaskWorkspace({
             </label>
             <select
               id="analyst-month"
-              value={month}
+              value={draftMonth}
               disabled={pendingNavigation}
-              onChange={(event) => navigate(event.target.value)}
+              onChange={(event) => setDraftMonth(event.target.value)}
               className="ui-select"
             >
               {monthOptions.map((option) => (
@@ -727,9 +738,9 @@ export function AnalystTaskWorkspace({
               </label>
               <select
                 id="analyst-developer"
-                value={selectedDeveloperId}
+                value={draftDeveloperId}
                 disabled={pendingNavigation}
-                onChange={(event) => navigate(month, event.target.value)}
+                onChange={(event) => setDraftDeveloperId(event.target.value)}
                 className="ui-select"
               >
                 {analysts.map((analyst) => (
@@ -748,6 +759,18 @@ export function AnalystTaskWorkspace({
               {monthLabel}
             </p>
           )}
+          <button
+            type="button"
+            className="ui-btn-secondary w-full justify-center"
+            disabled={
+              pendingNavigation ||
+              (draftMonth === month &&
+                draftDeveloperId === selectedDeveloperId)
+            }
+            onClick={applyContextFilters}
+          >
+            Aplicar
+          </button>
           {canEdit ? (
             <button
               type="button"

@@ -667,6 +667,7 @@ export function DeveloperClosingsYearView({
 }: DeveloperClosingsYearViewProps) {
   const router = useRouter();
   const [, startDetailTransition] = useTransition();
+  const [draftYear, setDraftYear] = useState(selectedYear);
   const [panelMonth, setPanelMonth] = useState<string | null>(detailMonth);
   const [loadedMonth, setLoadedMonth] = useState<string | null>(detailMonth);
   const [clientClosing, setClientClosing] = useState<MonthlyClosing | null>(
@@ -799,6 +800,10 @@ export function DeveloperClosingsYearView({
   );
 
   // Hydrate from SSR only when the server-selected detail month changes (deep link).
+  useEffect(() => {
+    setDraftYear(selectedYear);
+  }, [selectedYear]);
+
   useEffect(() => {
     if (detailMonth && detailMonth === panelMonth) {
       applyServerDetail(detailMonth);
@@ -964,29 +969,39 @@ export function DeveloperClosingsYearView({
   };
 
   const yearSelect = (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Ano
-      </label>
-      <select
-        className="ui-select max-w-[8rem] py-1.5"
-        value={String(selectedYear)}
-        onChange={(event) => {
+    <div className="mb-3 flex flex-wrap items-end gap-2">
+      <div className="space-y-1">
+        <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Ano
+        </label>
+        <select
+          className="ui-select max-w-[8rem] py-1.5"
+          value={String(draftYear)}
+          onChange={(event) => setDraftYear(Number(event.target.value))}
+        >
+          {years.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        className="ui-btn-secondary py-1.5 text-xs"
+        disabled={draftYear === selectedYear}
+        onClick={() => {
           setPanelMonth(null);
           const href = buildFechamentosHref({
             importId,
-            closingYear: Number(event.target.value),
+            closingYear: draftYear,
           });
           persistFiltersFromHref("developer-home", href);
           router.push(href);
         }}
       >
-        {years.map((year) => (
-          <option key={year} value={year}>
-            {year}
-          </option>
-        ))}
-      </select>
+        Aplicar
+      </button>
     </div>
   );
 

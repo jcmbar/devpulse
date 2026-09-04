@@ -13,7 +13,7 @@ import {
   DEVELOPER_JOB_TITLES,
 } from "@/types/developer-compensation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 type ChipOption<T extends string> = {
   value: T;
@@ -99,16 +99,26 @@ export function DeveloperListColumnFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const [draftActive, setDraftActive] = useState(activeFilter);
+  const [draftJira, setDraftJira] = useState(jiraAccountFilter);
+  const [draftJobTitle, setDraftJobTitle] = useState(jobTitleFilter);
 
-  function navigate(
-    patch: {
-      active?: ActiveListFilter;
-      jiraId?: JiraAccountListFilter;
-      jobTitle?: JobTitleListFilter;
-    },
-  ) {
+  useEffect(() => {
+    setDraftActive(activeFilter);
+    setDraftJira(jiraAccountFilter);
+    setDraftJobTitle(jobTitleFilter);
+  }, [activeFilter, jiraAccountFilter, jobTitleFilter]);
+
+  const dirty =
+    draftActive !== activeFilter ||
+    draftJira !== jiraAccountFilter ||
+    draftJobTitle !== jobTitleFilter;
+
+  function apply() {
     const params = patchAdminListSearchParams(searchParams, {
-      ...patch,
+      active: draftActive,
+      jiraId: draftJira,
+      jobTitle: draftJobTitle,
       resetPage: true,
     });
     const query = params.toString();
@@ -128,25 +138,35 @@ export function DeveloperListColumnFilters({
     >
       <FilterChipGroup
         label="Cargo"
-        value={jobTitleFilter}
+        value={draftJobTitle}
         options={JOB_TITLE_OPTIONS}
         disabled={pending}
-        onChange={(jobTitle) => navigate({ jobTitle })}
+        onChange={setDraftJobTitle}
       />
       <FilterChipGroup
         label="Status"
-        value={activeFilter}
+        value={draftActive}
         options={ACTIVE_OPTIONS}
         disabled={pending}
-        onChange={(active) => navigate({ active })}
+        onChange={setDraftActive}
       />
       <FilterChipGroup
         label="Jira Account ID"
-        value={jiraAccountFilter}
+        value={draftJira}
         options={JIRA_OPTIONS}
         disabled={pending}
-        onChange={(jiraId) => navigate({ jiraId })}
+        onChange={setDraftJira}
       />
+      <div className="flex items-end">
+        <button
+          type="button"
+          className="ui-btn-primary px-3 py-1.5 text-xs"
+          disabled={pending || !dirty}
+          onClick={apply}
+        >
+          Aplicar
+        </button>
+      </div>
     </div>
   );
 }

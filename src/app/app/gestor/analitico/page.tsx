@@ -205,6 +205,10 @@ export default async function GestorAnaliticoPage({ searchParams }: PageProps) {
           q: preservedWithSource.q,
         }}
         persistScope="gestor-analitico"
+        liveParamFieldIds={{
+          source: "gestor-source",
+          importId: "importId",
+        }}
       />
 
       {base.selectedBatch == null ? (

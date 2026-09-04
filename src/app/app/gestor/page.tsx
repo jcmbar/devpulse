@@ -409,6 +409,11 @@ export default async function GestorDashboardPage({
             preservedParams={{ source: sourceParam, teamId: teamParam }}
             persistScope="gestor-dashboard"
             embedded
+            liveParamFieldIds={{
+              teamId: "gestor-team",
+              source: "gestor-source",
+              importId: "importId",
+            }}
           />
         </div>
       </FilterBar>

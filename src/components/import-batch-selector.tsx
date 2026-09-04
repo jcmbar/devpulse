@@ -4,6 +4,7 @@ import { FormField } from "@/components/ui/form";
 import { persistFiltersFromHref } from "@/lib/filters/persist-client";
 import type { FilterScope } from "@/lib/filters/persist";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { ImportBatchOption } from "@/types/import-period";
 
 type ImportBatchSelectorProps = {
@@ -15,6 +16,13 @@ type ImportBatchSelectorProps = {
   /** Compact control for FilterBar. */
   embedded?: boolean;
   persistScope?: FilterScope;
+  /**
+   * When true, changing the select navigates immediately.
+   * Default false — change locally and apply via a parent form / Aplicar.
+   */
+  applyOnChange?: boolean;
+  form?: string;
+  id?: string;
 };
 
 function formatBatchLabel(batch: ImportBatchOption): string {
@@ -57,8 +65,17 @@ export function ImportBatchSelector({
   preservedParams,
   embedded = false,
   persistScope,
+  applyOnChange = false,
+  form,
+  id = "importId",
 }: ImportBatchSelectorProps) {
   const router = useRouter();
+  const serverValue = selectedImportId ?? "";
+  const [draft, setDraft] = useState(serverValue);
+
+  useEffect(() => {
+    setDraft(serverValue);
+  }, [serverValue]);
 
   if (batches.length === 0) {
     return (
@@ -70,11 +87,16 @@ export function ImportBatchSelector({
 
   const select = (
     <select
-      id="importId"
+      id={id}
       name="importId"
-      value={selectedImportId ?? ""}
+      form={form}
+      value={draft}
       onChange={(event) => {
         const value = event.target.value || null;
+        setDraft(value ?? "");
+        if (!applyOnChange) {
+          return;
+        }
         const href = buildHref(basePath, value, preservedParams);
         if (persistScope) {
           persistFiltersFromHref(persistScope, href);
@@ -99,7 +121,7 @@ export function ImportBatchSelector({
   }
 
   return (
-    <FormField label="Lote importado" htmlFor="importId">
+    <FormField label="Lote importado" htmlFor={id}>
       {select}
     </FormField>
   );

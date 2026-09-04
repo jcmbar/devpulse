@@ -22,7 +22,28 @@ type CompiladoDateFilterProps = {
   embedded?: boolean;
   /** Persist last-used filters for this surface. */
   persistScope?: FilterScope;
+  /**
+   * Optional select element ids whose current values are merged on Aplicar
+   * (so Time/Fonte/Lote can defer apply until this button).
+   */
+  liveParamFieldIds?: {
+    teamId?: string;
+    source?: string;
+    importId?: string;
+  };
 };
+
+function readSelectValue(elementId: string | undefined): string | null {
+  if (!elementId || typeof document === "undefined") {
+    return null;
+  }
+  const el = document.getElementById(elementId);
+  if (!(el instanceof HTMLSelectElement)) {
+    return null;
+  }
+  const value = el.value.trim();
+  return value.length > 0 ? value : null;
+}
 
 export function CompiladoDateFilter({
   basePath,
@@ -32,6 +53,7 @@ export function CompiladoDateFilter({
   preservedParams,
   embedded = false,
   persistScope,
+  liveParamFieldIds,
 }: CompiladoDateFilterProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"month" | "custom">(activeRange.mode);
@@ -42,14 +64,35 @@ export function CompiladoDateFilter({
   const [to, setTo] = useState(activeRange.end);
 
   function navigate(next: URLSearchParams) {
-    if (importId) {
-      next.set("importId", importId);
+    const liveImportId =
+      readSelectValue(liveParamFieldIds?.importId) ?? importId;
+    if (liveImportId) {
+      next.set("importId", liveImportId);
     }
+
+    const liveTeamId = readSelectValue(liveParamFieldIds?.teamId);
+    const liveSource = readSelectValue(liveParamFieldIds?.source);
+
     for (const [key, value] of Object.entries(preservedParams ?? {})) {
       if (value && !next.has(key)) {
         next.set(key, value);
       }
     }
+
+    // Live draft selects override preserved/server params when present.
+    if (liveParamFieldIds?.teamId) {
+      next.delete("teamId");
+      if (liveTeamId) {
+        next.set("teamId", liveTeamId);
+      }
+    }
+    if (liveParamFieldIds?.source) {
+      next.delete("source");
+      if (liveSource && liveSource !== "auto") {
+        next.set("source", liveSource);
+      }
+    }
+
     const query = next.toString();
     const href = query ? `${basePath}?${query}` : basePath;
     if (persistScope) {

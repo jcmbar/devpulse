@@ -5,6 +5,7 @@ import type { FilterScope } from "@/lib/filters/persist";
 import { TEAM_FILTER_PARAM } from "@/lib/teams/team-filter";
 import type { Team } from "@/types/team";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type GestorTeamFilterProps = {
   basePath: string;
@@ -15,6 +16,14 @@ type GestorTeamFilterProps = {
   /** Compact control for FilterBar. */
   embedded?: boolean;
   persistScope?: FilterScope;
+  /**
+   * When true, changing the select navigates immediately.
+   * Default false — change locally and apply via a parent form / Aplicar.
+   */
+  applyOnChange?: boolean;
+  /** Associate with a parent `<form id=…>` for native submit. */
+  form?: string;
+  id?: string;
 };
 
 function buildHref(
@@ -42,17 +51,30 @@ export function GestorTeamFilter({
   preservedParams,
   embedded = false,
   persistScope,
+  applyOnChange = false,
+  form,
+  id = "gestor-team",
 }: GestorTeamFilterProps) {
   const router = useRouter();
-  const value = selectedTeamId ?? "";
+  const serverValue = selectedTeamId ?? "";
+  const [draft, setDraft] = useState(serverValue);
+
+  useEffect(() => {
+    setDraft(serverValue);
+  }, [serverValue]);
 
   const select = (
     <select
-      id="gestor-team"
+      id={id}
       name={TEAM_FILTER_PARAM}
-      value={value}
+      form={form}
+      value={draft}
       onChange={(event) => {
         const next = event.target.value.trim() || null;
+        setDraft(next ?? "");
+        if (!applyOnChange) {
+          return;
+        }
         const href = buildHref(basePath, next, preservedParams);
         if (persistScope) {
           persistFiltersFromHref(persistScope, href);
@@ -79,7 +101,7 @@ export function GestorTeamFilter({
 
   return (
     <div className="ui-card space-y-3 px-4 py-3">
-      <label className="ui-field" htmlFor="gestor-team">
+      <label className="ui-field" htmlFor={id}>
         <span className="ui-label">Time</span>
         {select}
       </label>

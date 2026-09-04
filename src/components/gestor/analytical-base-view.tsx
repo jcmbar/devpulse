@@ -87,17 +87,18 @@ export function AnalyticalBaseView({
     initialFilters.classification,
   );
   const [q, setQ] = useState(initialFilters.q);
+  const [applied, setApplied] = useState(initialFilters);
 
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = applied.q.trim().toLowerCase();
     return rows.filter((row) => {
-      if (developerId && row.developerId !== developerId) {
+      if (applied.developerId && row.developerId !== applied.developerId) {
         return false;
       }
-      if (status && row.status !== status) {
+      if (applied.status && row.status !== applied.status) {
         return false;
       }
-      if (!rowMatchesClassification(row, classification)) {
+      if (!rowMatchesClassification(row, applied.classification)) {
         return false;
       }
       if (needle) {
@@ -108,7 +109,7 @@ export function AnalyticalBaseView({
       }
       return true;
     });
-  }, [rows, developerId, status, classification, q]);
+  }, [rows, applied]);
 
   const totals = useMemo(() => {
     let onTime = 0;
@@ -164,26 +165,14 @@ export function AnalyticalBaseView({
     });
   }
 
-  function updateFilters(patch: Partial<AnalyticalBaseFilterState>) {
+  function applyFilters() {
     const next: AnalyticalBaseFilterState = {
       developerId,
       status,
       classification,
       q,
-      ...patch,
     };
-    if (patch.developerId !== undefined) {
-      setDeveloperId(patch.developerId);
-    }
-    if (patch.status !== undefined) {
-      setStatus(patch.status);
-    }
-    if (patch.classification !== undefined) {
-      setClassification(patch.classification);
-    }
-    if (patch.q !== undefined) {
-      setQ(patch.q);
-    }
+    setApplied(next);
     syncUrl(next);
   }
 
@@ -201,14 +190,12 @@ export function AnalyticalBaseView({
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 xl:items-end">
           <label className="space-y-1.5 text-xs">
             <span className="font-semibold text-muted-foreground">Developer</span>
             <select
               value={developerId}
-              onChange={(event) =>
-                updateFilters({ developerId: event.target.value })
-              }
+              onChange={(event) => setDeveloperId(event.target.value)}
               className="ui-select"
             >
               <option value="">Todos</option>
@@ -224,7 +211,7 @@ export function AnalyticalBaseView({
             <span className="font-semibold text-muted-foreground">Status</span>
             <select
               value={status}
-              onChange={(event) => updateFilters({ status: event.target.value })}
+              onChange={(event) => setStatus(event.target.value)}
               className="ui-select"
             >
               <option value="">Todos</option>
@@ -243,10 +230,10 @@ export function AnalyticalBaseView({
             <select
               value={classification}
               onChange={(event) =>
-                updateFilters({
-                  classification: event.target
+                setClassification(
+                  event.target
                     .value as AnalyticalBaseFilterState["classification"],
-                })
+                )
               }
               className="ui-select"
             >
@@ -266,16 +253,27 @@ export function AnalyticalBaseView({
               type="search"
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              onBlur={() => updateFilters({ q })}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  updateFilters({ q });
+                  event.preventDefault();
+                  applyFilters();
                 }
               }}
               placeholder="AP-7516 ou texto…"
               className="ui-input"
             />
           </label>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              className="ui-btn-primary w-full sm:w-auto"
+              disabled={pending}
+              onClick={applyFilters}
+            >
+              Aplicar
+            </button>
+          </div>
         </div>
       </div>
 
