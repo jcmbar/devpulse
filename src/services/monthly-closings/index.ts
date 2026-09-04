@@ -706,7 +706,14 @@ function isDecided(
 export function buildMonthlyClosingAuditRows(input: {
   cards: JiraCard[];
   justifications: DelayJustificationRequest[];
+  /**
+   * When false (analistas), atraso/retrabalho still appear in the audit but
+   * do not block submit. Developers keep the default (true).
+   */
+  requireDeliveryJustifications?: boolean;
 }): MonthlyClosingCardAuditRow[] {
+  const requireDeliveryJustifications =
+    input.requireDeliveryJustifications !== false;
   const delayByKey = new Map<string, DelayJustificationRequest>();
   const reworkByKey = new Map<string, DelayJustificationRequest>();
   for (const row of input.justifications) {
@@ -725,14 +732,22 @@ export function buildMonthlyClosingAuditRows(input: {
     const reworkJustification = justificationSnapshot(reworkByKey.get(key));
     const blockReasons: string[] = [];
 
-    if (flags.isDelayed === true && !isDecided(delayJustification.status)) {
+    if (
+      requireDeliveryJustifications &&
+      flags.isDelayed === true &&
+      !isDecided(delayJustification.status)
+    ) {
       blockReasons.push(
         delayJustification.status === "pending"
           ? "Justificativa de atraso pendente de decisão do gestor"
           : "Justificativa de atraso ausente (precisa ser enviada e decidida)",
       );
     }
-    if (flags.isRework && !isDecided(reworkJustification.status)) {
+    if (
+      requireDeliveryJustifications &&
+      flags.isRework &&
+      !isDecided(reworkJustification.status)
+    ) {
       blockReasons.push(
         reworkJustification.status === "pending"
           ? "Justificativa de retrabalho pendente de decisão do gestor"
@@ -787,16 +802,25 @@ function pickStrongerJustification(
 
 function recomputeAuditRowBlocks(
   row: MonthlyClosingCardAuditRow,
+  requireDeliveryJustifications = true,
 ): MonthlyClosingCardAuditRow {
   const blockReasons: string[] = [];
-  if (row.isDelayed && !isDecided(row.delayJustification.status)) {
+  if (
+    requireDeliveryJustifications &&
+    row.isDelayed &&
+    !isDecided(row.delayJustification.status)
+  ) {
     blockReasons.push(
       row.delayJustification.status === "pending"
         ? "Justificativa de atraso pendente de decisão do gestor"
         : "Justificativa de atraso ausente (precisa ser enviada e decidida)",
     );
   }
-  if (row.isRework && !isDecided(row.reworkJustification.status)) {
+  if (
+    requireDeliveryJustifications &&
+    row.isRework &&
+    !isDecided(row.reworkJustification.status)
+  ) {
     blockReasons.push(
       row.reworkJustification.status === "pending"
         ? "Justificativa de retrabalho pendente de decisão do gestor"
@@ -817,6 +841,7 @@ function recomputeAuditRowBlocks(
 export function mergeSnapshotJustificationsIntoAuditRows(
   auditRows: MonthlyClosingCardAuditRow[],
   snapshotItems: MonthlyClosingItem[],
+  requireDeliveryJustifications = true,
 ): MonthlyClosingCardAuditRow[] {
   if (snapshotItems.length === 0) {
     return auditRows;
@@ -857,11 +882,14 @@ export function mergeSnapshotJustificationsIntoAuditRows(
       return row;
     }
 
-    return recomputeAuditRowBlocks({
-      ...row,
-      delayJustification,
-      reworkJustification,
-    });
+    return recomputeAuditRowBlocks(
+      {
+        ...row,
+        delayJustification,
+        reworkJustification,
+      },
+      requireDeliveryJustifications,
+    );
   });
 }
 
@@ -889,28 +917,44 @@ export async function loadMonthlyClosingAuditForDeveloper(input: {
     ...(input.closingImportId ? [input.closingImportId] : []),
   ];
 
-  const [cards, justifications, snapshotItems] = await Promise.all([
-    listJiraCardsByDeveloperAndImport({
-      developerId: input.developerId,
-      importId: input.importId,
-      rangeStart: periodStart,
-      rangeEnd: periodEnd,
-    }),
-    listDelayJustificationsForDeveloperImports({
-      importIds: justificationImportIds,
-      developerId: input.developerId,
-      kind: "all",
-    }),
-    input.closingId
-      ? listMonthlyClosingItems(input.closingId)
-      : Promise.resolve([] as MonthlyClosingItem[]),
-  ]);
+  const supabase = await createClient();
+  const [cards, justifications, snapshotItems, developerRow] =
+    await Promise.all([
+      listJiraCardsByDeveloperAndImport({
+        developerId: input.developerId,
+        importId: input.importId,
+        rangeStart: periodStart,
+        rangeEnd: periodEnd,
+      }),
+      listDelayJustificationsForDeveloperImports({
+        importIds: justificationImportIds,
+        developerId: input.developerId,
+        kind: "all",
+      }),
+      input.closingId
+        ? listMonthlyClosingItems(input.closingId)
+        : Promise.resolve([] as MonthlyClosingItem[]),
+      supabase
+        .from("developers")
+        .select("job_title")
+        .eq("id", input.developerId)
+        .maybeSingle(),
+    ]);
 
-  let auditRows = buildMonthlyClosingAuditRows({ cards, justifications });
+  // Analistas may close without decided delay/rework justifications; developers may not.
+  const requireDeliveryJustifications =
+    String(developerRow.data?.job_title ?? "developer") !== "analyst";
+
+  let auditRows = buildMonthlyClosingAuditRows({
+    cards,
+    justifications,
+    requireDeliveryJustifications,
+  });
   if (snapshotItems.length > 0) {
     auditRows = mergeSnapshotJustificationsIntoAuditRows(
       auditRows,
       snapshotItems,
+      requireDeliveryJustifications,
     );
   }
   const blockingCount = auditRows.filter((row) => row.blocksSubmit).length;
