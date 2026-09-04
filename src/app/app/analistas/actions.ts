@@ -14,20 +14,11 @@ import { createClient } from "@/lib/supabase/server";
 export type AnalystTaskActionState = {
   error: string | null;
   success: string | null;
-  /** Used by ciência actions to update the card without a full page refresh. */
-  taskId?: string | null;
-  acknowledgment?: {
-    acknowledged_at: string | null;
-    acknowledged_by: string | null;
-    acknowledged_by_name: string | null;
-  } | null;
 };
 
 const EMPTY_STATE: AnalystTaskActionState = {
   error: null,
   success: null,
-  taskId: null,
-  acknowledgment: null,
 };
 
 function parseDateTime(value: FormDataEntryValue | null, label: string): string {
@@ -410,92 +401,6 @@ export async function deleteAnalystTaskAction(
           ? error.message
           : "Não foi possível excluir a tarefa.",
       success: null,
-    };
-  }
-}
-
-export async function acknowledgeAnalystTaskAction(
-  _previous: AnalystTaskActionState = EMPTY_STATE,
-  formData: FormData,
-): Promise<AnalystTaskActionState> {
-  void _previous;
-  try {
-    const context = await requirePermission("analistas", "edit");
-    if (!isManager(context.profile.role)) {
-      throw new Error("Apenas gestor ou administrador pode dar ciência.");
-    }
-    const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
-    const name =
-      (context.profile.full_name ?? "").trim() ||
-      context.profile.email ||
-      "Gestor";
-    const acknowledgedAt = new Date().toISOString();
-    const { acknowledgeAnalystTask } = await import("@/services/analyst-tasks");
-    const result = await acknowledgeAnalystTask({
-      taskId,
-      acknowledgedBy: context.profile.id,
-      acknowledgedByName: name,
-      acknowledgedAt,
-    });
-    return {
-      error: null,
-      success: "Ciência registrada.",
-      taskId,
-      acknowledgment: {
-        acknowledged_at: result.acknowledgedAt,
-        acknowledged_by: context.profile.id,
-        acknowledged_by_name: name,
-      },
-    };
-  } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível registrar a ciência.",
-      success: null,
-      taskId: null,
-      acknowledgment: null,
-    };
-  }
-}
-
-export async function clearAnalystTaskAcknowledgmentAction(
-  _previous: AnalystTaskActionState = EMPTY_STATE,
-  formData: FormData,
-): Promise<AnalystTaskActionState> {
-  void _previous;
-  try {
-    const context = await requirePermission("analistas", "edit");
-    if (!isManager(context.profile.role)) {
-      throw new Error("Apenas gestor ou administrador pode remover a ciência.");
-    }
-    const taskId = String(formData.get("taskId") ?? "").trim();
-    await canManageTask(context, taskId);
-    const { clearAnalystTaskAcknowledgment } = await import(
-      "@/services/analyst-tasks"
-    );
-    await clearAnalystTaskAcknowledgment(taskId);
-    return {
-      error: null,
-      success: "Ciência removida.",
-      taskId,
-      acknowledgment: {
-        acknowledged_at: null,
-        acknowledged_by: null,
-        acknowledged_by_name: null,
-      },
-    };
-  } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível remover a ciência.",
-      success: null,
-      taskId: null,
-      acknowledgment: null,
     };
   }
 }

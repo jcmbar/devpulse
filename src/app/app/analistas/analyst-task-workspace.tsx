@@ -2,8 +2,6 @@
 
 import { AnalystDayTimeline } from "@/app/app/analistas/analyst-day-timeline";
 import {
-  acknowledgeAnalystTaskAction,
-  clearAnalystTaskAcknowledgmentAction,
   completeAnalystTaskAction,
   createAnalystTaskAction,
   deleteAnalystTaskAction,
@@ -81,8 +79,11 @@ type Props = {
 const initialState: AnalystTaskActionState = {
   error: null,
   success: null,
-  taskId: null,
-  acknowledgment: null,
+};
+
+type AcknowledgeFeedback = {
+  error: string | null;
+  success: string | null;
 };
 
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -757,59 +758,75 @@ export function AnalystTaskWorkspace({
     resumeAnalystTaskAction,
     initialState,
   );
-  const [ackState, ackAction, ackPending] = useActionState(
-    acknowledgeAnalystTaskAction,
-    initialState,
-  );
-  const [clearAckState, clearAckAction, clearAckPending] = useActionState(
-    clearAnalystTaskAcknowledgmentAction,
-    initialState,
-  );
   const [localTasks, setLocalTasks] = useState(tasks);
   const [ackTaskId, setAckTaskId] = useState<string | null>(null);
-  const handledAckKey = useRef<string | null>(null);
+  const [ackFeedback, setAckFeedback] = useState<AcknowledgeFeedback>({
+    error: null,
+    success: null,
+  });
+  const [ackPending, setAckPending] = useState(false);
 
   useEffect(() => {
     setLocalTasks(tasks);
   }, [tasks]);
 
-  useEffect(() => {
-    const state = ackState.success
-      ? ackState
-      : clearAckState.success
-        ? clearAckState
-        : null;
-    if (!state?.success || !state.taskId || !state.acknowledgment) {
-      return;
-    }
-    const key = `${state.success}:${state.taskId}:${state.acknowledgment.acknowledged_at ?? "cleared"}`;
-    if (handledAckKey.current === key) {
-      return;
-    }
-    handledAckKey.current = key;
-    const acknowledgment = state.acknowledgment;
-    setLocalTasks((previous) =>
-      previous.map((task) =>
-        task.id === state.taskId
-          ? {
-              ...task,
-              acknowledged_at: acknowledgment.acknowledged_at,
-              acknowledged_by: acknowledgment.acknowledged_by,
-              acknowledged_by_name: acknowledgment.acknowledged_by_name,
-            }
-          : task,
-      ),
-    );
-    setAckTaskId(null);
-  }, [ackState, clearAckState]);
-
-  useEffect(() => {
-    if (!ackPending && !clearAckPending) {
+  async function submitAcknowledgment(taskId: string, clear: boolean) {
+    setAckTaskId(taskId);
+    setAckPending(true);
+    setAckFeedback({ error: null, success: null });
+    try {
+      const response = await fetch("/api/analistas/tasks/acknowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId, clear }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        success?: string;
+        taskId?: string;
+        acknowledgment?: {
+          acknowledged_at: string | null;
+          acknowledged_by: string | null;
+          acknowledged_by_name: string | null;
+        };
+      };
+      if (!response.ok || !payload.acknowledgment || !payload.taskId) {
+        throw new Error(
+          payload.error ?? "Não foi possível atualizar a ciência.",
+        );
+      }
+      const acknowledgment = payload.acknowledgment;
+      setLocalTasks((previous) =>
+        previous.map((task) =>
+          task.id === payload.taskId
+            ? {
+                ...task,
+                acknowledged_at: acknowledgment.acknowledged_at,
+                acknowledged_by: acknowledgment.acknowledged_by,
+                acknowledged_by_name: acknowledgment.acknowledged_by_name,
+              }
+            : task,
+        ),
+      );
+      setAckFeedback({
+        error: null,
+        success: payload.success ?? (clear ? "Ciência removida." : "Ciência registrada."),
+      });
+    } catch (error) {
+      setAckFeedback({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível atualizar a ciência.",
+        success: null,
+      });
+    } finally {
+      setAckPending(false);
       setAckTaskId(null);
     }
-  }, [ackPending, clearAckPending]);
+  }
 
-  const acknowledgePending = ackPending || clearAckPending;
+  const acknowledgePending = ackPending;
   const activeOpenTasks = activeTasks;
   const runningCount = activeOpenTasks.length;
   const focusedActiveTask =
@@ -1496,8 +1513,8 @@ export function AnalystTaskWorkspace({
             </div>
           ) : null}
           <FormFeedback
-            error={ackState.error ?? clearAckState.error}
-            success={ackState.success ?? clearAckState.success}
+            error={ackFeedback.error}
+            success={ackFeedback.success}
           />
           <div className="max-h-[30rem] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-[36rem]">
             {selectedTasks.length > 0 ? (
@@ -1551,16 +1568,10 @@ export function AnalystTaskWorkspace({
                       acknowledgePending && ackTaskId === task.id
                     }
                     onAcknowledge={() => {
-                      setAckTaskId(task.id);
-                      const formData = new FormData();
-                      formData.set("taskId", task.id);
-                      ackAction(formData);
+                      void submitAcknowledgment(task.id, false);
                     }}
                     onClearAcknowledgment={() => {
-                      setAckTaskId(task.id);
-                      const formData = new FormData();
-                      formData.set("taskId", task.id);
-                      clearAckAction(formData);
+                      void submitAcknowledgment(task.id, true);
                     }}
                   />
                 );
