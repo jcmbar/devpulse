@@ -21,7 +21,7 @@ import type {
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
 
 const initialState: PayrollFormState = {
   error: null,
@@ -95,7 +95,7 @@ export function PayrollItemEditor({
     initialState,
   );
   const [restorePending, setRestorePending] = useState(false);
-  const [reviewPending, startReview] = useTransition();
+  const [reviewPending, setReviewPending] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
@@ -146,17 +146,29 @@ export function PayrollItemEditor({
 
   function toggleReviewed() {
     setReviewError(null);
-    startReview(async () => {
-      const result = await setPayrollItemReviewedAction({
-        itemId: item.id,
-        reviewed: !item.is_reviewed,
-      });
-      if (!result.ok) {
-        setReviewError(result.error);
+    setReviewPending(true);
+    void (async () => {
+      try {
+        const result = await setPayrollItemReviewedAction({
+          itemId: item.id,
+          reviewed: !item.is_reviewed,
+        });
+        if (!result.ok) {
+          setReviewError(result.error);
+          return;
+        }
+      } catch (error) {
+        setReviewError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível atualizar a conferência.",
+        );
         return;
+      } finally {
+        setReviewPending(false);
       }
       router.refresh();
-    });
+    })();
   }
 
   return (
