@@ -17,13 +17,18 @@ function withQuery(
   return query ? `${path}?${query}` : path;
 }
 
-/** Shared Gestor section tabs (Dashboard / Fechamentos / Folha). */
+/**
+ * Shared Gestor section tabs (Dashboard / Fechamentos / Folha).
+ * Folha always uses a bare path so the last applied Folha filters restore
+ * from cookie — partial query from other tabs would wipe reviewed/closing.
+ */
 export function buildGestorNavTabs(input: {
   active: GestorNavSection;
   teamId?: string | null;
   closingYear?: number | null;
   month?: string | null;
   reviewed?: string | null;
+  closing?: string | null;
 }): AppViewTab[] {
   const teamId = input.teamId || undefined;
 
@@ -42,11 +47,7 @@ export function buildGestorNavTabs(input: {
       active: input.active === "fechamentos",
     },
     {
-      href: withQuery("/app/gestor/folha", {
-        teamId,
-        month: input.month ?? undefined,
-        reviewed: input.reviewed ?? undefined,
-      }),
+      href: "/app/gestor/folha",
       label: "Folha",
       active: input.active === "folha",
     },

@@ -11,6 +11,7 @@ import {
   listAttendanceForItem,
   restorePayrollItemCalculatedAmounts,
   setPayrollItemReviewed,
+  setPayrollItemInvoiceIssuer,
   syncPayrollItemsFromCompensation,
   updatePayrollClosingStatus,
   updatePayrollItemAmounts,
@@ -495,6 +496,37 @@ export async function setPayrollItemReviewedAction(input: {
         error instanceof Error
           ? error.message
           : "Não foi possível atualizar a conferência.",
+    };
+  }
+
+  revalidateFolha();
+  return { ok: true };
+}
+
+export async function setPayrollItemInvoiceIssuerAction(input: {
+  itemId: string;
+  invoiceIssuerId: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requirePermission("gestor", "edit");
+
+  const itemId = input.itemId.trim();
+  if (!itemId) {
+    return { ok: false, error: "Item inválido." };
+  }
+
+  try {
+    await assertPayrollItemEditable(itemId);
+    await setPayrollItemInvoiceIssuer({
+      itemId,
+      invoiceIssuerId: input.invoiceIssuerId,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a empresa da NF.",
     };
   }
 

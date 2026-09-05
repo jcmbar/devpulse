@@ -262,6 +262,42 @@ export async function setPayrollItemReviewed(input: {
   return mapItem(data as Record<string, unknown>);
 }
 
+/** Persist Empresa NF without touching amounts or clearing conferido. */
+export async function setPayrollItemInvoiceIssuer(input: {
+  itemId: string;
+  invoiceIssuerId: string | null;
+}): Promise<PayrollClosingItem> {
+  const item = await getPayrollItem(input.itemId);
+  if (!item) {
+    throw new Error("Item da folha não encontrado.");
+  }
+
+  const nextIssuerId = input.invoiceIssuerId?.trim() || null;
+  if ((item.invoice_issuer_id ?? null) === nextIssuerId) {
+    return item;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("payroll_closing_items")
+    .update({ invoice_issuer_id: nextIssuerId })
+    .eq("id", input.itemId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Falha ao salvar empresa da NF: ${error.message}`);
+  }
+
+  await supabase
+    .from("payroll_month_closings")
+    .update({ status: "in_progress" })
+    .eq("id", item.payroll_closing_id)
+    .eq("status", "open");
+
+  return mapItem(data as Record<string, unknown>);
+}
+
 /** Auto-calculated amounts for an item, before manual overrides. */
 async function suggestPayrollItemAmounts(
   item: PayrollClosingItem,

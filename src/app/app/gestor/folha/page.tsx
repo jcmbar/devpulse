@@ -230,6 +230,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
           teamId: teamParam,
           month,
           reviewed: reviewedFilter,
+          closing: closingFilter,
         })}
       />
 

@@ -2,6 +2,7 @@
 
 import {
   restorePayrollItemCalculatedAction,
+  setPayrollItemInvoiceIssuerAction,
   setPayrollItemReviewedAction,
   updatePayrollItemAction,
   type PayrollFormState,
@@ -106,10 +107,12 @@ export function PayrollItemEditor({
   const [reviewedOptimistic, setReviewedOptimistic] = useState<boolean | null>(
     null,
   );
+  const [issuerPending, setIssuerPending] = useState(false);
+  const [issuerError, setIssuerError] = useState<string | null>(null);
 
   const lockedByFinalized = finalizedClosingId != null;
   const inputsDisabled = readOnly || lockedByFinalized;
-  const busy = isPending || restorePending || reviewPending;
+  const busy = isPending || restorePending || reviewPending || issuerPending;
   const hasManualAutoField =
     item.differential_manual || item.travel_manual || item.meal_manual;
   const isReviewed =
@@ -132,6 +135,36 @@ export function PayrollItemEditor({
     reviewedOptimistic === item.is_reviewed
   ) {
     setReviewedOptimistic(null);
+  }
+
+  function persistIssuer(nextIssuerId: string) {
+    setIssuerError(null);
+    setIssuerPending(true);
+    void (async () => {
+      try {
+        const result = await setPayrollItemInvoiceIssuerAction({
+          itemId: item.id,
+          invoiceIssuerId: nextIssuerId.trim() ? nextIssuerId : null,
+        });
+        if (!result.ok) {
+          setIssuerError(result.error);
+          setIssuerId(item.invoice_issuer_id ?? "");
+          return;
+        }
+        setIssuerSyncedFrom(nextIssuerId.trim());
+      } catch (error) {
+        setIssuerError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar a empresa da NF.",
+        );
+        setIssuerId(item.invoice_issuer_id ?? "");
+        return;
+      } finally {
+        setIssuerPending(false);
+      }
+      router.refresh();
+    })();
   }
 
   function restore(fields: PayrollAutoAmountField) {
@@ -419,12 +452,22 @@ export function PayrollItemEditor({
               )}
             </div>
             <label className="space-y-1 text-xs">
-              <span className="text-muted-foreground">Empresa NF</span>
+              <span className="text-muted-foreground">
+                Empresa NF
+                {issuerPending ? " · salvando…" : ""}
+              </span>
               <select
                 value={issuerId}
-                onChange={(event) => setIssuerId(event.target.value)}
-                disabled={inputsDisabled}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setIssuerId(next);
+                  if (!inputsDisabled) {
+                    persistIssuer(next);
+                  }
+                }}
+                disabled={inputsDisabled || issuerPending}
                 className="ui-select"
+                title="Salva automaticamente e pré-preenche a empresa na aprovação do fechamento"
               >
                 <option value="">—</option>
                 {issuers.map((issuer) => (
@@ -464,7 +507,7 @@ export function PayrollItemEditor({
                   title={
                     moneyVisible
                       ? undefined
-                      : "Exiba os valores (olho) antes de salvar a linha"
+                      : "Exiba os valores (olho) para salvar montantes. Empresa NF já salva ao escolher."
                   }
                 >
                   {isPending ? "Salvando..." : "Salvar linha"}
@@ -525,6 +568,11 @@ export function PayrollItemEditor({
             {reviewError ? (
               <p className="text-xs text-destructive" role="alert">
                 {reviewError}
+              </p>
+            ) : null}
+            {issuerError ? (
+              <p className="text-xs text-destructive" role="alert">
+                {issuerError}
               </p>
             ) : null}
           </div>
