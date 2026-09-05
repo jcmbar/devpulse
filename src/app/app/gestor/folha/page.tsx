@@ -25,10 +25,13 @@ import { listDevelopersAdmin } from "@/services/developers/admin";
 import { developerAvatarPublicUrl } from "@/services/developers/avatar";
 import { listTeamsAdmin } from "@/services/teams";
 
+type ReviewedFilter = "all" | "yes" | "no";
+
 type PageProps = {
   searchParams: Promise<{
     teamId?: string;
     month?: string;
+    reviewed?: string;
     itemId?: string;
   }>;
 };
@@ -45,6 +48,13 @@ function parseYearMonth(value: string | undefined): string {
   return currentYearMonth();
 }
 
+function parseReviewedFilter(value: string | undefined): ReviewedFilter {
+  if (value === "yes" || value === "no") {
+    return value;
+  }
+  return "all";
+}
+
 export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const { profile } = await requirePermission("gestor", "access");
   const params = await searchParams;
@@ -59,6 +69,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
     teamFilter.kind === "team" ? teamFilter.teamId : null;
   const teamParam = teamListFilterParam(teamFilter) || undefined;
   const month = parseYearMonth(params.month);
+  const reviewedFilter = parseReviewedFilter(params.reviewed);
+  const reviewedParam =
+    reviewedFilter === "all" ? undefined : reviewedFilter;
   const initialAttendanceItemId = params.itemId?.trim() || null;
 
   const [teams, issuers, payroll, finalizedByDeveloper, developers] =
@@ -76,7 +89,13 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
       ),
     ]);
 
-  const { closing, items } = payroll;
+  const { closing, items: allItems } = payroll;
+  const items =
+    reviewedFilter === "yes"
+      ? allItems.filter((item) => item.is_reviewed)
+      : reviewedFilter === "no"
+        ? allItems.filter((item) => !item.is_reviewed)
+        : allItems;
   const avatarUrlByDeveloper = Object.fromEntries(
     developers.map((developer) => [
       developer.id,
@@ -134,6 +153,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         params={{
           teamId: teamParam,
           month,
+          reviewed: reviewedParam,
         }}
       />
       <PageHeader
@@ -157,6 +177,8 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <span className="font-medium text-foreground capitalize">
               {formatYearMonthLabel(month)}
             </span>
+            {reviewedFilter === "yes" ? " · conferidos" : null}
+            {reviewedFilter === "no" ? " · não conferidos" : null}
           </>
         }
         actions={
@@ -165,7 +187,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
               yearMonth={month}
               periodStart={closing.period_start}
               periodEnd={closing.period_end}
-              rows={items
+              rows={allItems
                 .filter((item) => item.is_reviewed)
                 .map((item) => ({
                   developerName: item.developer_name,
@@ -198,14 +220,14 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
 
       <FilterBar>
         <div className="ui-filter-bar__row">
-          <div className="ui-filter-bar__fields min-w-0 flex-1 md:grid-cols-3">
+          <div className="ui-filter-bar__fields min-w-0 flex-1 md:grid-cols-2 xl:grid-cols-4">
             <div className="ui-filter-bar__field">
               <p className="ui-filter-bar__label">Time</p>
               <GestorTeamFilter
                 basePath="/app/gestor/folha"
                 teams={teams}
                 selectedTeamId={selectedTeamId}
-                preservedParams={{ month }}
+                preservedParams={{ month, reviewed: reviewedParam }}
                 persistScope="gestor-folha"
                 embedded
                 form="folha-month-filter"
@@ -224,6 +246,22 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             <div className="ui-filter-bar__field">
               <p className="ui-filter-bar__label">Fechamento</p>
               <PayrollMonthStatusControl closing={closing} />
+            </div>
+            <div className="ui-filter-bar__field">
+              <label className="ui-filter-bar__label" htmlFor="folha-reviewed">
+                Conferido
+              </label>
+              <select
+                id="folha-reviewed"
+                form="folha-month-filter"
+                name="reviewed"
+                defaultValue={reviewedFilter === "all" ? "" : reviewedFilter}
+                className="ui-select w-full min-w-0"
+              >
+                <option value="">Todos</option>
+                <option value="yes">Conferido</option>
+                <option value="no">Não conferido</option>
+              </select>
             </div>
           </div>
           <form
