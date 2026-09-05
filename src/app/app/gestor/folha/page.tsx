@@ -25,13 +25,14 @@ import { listDevelopersAdmin } from "@/services/developers/admin";
 import { developerAvatarPublicUrl } from "@/services/developers/avatar";
 import { listTeamsAdmin } from "@/services/teams";
 
-type ReviewedFilter = "all" | "yes" | "no";
+type TriFilter = "all" | "yes" | "no";
 
 type PageProps = {
   searchParams: Promise<{
     teamId?: string;
     month?: string;
     reviewed?: string;
+    closing?: string;
     itemId?: string;
   }>;
 };
@@ -48,7 +49,7 @@ function parseYearMonth(value: string | undefined): string {
   return currentYearMonth();
 }
 
-function parseReviewedFilter(value: string | undefined): ReviewedFilter {
+function parseTriFilter(value: string | undefined): TriFilter {
   if (value === "yes" || value === "no") {
     return value;
   }
@@ -69,7 +70,8 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
     teamFilter.kind === "team" ? teamFilter.teamId : null;
   const teamParam = teamListFilterParam(teamFilter);
   const month = parseYearMonth(params.month);
-  const reviewedFilter = parseReviewedFilter(params.reviewed);
+  const reviewedFilter = parseTriFilter(params.reviewed);
+  const closingFilter = parseTriFilter(params.closing);
   const initialAttendanceItemId = params.itemId?.trim() || null;
 
   const [teams, issuers, payroll, finalizedByDeveloper, developers] =
@@ -88,12 +90,22 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
     ]);
 
   const { closing, items: allItems } = payroll;
-  const items =
-    reviewedFilter === "yes"
-      ? allItems.filter((item) => item.is_reviewed)
-      : reviewedFilter === "no"
-        ? allItems.filter((item) => !item.is_reviewed)
-        : allItems;
+  const items = allItems.filter((item) => {
+    if (reviewedFilter === "yes" && !item.is_reviewed) {
+      return false;
+    }
+    if (reviewedFilter === "no" && item.is_reviewed) {
+      return false;
+    }
+    const isFinalized = finalizedByDeveloper.has(item.developer_id);
+    if (closingFilter === "yes" && !isFinalized) {
+      return false;
+    }
+    if (closingFilter === "no" && isFinalized) {
+      return false;
+    }
+    return true;
+  });
   const avatarUrlByDeveloper = Object.fromEntries(
     developers.map((developer) => [
       developer.id,
@@ -152,6 +164,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
           teamId: teamParam,
           month,
           reviewed: reviewedFilter,
+          closing: closingFilter,
         }}
       />
       <PageHeader
@@ -177,10 +190,13 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
             </span>
             {reviewedFilter === "yes" ? " · conferidos" : null}
             {reviewedFilter === "no" ? " · não conferidos" : null}
+            {closingFilter === "yes" ? " · fechamento finalizado" : null}
+            {closingFilter === "no" ? " · sem fechamento finalizado" : null}
           </>
         }
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <PayrollMonthStatusControl closing={closing} />
             <PayrollSinteticoExportButton
               yearMonth={month}
               periodStart={closing.period_start}
@@ -230,6 +246,8 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
                   month,
                   reviewed:
                     reviewedFilter === "all" ? undefined : reviewedFilter,
+                  closing:
+                    closingFilter === "all" ? undefined : closingFilter,
                 }}
                 persistScope="gestor-folha"
                 embedded
@@ -247,8 +265,20 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
               />
             </div>
             <div className="ui-filter-bar__field">
-              <p className="ui-filter-bar__label">Fechamento</p>
-              <PayrollMonthStatusControl closing={closing} />
+              <label className="ui-filter-bar__label" htmlFor="folha-closing">
+                Fechamento
+              </label>
+              <select
+                id="folha-closing"
+                form="folha-month-filter"
+                name="closing"
+                defaultValue={closingFilter}
+                className="ui-select w-full min-w-0"
+              >
+                <option value="all">Todos</option>
+                <option value="yes">Finalizado</option>
+                <option value="no">Não finalizado</option>
+              </select>
             </div>
             <div className="ui-filter-bar__field">
               <label className="ui-filter-bar__label" htmlFor="folha-reviewed">

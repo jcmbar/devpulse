@@ -22,7 +22,7 @@ export function PayrollMonthStatusControl({
   return (
     <div className="ui-control-row">
       <label className="text-sm text-muted-foreground" htmlFor="payroll-status">
-        Status
+        Status da folha
       </label>
       <select
         id="payroll-status"
