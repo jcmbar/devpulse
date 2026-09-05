@@ -9,6 +9,7 @@ import {
   countUnreadNotifications,
   listMyNotifications,
 } from "@/services/notifications";
+import { getPublicVapidKey } from "@/services/notifications/web-push";
 
 /**
  * Shared layout for all authenticated `/app/**` routes (home, pessoas, imports,
@@ -52,6 +53,7 @@ export default async function AppLayout({
         versionLabel={build.label}
         unreadNotificationCount={unreadNotificationCount}
         recentNotifications={recentNotifications}
+        vapidPublicKey={getPublicVapidKey()}
       >
         {children}
       </AppChrome>

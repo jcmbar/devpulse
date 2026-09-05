@@ -4,6 +4,7 @@ import { AppShellMesh } from "@/components/app-shell-mesh";
 import { SessionActivityGuard } from "@/components/session-activity-guard";
 import { BrandMark } from "@/components/brand-mark";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { PushEnableModal } from "@/components/notifications/push-enable-modal";
 import { UnreadNotificationsModal } from "@/components/notifications/unread-notifications-modal";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -63,6 +64,8 @@ type AppChromeProps = {
   versionLabel?: string;
   unreadNotificationCount?: number;
   recentNotifications?: AppNotification[];
+  /** Public VAPID key for Web Push opt-in modal (null when unset). */
+  vapidPublicKey?: string | null;
   children: ReactNode;
 };
 
@@ -193,6 +196,7 @@ export function AppChrome({
   versionLabel = "v0.1.0",
   unreadNotificationCount = 0,
   recentNotifications = [],
+  vapidPublicKey = null,
   children,
 }: AppChromeProps) {
   const pathname = usePathname();
@@ -465,6 +469,10 @@ export function AppChrome({
 
       <div className="relative z-10 flex flex-1 flex-col">{children}</div>
       <UnreadNotificationsModal unreadCount={unreadNotificationCount} />
+      <PushEnableModal
+        vapidPublicKey={vapidPublicKey}
+        unreadCount={unreadNotificationCount}
+      />
       <footer className="relative z-10 border-t border-border/50 bg-background/40">
         <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-3 py-3 text-[11px] text-muted-foreground sm:px-6 lg:px-8">
           <span>DevPulse · Ambiente de produção</span>

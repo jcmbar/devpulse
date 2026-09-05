@@ -4,7 +4,11 @@ import { BellRing } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
-const SESSION_KEY = "devpulse.notifications.login-modal.dismissed";
+export const UNREAD_NOTIFICATIONS_MODAL_SESSION_KEY =
+  "devpulse.notifications.login-modal.dismissed";
+
+export const UNREAD_NOTIFICATIONS_MODAL_DISMISSED_EVENT =
+  "devpulse:unread-modal-dismissed";
 
 type UnreadNotificationsModalProps = {
   unreadCount: number;
@@ -16,7 +20,9 @@ function subscribe() {
 
 function getDismissedSnapshot() {
   try {
-    return sessionStorage.getItem(SESSION_KEY) === "1";
+    return (
+      sessionStorage.getItem(UNREAD_NOTIFICATIONS_MODAL_SESSION_KEY) === "1"
+    );
   } catch {
     return false;
   }
@@ -43,11 +49,14 @@ export function UnreadNotificationsModal({
 
   function dismiss() {
     try {
-      sessionStorage.setItem(SESSION_KEY, "1");
+      sessionStorage.setItem(UNREAD_NOTIFICATIONS_MODAL_SESSION_KEY, "1");
     } catch {
       // ignore
     }
     setLocalDismissed(true);
+    window.dispatchEvent(
+      new Event(UNREAD_NOTIFICATIONS_MODAL_DISMISSED_EVENT),
+    );
   }
 
   return (
