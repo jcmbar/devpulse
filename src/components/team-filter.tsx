@@ -5,6 +5,7 @@ import { persistFiltersFromHref } from "@/lib/filters/persist-client";
 import type { FilterScope } from "@/lib/filters/persist";
 import { patchAdminListSearchParams } from "@/lib/admin-list-query";
 import {
+  TEAM_FILTER_ALL,
   TEAM_FILTER_PARAM,
   TEAM_FILTER_UNASSIGNED,
 } from "@/lib/teams/team-filter";
@@ -23,7 +24,7 @@ type TeamFilterFormProps = {
 
 export function TeamFilterForm({
   teams,
-  defaultTeamId = "",
+  defaultTeamId = TEAM_FILTER_ALL,
   includeUnassigned = true,
   className = "flex flex-wrap items-end gap-3",
   persistScope,
@@ -32,11 +33,15 @@ export function TeamFilterForm({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
-  const current = defaultTeamId ?? "";
+  const current = (defaultTeamId ?? "").trim() || TEAM_FILTER_ALL;
 
   function applyTeamFilter(nextTeamId: string) {
+    const normalized =
+      !nextTeamId.trim() || nextTeamId.trim() === TEAM_FILTER_ALL
+        ? TEAM_FILTER_ALL
+        : nextTeamId.trim();
     const params = patchAdminListSearchParams(searchParams, {
-      teamId: nextTeamId,
+      teamId: normalized,
       resetPage: true,
     });
     const query = params.toString();
@@ -61,13 +66,14 @@ export function TeamFilterForm({
       <label className="ui-field">
         <span className="ui-label">Time</span>
         <TeamSelect
-          key={current || "all"}
+          key={current}
           id={TEAM_FILTER_PARAM}
           name={TEAM_FILTER_PARAM}
           teams={teams}
           defaultValue={current}
           includeEmpty
           emptyLabel="Todos os times"
+          emptyValue={TEAM_FILTER_ALL}
           extraOptions={
             includeUnassigned
               ? [

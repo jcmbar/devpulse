@@ -1,6 +1,7 @@
 /**
  * Persist last-used filters per surface (cookie).
- * URL remains source of truth; cookies only fill missing durable params.
+ * URL remains source of truth when it already carries durable params;
+ * cookies restore a full snapshot only on a bare entry (no durable keys).
  */
 
 export type FilterScope =
@@ -126,9 +127,20 @@ export function parseFilterCookie(
   }
 }
 
+function durableKeysInParams(
+  scope: FilterScope,
+  params: Record<string, string>,
+): string[] {
+  return FILTER_SCOPE_KEYS[scope].filter(
+    (key) => !EPHEMERAL_KEYS.has(key) && Boolean(params[key]),
+  );
+}
+
 /**
- * Merge stored durable params into the current URL only where keys are absent.
- * Returns null when nothing changes.
+ * Restore the last applied filter snapshot only when the URL has no durable
+ * filter keys (fresh entry). If the URL already carries any durable param,
+ * treat it as the intentional applied state — do not fill gaps from the cookie
+ * (absent optional filters mean “all”, not “restore previous”).
  */
 export function mergeMissingFilterParams(input: {
   scope: FilterScope;
@@ -142,39 +154,19 @@ export function mergeMissingFilterParams(input: {
     return null;
   }
 
+  if (durableKeysInParams(input.scope, current).length > 0) {
+    return null;
+  }
+
   const next = { ...current };
   let changed = false;
-
-  const hasDateInUrl = Boolean(
-    current.month || (current.from && current.to),
-  );
-  const hasDateInStore = Boolean(
-    stored.month || (stored.from && stored.to),
-  );
 
   for (const key of FILTER_SCOPE_KEYS[input.scope]) {
     if (EPHEMERAL_KEYS.has(key)) {
       continue;
     }
-    if (key === "month" || key === "from" || key === "to") {
-      continue;
-    }
     if (!current[key] && stored[key]) {
       next[key] = stored[key];
-      changed = true;
-    }
-  }
-
-  if (!hasDateInUrl && hasDateInStore) {
-    if (stored.month) {
-      next.month = stored.month;
-      delete next.from;
-      delete next.to;
-      changed = true;
-    } else if (stored.from && stored.to) {
-      next.from = stored.from;
-      next.to = stored.to;
-      delete next.month;
       changed = true;
     }
   }

@@ -4,6 +4,8 @@
  */
 
 export const TEAM_FILTER_UNASSIGNED = "__none__";
+/** Explicit “all teams” for URL/cookies (empty param is ambiguous vs “missing”). */
+export const TEAM_FILTER_ALL = "__all__";
 export const TEAM_FILTER_PARAM = "teamId";
 
 const TEAM_ID_UUID_RE =
@@ -21,7 +23,7 @@ export type TeamScopedListInput = {
 
 /**
  * Parse `teamId` search param.
- * - empty → all
+ * - empty / `__all__` → all
  * - `__none__` → unassigned (team_id IS NULL)
  * - valid UUID → filter by team_id
  * - anything else (e.g. legacy team_code) → all (never filter by code)
@@ -30,7 +32,7 @@ export function parseTeamListFilter(
   value: string | null | undefined,
 ): TeamListFilter {
   const trimmed = (value ?? "").trim();
-  if (!trimmed) {
+  if (!trimmed || trimmed === TEAM_FILTER_ALL) {
     return { kind: "all" };
   }
   if (trimmed === TEAM_FILTER_UNASSIGNED) {
@@ -42,7 +44,10 @@ export function parseTeamListFilter(
   return { kind: "team", teamId: trimmed };
 }
 
-/** Canonical value for the filter select / URL (never a free-form code). */
+/**
+ * Canonical value for selects / persistence.
+ * Uses `__all__` so “todos” is not confused with a missing param on restore.
+ */
 export function teamListFilterParam(filter: TeamListFilter): string {
   if (filter.kind === "team") {
     return filter.teamId;
@@ -50,7 +55,12 @@ export function teamListFilterParam(filter: TeamListFilter): string {
   if (filter.kind === "unassigned") {
     return TEAM_FILTER_UNASSIGNED;
   }
-  return "";
+  return TEAM_FILTER_ALL;
+}
+
+/** Real team UUID for APIs, or null when filter is all/unassigned. */
+export function teamListFilterTeamId(filter: TeamListFilter): string | null {
+  return filter.kind === "team" ? filter.teamId : null;
 }
 
 /** Map parsed filter → service list options (team_id only). */

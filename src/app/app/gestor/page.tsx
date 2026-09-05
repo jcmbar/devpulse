@@ -155,7 +155,7 @@ export default async function GestorDashboardPage({
   const teamFilter = parseTeamListFilter(params.teamId);
   const selectedTeamId =
     teamFilter.kind === "team" ? teamFilter.teamId : null;
-  const teamParam = teamListFilterParam(teamFilter) || undefined;
+  const teamParam = teamListFilterParam(teamFilter);
 
   const [seed, jiraIntegrations, teams] = await Promise.all([
     resolveCompiladoSnapshot({

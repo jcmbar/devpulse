@@ -69,7 +69,7 @@ export default async function GestorFechamentosPage({ searchParams }: PageProps)
   const teamFilter = parseTeamListFilter(params.teamId);
   const selectedTeamId =
     teamFilter.kind === "team" ? teamFilter.teamId : null;
-  const teamParam = teamListFilterParam(teamFilter) || undefined;
+  const teamParam = teamListFilterParam(teamFilter);
 
   const now = new Date();
   const currentYear = now.getUTCFullYear();

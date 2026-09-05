@@ -67,11 +67,9 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
   const teamFilter = parseTeamListFilter(params.teamId);
   const selectedTeamId =
     teamFilter.kind === "team" ? teamFilter.teamId : null;
-  const teamParam = teamListFilterParam(teamFilter) || undefined;
+  const teamParam = teamListFilterParam(teamFilter);
   const month = parseYearMonth(params.month);
   const reviewedFilter = parseReviewedFilter(params.reviewed);
-  const reviewedParam =
-    reviewedFilter === "all" ? undefined : reviewedFilter;
   const initialAttendanceItemId = params.itemId?.trim() || null;
 
   const [teams, issuers, payroll, finalizedByDeveloper, developers] =
@@ -153,7 +151,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
         params={{
           teamId: teamParam,
           month,
-          reviewed: reviewedParam,
+          reviewed: reviewedFilter,
         }}
       />
       <PageHeader
@@ -215,6 +213,7 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
           active: "folha",
           teamId: teamParam,
           month,
+          reviewed: reviewedFilter,
         })}
       />
 
@@ -227,7 +226,11 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
                 basePath="/app/gestor/folha"
                 teams={teams}
                 selectedTeamId={selectedTeamId}
-                preservedParams={{ month, reviewed: reviewedParam }}
+                preservedParams={{
+                  month,
+                  reviewed:
+                    reviewedFilter === "all" ? undefined : reviewedFilter,
+                }}
                 persistScope="gestor-folha"
                 embedded
                 form="folha-month-filter"
@@ -255,10 +258,10 @@ export default async function GestorFolhaPage({ searchParams }: PageProps) {
                 id="folha-reviewed"
                 form="folha-month-filter"
                 name="reviewed"
-                defaultValue={reviewedFilter === "all" ? "" : reviewedFilter}
+                defaultValue={reviewedFilter}
                 className="ui-select w-full min-w-0"
               >
-                <option value="">Todos</option>
+                <option value="all">Todos</option>
                 <option value="yes">Conferido</option>
                 <option value="no">Não conferido</option>
               </select>

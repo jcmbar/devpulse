@@ -10,6 +10,8 @@ type TeamSelectProps = {
   required?: boolean;
   includeEmpty?: boolean;
   emptyLabel?: string;
+  /** Value for the empty option (e.g. `__all__` in list filters). */
+  emptyValue?: string;
   className?: string;
   /** When true, only active teams (still shows current inactive if selected). */
   activeOnly?: boolean;
@@ -30,12 +32,13 @@ export function TeamSelect({
   required = false,
   includeEmpty = true,
   emptyLabel = "Sem time",
+  emptyValue = "",
   className = "ui-select",
   activeOnly = false,
   valueMode = "id",
   extraOptions = [],
 }: TeamSelectProps) {
-  const current = defaultValue ?? "";
+  const current = (defaultValue ?? "").trim() || emptyValue;
   const options = teams.filter((team) => {
     if (!activeOnly) {
       return true;
@@ -53,7 +56,7 @@ export function TeamSelect({
       className={className}
     >
       {includeEmpty ? (
-        <option value="">{emptyLabel}</option>
+        <option value={emptyValue}>{emptyLabel}</option>
       ) : (
         <option value="" disabled>
           {emptyLabel}

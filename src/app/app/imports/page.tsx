@@ -76,7 +76,7 @@ export default async function ImportsPage({ searchParams }: ImportsPageProps) {
       <FilterPersistenceSync
         scope="admin-imports"
         params={{
-          teamId: query.teamParam || undefined,
+          teamId: query.teamParam,
         }}
       />
       <PageHeader

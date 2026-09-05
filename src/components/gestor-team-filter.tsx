@@ -2,7 +2,10 @@
 
 import { persistFiltersFromHref } from "@/lib/filters/persist-client";
 import type { FilterScope } from "@/lib/filters/persist";
-import { TEAM_FILTER_PARAM } from "@/lib/teams/team-filter";
+import {
+  TEAM_FILTER_ALL,
+  TEAM_FILTER_PARAM,
+} from "@/lib/teams/team-filter";
 import type { Team } from "@/types/team";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,7 +13,7 @@ import { useEffect, useState } from "react";
 type GestorTeamFilterProps = {
   basePath: string;
   teams: Team[];
-  /** Selected team id, or empty for “Exibir todos”. */
+  /** Selected team id, or empty/null for “Exibir todos”. */
   selectedTeamId: string | null;
   preservedParams?: Record<string, string | undefined>;
   /** Compact control for FilterBar. */
@@ -32,9 +35,7 @@ function buildHref(
   preservedParams?: Record<string, string | undefined>,
 ): string {
   const params = new URLSearchParams();
-  if (teamId) {
-    params.set(TEAM_FILTER_PARAM, teamId);
-  }
+  params.set(TEAM_FILTER_PARAM, teamId?.trim() || TEAM_FILTER_ALL);
   for (const [key, value] of Object.entries(preservedParams ?? {})) {
     if (value && key !== TEAM_FILTER_PARAM) {
       params.set(key, value);
@@ -56,7 +57,7 @@ export function GestorTeamFilter({
   id = "gestor-team",
 }: GestorTeamFilterProps) {
   const router = useRouter();
-  const serverValue = selectedTeamId ?? "";
+  const serverValue = selectedTeamId?.trim() || TEAM_FILTER_ALL;
   const [draft, setDraft] = useState(serverValue);
 
   useEffect(() => {
@@ -70,12 +71,18 @@ export function GestorTeamFilter({
       form={form}
       value={draft}
       onChange={(event) => {
-        const next = event.target.value.trim() || null;
-        setDraft(next ?? "");
+        const raw = event.target.value.trim();
+        const next =
+          !raw || raw === TEAM_FILTER_ALL ? TEAM_FILTER_ALL : raw;
+        setDraft(next);
         if (!applyOnChange) {
           return;
         }
-        const href = buildHref(basePath, next, preservedParams);
+        const href = buildHref(
+          basePath,
+          next === TEAM_FILTER_ALL ? null : next,
+          preservedParams,
+        );
         if (persistScope) {
           persistFiltersFromHref(persistScope, href);
         }
@@ -84,7 +91,7 @@ export function GestorTeamFilter({
       className={embedded ? "ui-select w-full min-w-0" : "ui-select max-w-xl"}
       aria-label="Time"
     >
-      <option value="">Exibir todos</option>
+      <option value={TEAM_FILTER_ALL}>Exibir todos</option>
       {teams.map((team) => (
         <option key={team.id} value={team.id}>
           {team.name}

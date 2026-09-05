@@ -4,6 +4,7 @@
  */
 
 import {
+  TEAM_FILTER_ALL,
   TEAM_FILTER_PARAM,
   parseTeamListFilter,
   teamFilterEmptyMessage,
@@ -31,7 +32,7 @@ export type JobTitleListFilter = "all" | DeveloperJobTitle;
 
 export type AdminListQuery = {
   teamFilter: TeamListFilter;
-  /** Canonical teamId param for UI/URL (empty | uuid | __none__). */
+  /** Canonical teamId param for UI/URL (`__all__` | uuid | `__none__`). */
   teamParam: string;
   /** Raw teamId from URL (may be invalid / legacy code). */
   rawTeamId: string;
@@ -142,7 +143,10 @@ export function buildAdminListSearchParams(
   const jobTitle = input.jobTitle ?? "all";
 
   if (teamId) {
-    params.set(TEAM_FILTER_PARAM, teamId);
+    params.set(
+      TEAM_FILTER_PARAM,
+      teamId === TEAM_FILTER_ALL ? TEAM_FILTER_ALL : teamId,
+    );
   }
   if (q) {
     params.set(SEARCH_PARAM, q);
@@ -192,8 +196,8 @@ export function patchAdminListSearchParams(
 
   if (patch.teamId !== undefined) {
     const teamId = (patch.teamId ?? "").trim();
-    if (!teamId) {
-      next.delete(TEAM_FILTER_PARAM);
+    if (!teamId || teamId === TEAM_FILTER_ALL) {
+      next.set(TEAM_FILTER_PARAM, TEAM_FILTER_ALL);
     } else {
       next.set(TEAM_FILTER_PARAM, teamId);
     }

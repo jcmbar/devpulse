@@ -349,15 +349,10 @@ export default async function DevelopersAdminPage({
       <FilterPersistenceSync
         scope="admin-developers"
         params={{
-          teamId: query.teamParam || undefined,
-          active:
-            query.activeFilter !== "all" ? query.activeFilter : undefined,
-          jiraId:
-            query.jiraAccountFilter !== "all"
-              ? query.jiraAccountFilter
-              : undefined,
-          jobTitle:
-            query.jobTitleFilter !== "all" ? query.jobTitleFilter : undefined,
+          teamId: query.teamParam,
+          active: query.activeFilter,
+          jiraId: query.jiraAccountFilter,
+          jobTitle: query.jobTitleFilter,
         }}
       />
       <PageHeader

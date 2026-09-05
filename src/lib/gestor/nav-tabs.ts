@@ -23,6 +23,7 @@ export function buildGestorNavTabs(input: {
   teamId?: string | null;
   closingYear?: number | null;
   month?: string | null;
+  reviewed?: string | null;
 }): AppViewTab[] {
   const teamId = input.teamId || undefined;
 
@@ -44,6 +45,7 @@ export function buildGestorNavTabs(input: {
       href: withQuery("/app/gestor/folha", {
         teamId,
         month: input.month ?? undefined,
+        reviewed: input.reviewed ?? undefined,
       }),
       label: "Folha",
       active: input.active === "folha",
